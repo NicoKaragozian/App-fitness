@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0f1117;
+  --foreground: #e8eaf0;
+  --card: #1a1d27;
+  --card-border: #2a2d3e;
+  --accent: #6366f1;
+  --accent-light: #818cf8;
+  --muted: #6b7280;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2d3e;
+  border-radius: 3px;
+}
+
+/* Recharts dark mode overrides */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: #2a2d3e;
+}
+.recharts-text {
+  fill: #6b7280;
+  font-size: 12px;
+}
+.recharts-tooltip-wrapper {
+  outline: none;
+}
