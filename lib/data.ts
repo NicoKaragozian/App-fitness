@@ -105,6 +105,15 @@ const CATEGORY_LABELS: Record<SportCategory, string> = {
 };
 
 export async function getSportCategorySummaries(days = 30): Promise<SportCategorySummary[]> {
+  // Defined inline so it's always available regardless of module init order
+  const typeToCategory: Record<string, SportCategory> = {
+    strength: "gym", cardio: "gym", swimming: "gym",
+    running: "running", cycling: "cycling", hiking: "hiking",
+    surf: "water_sports", wingfoil: "water_sports", windsurf: "water_sports",
+    kiteboard: "water_sports", stand_up_paddling: "water_sports", open_water_swimming: "water_sports",
+    tennis: "tennis", padel: "tennis", squash: "tennis",
+  };
+
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const acts = await getActivities(days);
@@ -130,7 +139,7 @@ export async function getSportCategorySummaries(days = 30): Promise<SportCategor
   }>();
 
   for (const act of recent) {
-    const cat: SportCategory = ACTIVITY_CATEGORY_MAP[act.type] ?? "gym";
+    const cat: SportCategory = typeToCategory[act.type] ?? "gym";
     if (!byCategory.has(cat)) {
       byCategory.set(cat, { sessions: 0, totalDuration: 0, totalCalories: 0, totalHR: 0, hrCount: 0, weekCounts: [0, 0, 0, 0] });
     }
@@ -147,7 +156,7 @@ export async function getSportCategorySummaries(days = 30): Promise<SportCategor
   // Weekly counts per category
   for (let w = 0; w < 4; w++) {
     for (const act of weekBuckets[w]) {
-      const cat = ACTIVITY_CATEGORY_MAP[act.type] ?? "gym";
+      const cat = typeToCategory[act.type] ?? "gym";
       const entry = byCategory.get(cat);
       if (entry) entry.weekCounts[w]++;
     }
