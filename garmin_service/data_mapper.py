@@ -164,42 +164,52 @@ def map_health_metrics(
 ) -> dict:
     """Combine daily health data into DailyHealthMetrics format."""
 
-    # Body Battery: use max value of the day
+    # Body Battery: max level across the day from bodyBatteryValuesArray [[ts, level], ...]
     bb_value = 0
-    if body_battery:
-        values = [e.get("bodyBatteryLevel", 0) for e in body_battery if e.get("bodyBatteryLevel")]
-        bb_value = max(values) if values else 0
+    if body_battery and isinstance(body_battery, list) and len(body_battery) > 0:
+        first = body_battery[0]
+        if isinstance(first, dict):
+            arr = first.get("bodyBatteryValuesArray") or []
+            values = [entry[1] for entry in arr if isinstance(entry, list) and len(entry) >= 2 and entry[1] is not None]
+            bb_value = max(values) if values else first.get("charged", 0) or 0
 
     # Sleep
     sleep_score = 0
     sleep_hours = 0.0
-    if sleep:
-        daily = sleep.get("dailySleepDTO", {})
-        sleep_score = daily.get("sleepScores", {}).get("overall", {}).get("value", 0) or 0
+    if sleep and isinstance(sleep, dict):
+        daily = sleep.get("dailySleepDTO") or {}
+        sleep_score = (daily.get("sleepScores") or {}).get("overall", {}).get("value", 0) or 0
         sleep_seconds = daily.get("sleepTimeSeconds", 0) or 0
         sleep_hours = round(sleep_seconds / 3600, 1)
 
-    # Resting HR
+    # Resting HR — from allMetrics.metricsMap or direct restingHeartRate field
     rhr_value = 0
-    if rhr:
-        rhr_value = rhr.get("restingHeartRate", 0) or 0
+    if rhr and isinstance(rhr, dict):
+        metrics_map = (rhr.get("allMetrics") or {}).get("metricsMap") or {}
+        rhr_list = metrics_map.get("WELLNESS_RESTING_HEART_RATE") or []
+        if rhr_list:
+            rhr_value = (rhr_list[0] or {}).get("value", 0) or 0
+        else:
+            rhr_value = rhr.get("restingHeartRate", 0) or 0
 
-    # Steps: sum of all step entries
+    # Steps: sum of 15-min interval entries
     steps_total = 0
-    if steps:
-        steps_total = sum(e.get("steps", 0) or 0 for e in steps)
+    if steps and isinstance(steps, list):
+        steps_total = sum(e.get("steps", 0) or 0 for e in steps if isinstance(e, dict))
 
-    # Stress: average of all readings (0–100 scale)
+    # Stress: avgStressLevel is a direct field in the dict
     stress_avg = 0
-    if stress:
-        values = [e.get("stressLevel", 0) for e in stress if (e.get("stressLevel") or 0) > 0]
-        stress_avg = round(sum(values) / len(values)) if values else 0
+    if stress and isinstance(stress, dict):
+        stress_avg = stress.get("avgStressLevel", 0) or 0
 
-    # VO2 Max
+    # VO2 Max — try multiple formats
     vo2_value = 0.0
-    if vo2max:
-        vo2_value = vo2max.get("generic", {}).get("vo2MaxValue") or \
-                    vo2max.get("cycling", {}).get("vo2MaxValue") or 0.0
+    if vo2max and isinstance(vo2max, dict):
+        vo2_value = (vo2max.get("generic") or {}).get("vo2MaxValue") or \
+                    (vo2max.get("cycling") or {}).get("vo2MaxValue") or 0.0
+    elif vo2max and isinstance(vo2max, list) and len(vo2max) > 0:
+        first = vo2max[0] if isinstance(vo2max[0], dict) else {}
+        vo2_value = first.get("vo2MaxValue") or first.get("generic", {}).get("vo2MaxValue") or 0.0
 
     return {
         "date": date_str,

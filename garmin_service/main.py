@@ -111,7 +111,7 @@ def get_health(date_str: str = Query(default=None, alias="date")):
         body_battery = _safe(lambda: client.get_body_battery(date_str))
         sleep = _safe(lambda: client.get_sleep_data(date_str))
         rhr = _safe(lambda: client.get_rhr_day(date_str))
-        steps = _safe(lambda: client.get_steps_data(date_str, date_str))
+        steps = _safe(lambda: client.get_steps_data(date_str))
         stress = _safe(lambda: client.get_stress_data(date_str))
         vo2max = _safe(lambda: client.get_max_metrics(date_str))
 
@@ -189,7 +189,7 @@ def get_health_range(
         body_battery = _safe(lambda d=date_str: client.get_body_battery(d))
         sleep = _safe(lambda d=date_str: client.get_sleep_data(d))
         rhr = _safe(lambda d=date_str: client.get_rhr_day(d))
-        steps = _safe(lambda d=date_str: client.get_steps_data(d, d))
+        steps = _safe(lambda d=date_str: client.get_steps_data(d))
         stress = _safe(lambda d=date_str: client.get_stress_data(d))
         vo2max = _safe(lambda d=date_str: client.get_max_metrics(d))
         results.append(
