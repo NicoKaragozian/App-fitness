@@ -105,7 +105,9 @@ Return ONLY valid JSON, no markdown or explanation.`;
   }
 
   try {
-    const parsed = JSON.parse(content.text) as InsightsResponse;
+    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    const text = content.text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const parsed = JSON.parse(text) as InsightsResponse;
     return parsed;
   } catch {
     throw new Error("Failed to parse Claude response as JSON");
