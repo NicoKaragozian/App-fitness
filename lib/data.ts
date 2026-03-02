@@ -93,6 +93,25 @@ export async function getPreviousWeekStats(): Promise<WeeklyStats> {
   return stats[1] ?? stats[0];
 }
 
+// ─── Analytics: Activities by Category ───────────────────────────────────────
+
+export async function getActivitiesByCategory(
+  category: SportCategory,
+  days = 60
+): Promise<Activity[]> {
+  const typeToCategory: Record<string, SportCategory> = {
+    strength: "gym", cardio: "gym", swimming: "gym",
+    running: "running", cycling: "cycling", hiking: "hiking",
+    surf: "water_sports", wingfoil: "water_sports", windsurf: "water_sports",
+    kiteboard: "water_sports", stand_up_paddling: "water_sports", open_water_swimming: "water_sports",
+    tennis: "tennis", padel: "tennis", squash: "tennis",
+  };
+  const acts = await getActivities(days);
+  return acts
+    .filter((a) => (typeToCategory[a.type] ?? "gym") === category)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
 // ─── Analytics: Sport Category Summaries ─────────────────────────────────────
 
 const CATEGORY_LABELS: Record<SportCategory, string> = {
@@ -215,7 +234,7 @@ export async function getSleepTrendSummary(days = 14): Promise<SleepTrendSummary
   const trends = metrics
     .slice(0, days)
     .map((m) => ({ date: m.date, sleepScore: m.sleepScore, sleepHours: m.sleepHours }))
-    .reverse(); // chronological order
+    .sort((a, b) => a.date.localeCompare(b.date)); // chronological order (oldest → newest)
 
   const avgScore = Math.round(trends.reduce((s, t) => s + t.sleepScore, 0) / (trends.length || 1));
   const avgHours = Math.round((trends.reduce((s, t) => s + t.sleepHours, 0) / (trends.length || 1)) * 10) / 10;

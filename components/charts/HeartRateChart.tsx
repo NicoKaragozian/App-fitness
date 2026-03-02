@@ -53,7 +53,7 @@ export function HeartRateChart({ samples, avgHR, maxHR }: HeartRateChartProps) {
   return (
     <div className="h-56">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 4, right: 4, left: 8, bottom: 16 }}>
           <defs>
             <linearGradient id="hrGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
@@ -66,11 +66,13 @@ export function HeartRateChart({ samples, avgHR, maxHR }: HeartRateChartProps) {
             tickFormatter={formatTime}
             tick={{ fontSize: 11 }}
             interval="preserveStartEnd"
+            label={{ value: "Time", position: "insideBottomRight", offset: -4, style: { fontSize: 10, fill: "#6b7280" } }}
           />
           <YAxis
             domain={[90, maxHR + 10]}
             tick={{ fontSize: 11 }}
             tickCount={5}
+            label={{ value: "BPM", angle: -90, position: "insideLeft", offset: 8, style: { fontSize: 10, fill: "#6b7280" } }}
           />
           <Tooltip content={<CustomTooltip />} />
           <ReferenceLine

@@ -4,7 +4,6 @@ import "./globals.css";
 import {
   Activity,
   LayoutDashboard,
-  TrendingUp,
   Brain,
 } from "lucide-react";
 
@@ -29,7 +28,6 @@ export const metadata: Metadata = {
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/activities", icon: Activity, label: "Activities" },
-  { href: "/trends", icon: TrendingUp, label: "Trends" },
   { href: "/insights", icon: Brain, label: "AI Insights" },
 ];
 

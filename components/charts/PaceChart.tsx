@@ -46,7 +46,7 @@ export function PaceChart({ samples, avgPace }: PaceChartProps) {
   return (
     <div className="h-56">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={samples} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+        <ComposedChart data={samples} margin={{ top: 4, right: 16, left: 8, bottom: 16 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="km"
@@ -60,12 +60,14 @@ export function PaceChart({ samples, avgPace }: PaceChartProps) {
             tick={{ fontSize: 11 }}
             domain={["auto", "auto"]}
             reversed
+            label={{ value: "Pace", angle: -90, position: "insideLeft", offset: 10, style: { fontSize: 10, fill: "#6b7280" } }}
           />
           <YAxis
             yAxisId="elevation"
             orientation="right"
             tick={{ fontSize: 11 }}
             tickFormatter={(v) => `${v}m`}
+            label={{ value: "Elev (m)", angle: 90, position: "insideRight", offset: 10, style: { fontSize: 10, fill: "#6b7280" } }}
           />
           <Tooltip content={<CustomTooltip />} />
           <Bar

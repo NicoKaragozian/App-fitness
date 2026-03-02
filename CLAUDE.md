@@ -1,7 +1,7 @@
 # FitTrack — Fitness App con Garmin + AI
 
 ## Qué es este proyecto
-Web app de fitness que muestra datos de entrenamiento multi-deporte con análisis de IA (Claude). Soporta running, gimnasio, deportes de agua (surf/wingfoil/windsurf) y tenis. Tiene integración real con Garmin Connect (Fase 3 ✅).
+Web app de fitness que muestra datos de entrenamiento multi-deporte con análisis de IA (Claude). Soporta running, gimnasio, deportes de agua (surf/wingfoil/windsurf) y tenis. Tiene integración real con Garmin Connect (Fase 3 ✅). Dashboard interactivo con drill-down por categoría (Fase 5 ✅).
 
 ## Cómo correr el proyecto
 
@@ -28,7 +28,7 @@ fitness-app/
 │   ├── page.tsx                    # Dashboard analytics (Server Component)
 │   ├── activities/page.tsx         # Lista de actividades (multi-deporte)
 │   ├── activities/[id]/page.tsx    # Detalle de actividad (con gráficos)
-│   ├── trends/page.tsx             # Gráficos históricos (4 semanas)
+│   ├── category/[slug]/page.tsx    # Detalle por categoría deportiva (gym/water_sports/tennis/…)
 │   ├── insights/page.tsx           # AI Insights (Claude) — cliente
 │   └── api/insights/route.ts       # Endpoint que llama a Claude API
 ├── components/
@@ -96,6 +96,18 @@ Sin estas variables, la app usa mock data.
 - Bug fix Garmin: tennis/surf/wingfoil caían a "running" → ahora mapeados correctamente
 - `ActivityType` expandido: surf, wingfoil, windsurf, kiteboard, tennis, padel, squash, cardio
 - `distance` y `avgPace` son opcionales en `Activity`
+
+### Fase 5 ✅ — Dashboard interactivo + fix gráficos
+- Eliminada página Trends (no usada); eliminada del nav
+- `SportCategoryPanel` clickeable → navega a `/category/[slug]`
+- Nueva página `/category/[slug]`: lista de sesiones por categoría (últimos 60 días) con métricas específicas
+  - Water sports: emoji por tipo, km si disponible, HR, cal
+  - Tennis: km si disponible, HR, cal
+  - Gym: nombre actividad (= grupo muscular), duración, HR, cal
+  - Cada card es link a `/activities/[id]`
+- `lib/data.ts`: nueva función `getActivitiesByCategory(category, days)`
+- Fix sleep trend: `.reverse()` → `.sort()` para orden cronológico estable con datos Garmin
+- Gráficos con labels en ejes: SleepTrendChart (Y: Score), HeartRateChart (X: Time, Y: BPM), PaceChart (Y izq: Pace, Y der: Elev)
 
 ## Mock Data
 - 32 actividades: 20 runs + 3 gym strength + 1 HIIT + 2 surf + 2 wingfoil + 1 windsurf + 3 tennis

@@ -42,6 +42,7 @@ export function SleepTrendChart({ trends }: Props) {
           tick={{ fontSize: 10, fill: "#6b7280" }}
           axisLine={false}
           tickLine={false}
+          label={{ value: "Score", angle: -90, position: "insideLeft", offset: 14, style: { fontSize: 10, fill: "#6b7280" } }}
         />
         <Tooltip
           contentStyle={{ background: "#1e2030", border: "1px solid #374151", borderRadius: 8, fontSize: 12 }}

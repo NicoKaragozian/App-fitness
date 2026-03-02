@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { SportCategorySummary, SportCategory } from "@/types/fitness";
 import { WeeklySessionSparkline } from "@/components/charts/WeeklySessionSparkline";
 import { Clock, Flame, Heart } from "lucide-react";
@@ -26,14 +27,20 @@ export function SportCategoryPanel({ summary }: Props) {
   const config = CATEGORY_CONFIG[summary.category];
 
   return (
-    <div className="bg-[#1e2030] border border-[#2a2d3e] rounded-xl p-4 flex flex-col gap-3">
+    <Link
+      href={`/category/${summary.category}`}
+      className="bg-[#1e2030] border border-[#2a2d3e] rounded-xl p-4 flex flex-col gap-3 hover:border-[#3a3d4e] cursor-pointer transition-all hover:bg-[#222537] block"
+    >
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <span className="text-2xl">{config.icon}</span>
-        <div>
-          <p className="text-sm font-semibold text-white">{summary.label}</p>
-          <p className={`text-xs ${config.color}`}>{summary.sessions} session{summary.sessions !== 1 ? "s" : ""}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{config.icon}</span>
+          <div>
+            <p className="text-sm font-semibold text-white">{summary.label}</p>
+            <p className={`text-xs ${config.color}`}>{summary.sessions} session{summary.sessions !== 1 ? "s" : ""}</p>
+          </div>
         </div>
+        <span className="text-gray-500 text-sm">→</span>
       </div>
 
       {/* Metrics */}
@@ -68,6 +75,6 @@ export function SportCategoryPanel({ summary }: Props) {
         <p className="text-xs text-gray-500 mb-1">Sessions / week</p>
         <WeeklySessionSparkline counts={summary.weeklySessionCounts} color={config.sparkColor} />
       </div>
-    </div>
+    </Link>
   );
 }
