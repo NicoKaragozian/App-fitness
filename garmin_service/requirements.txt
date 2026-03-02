@@ -1,0 +1,4 @@
+garminconnect
+fastapi
+uvicorn[standard]
+python-dotenv

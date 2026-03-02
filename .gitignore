@@ -34,3 +34,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Garmin service credentials
+garmin_service/.env
+garmin_service/__pycache__/
+garmin_service/*.pyc
