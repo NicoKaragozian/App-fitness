@@ -45,7 +45,7 @@ function buildSleepPerfData(activities: Activity[], healthMetrics: DailyHealthMe
     const metric = healthMetrics.find((m) => m.date === dayBefore || m.date === actDate);
     return {
       sleep: metric?.sleepHours ?? 7,
-      pace: a.avgPace,
+      pace: a.avgPace ?? 0,
       name: a.name,
     };
   });

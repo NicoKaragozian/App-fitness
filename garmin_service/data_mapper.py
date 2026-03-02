@@ -10,21 +10,57 @@ from typing import Any
 # ─── Activity mapping ────────────────────────────────────────────────────────
 
 ACTIVITY_TYPE_MAP = {
+    # Running
     "running": "running",
     "trail_running": "running",
     "treadmill_running": "running",
+    "virtual_run": "running",
+    # Cycling
     "cycling": "cycling",
     "indoor_cycling": "cycling",
+    "mountain_biking": "cycling",
+    "virtual_ride": "cycling",
+    # Swimming
     "swimming": "swimming",
-    "open_water_swimming": "swimming",
+    "lap_swimming": "swimming",
+    # Hiking
     "hiking": "hiking",
+    "walking": "hiking",
+    # Gym
     "strength_training": "strength",
     "fitness_equipment": "strength",
+    "indoor_cardio": "cardio",
+    "cardio_training": "cardio",
+    "hiit": "cardio",
+    "yoga": "strength",
+    "pilates": "strength",
+    # Water sports
+    "surfing": "surf",
+    "sailing": "surf",
+    "wakeboarding": "surf",
+    "kiteboarding": "kiteboard",
+    "windsurfing": "windsurf",
+    "wind_kite_surfing": "windsurf",
+    "wingfoil": "wingfoil",
+    "wing_foil": "wingfoil",
+    "stand_up_paddleboarding": "stand_up_paddling",
+    "open_water_swimming": "open_water_swimming",
+    # Tennis / racquet
+    "tennis": "tennis",
+    "padel": "padel",
+    "squash": "squash",
+    "racquet": "tennis",
+    "racquetball": "squash",
 }
 
 
 def map_activity_type(garmin_type: str) -> str:
-    return ACTIVITY_TYPE_MAP.get(garmin_type.lower(), "running")
+    mapped = ACTIVITY_TYPE_MAP.get(garmin_type.lower())
+    if mapped is None:
+        import logging
+        logging.warning(f"Unknown Garmin activity type: '{garmin_type}' — defaulting to 'strength'")
+        return "strength"
+    return mapped
 
 
 def map_hr_zones(zones_data: list[dict]) -> list[dict]:

@@ -43,9 +43,13 @@ export default async function ActivityDetailPage({ params }: PageProps) {
   });
 
   const stats = [
-    { label: "Distance", value: `${activity.distance.toFixed(2)} km`, icon: MapPin, color: "text-indigo-400" },
+    ...(activity.distance != null && activity.distance > 0
+      ? [{ label: "Distance", value: `${activity.distance.toFixed(2)} km`, icon: MapPin, color: "text-indigo-400" }]
+      : []),
     { label: "Duration", value: formatDuration(activity.duration), icon: Clock, color: "text-emerald-400" },
-    { label: "Avg Pace", value: `${formatPace(activity.avgPace)}/km`, icon: TrendingUp, color: "text-amber-400" },
+    ...(activity.avgPace != null && activity.avgPace > 0
+      ? [{ label: "Avg Pace", value: `${formatPace(activity.avgPace)}/km`, icon: TrendingUp, color: "text-amber-400" }]
+      : []),
     { label: "Avg HR", value: `${activity.avgHeartRate} bpm`, icon: Heart, color: "text-red-400" },
     { label: "Max HR", value: `${activity.maxHeartRate} bpm`, icon: Heart, color: "text-rose-500" },
     { label: "Calories", value: `${activity.calories} kcal`, icon: Flame, color: "text-orange-400" },
@@ -140,7 +144,7 @@ export default async function ActivityDetailPage({ params }: PageProps) {
                 </span>
               </div>
             </CardHeader>
-            <PaceChart samples={activity.paceSamples} avgPace={activity.avgPace} />
+            <PaceChart samples={activity.paceSamples} avgPace={activity.avgPace ?? 0} />
           </Card>
         </div>
 

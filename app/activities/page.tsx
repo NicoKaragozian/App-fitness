@@ -52,13 +52,13 @@ export default async function ActivitiesPage() {
               </p>
             </div>
             <p className="text-sm text-gray-300 text-right font-mono">
-              {activity.distance.toFixed(1)} km
+              {activity.distance != null && activity.distance > 0 ? `${activity.distance.toFixed(1)} km` : "—"}
             </p>
             <p className="text-sm text-gray-300 text-right font-mono">
               {formatDuration(activity.duration)}
             </p>
             <p className="text-sm text-gray-300 text-right font-mono">
-              {formatPace(activity.avgPace)}
+              {activity.avgPace != null && activity.avgPace > 0 ? formatPace(activity.avgPace) : "—"}
             </p>
             <p className="text-sm text-gray-300 text-right font-mono">
               {activity.avgHeartRate}

@@ -10,9 +10,9 @@ function summarizeActivities(activities: Activity[]) {
   return activities.map((a) => ({
     date: a.date.split("T")[0],
     name: a.name,
-    distance_km: a.distance,
+    distance_km: a.distance ?? 0,
     duration_min: Math.round(a.duration / 60),
-    avg_pace_per_km: formatPace(a.avgPace),
+    avg_pace_per_km: a.avgPace != null && a.avgPace > 0 ? formatPace(a.avgPace) : null,
     avg_hr: a.avgHeartRate,
     max_hr: a.maxHeartRate,
     calories: a.calories,

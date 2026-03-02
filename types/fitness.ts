@@ -1,4 +1,45 @@
-export type ActivityType = "running" | "cycling" | "swimming" | "hiking" | "strength";
+export type ActivityType =
+  | "running"
+  | "cycling"
+  | "swimming"
+  | "hiking"
+  | "strength"
+  | "cardio"
+  | "surf"
+  | "wingfoil"
+  | "windsurf"
+  | "kiteboard"
+  | "stand_up_paddling"
+  | "open_water_swimming"
+  | "tennis"
+  | "padel"
+  | "squash";
+
+export type SportCategory =
+  | "gym"
+  | "water_sports"
+  | "tennis"
+  | "running"
+  | "cycling"
+  | "hiking";
+
+export const ACTIVITY_CATEGORY_MAP: Record<ActivityType, SportCategory> = {
+  strength: "gym",
+  cardio: "gym",
+  swimming: "gym",
+  running: "running",
+  cycling: "cycling",
+  hiking: "hiking",
+  surf: "water_sports",
+  wingfoil: "water_sports",
+  windsurf: "water_sports",
+  kiteboard: "water_sports",
+  stand_up_paddling: "water_sports",
+  open_water_swimming: "water_sports",
+  tennis: "tennis",
+  padel: "tennis",
+  squash: "tennis",
+};
 
 export interface HeartRateZone {
   zone: 1 | 2 | 3 | 4 | 5;
@@ -25,9 +66,9 @@ export interface Activity {
   name: string;
   type: ActivityType;
   date: string; // ISO 8601
-  distance: number; // km
+  distance?: number; // km (optional for gym/tennis)
   duration: number; // seconds
-  avgPace: number; // seconds per km
+  avgPace?: number; // seconds per km (optional for gym/tennis/water)
   avgHeartRate: number; // bpm
   maxHeartRate: number; // bpm
   calories: number;
@@ -58,6 +99,37 @@ export interface WeeklyStats {
   avgHeartRate: number;
   totalCalories: number;
   trainingLoad: number; // arbitrary 0–1000
+}
+
+export interface SportCategorySummary {
+  category: SportCategory;
+  label: string;
+  sessions: number;
+  totalDuration: number; // seconds
+  totalCalories: number;
+  avgHeartRate: number;
+  weeklySessionCounts: number[]; // 4 weeks, oldest first
+}
+
+export interface MonthlyStats {
+  month: string; // "YYYY-MM"
+  totalSessions: number;
+  totalDuration: number;
+  totalCalories: number;
+  byCategory: Partial<Record<SportCategory, { sessions: number; duration: number }>>;
+}
+
+export interface SleepTrend {
+  date: string; // YYYY-MM-DD
+  sleepScore: number;
+  sleepHours: number;
+}
+
+export interface SleepTrendSummary {
+  trends: SleepTrend[];
+  avgScore: number;
+  avgHours: number;
+  trend: "improving" | "declining" | "stable";
 }
 
 export interface AIInsight {
