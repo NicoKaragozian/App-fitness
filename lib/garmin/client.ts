@@ -27,6 +27,15 @@ export async function fetchWeeklyStats(weeks = 4): Promise<WeeklyStats[]> {
   return garminFetch<WeeklyStats[]>(`/weekly-stats?weeks=${weeks}`);
 }
 
+export async function fetchHealthMetricsRange(
+  start: string,
+  end: string
+): Promise<DailyHealthMetrics[]> {
+  return garminFetch<DailyHealthMetrics[]>(
+    `/health-range?start=${start}&end=${end}`
+  );
+}
+
 export async function checkGarminHealth(): Promise<boolean> {
   try {
     const res = await fetch(`${GARMIN_SERVICE_URL}/health-check`, {

@@ -5,18 +5,20 @@ import {
   getPreviousWeekStats,
   formatDuration,
   formatPace,
-} from "@/lib/mock-data";
+} from "@/lib/data";
 import { StatsCard } from "@/components/dashboard/StatsCard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { AIWidget } from "@/components/dashboard/AIWidget";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { MapPin, Clock, Flame, TrendingUp, Zap, Moon, Activity } from "lucide-react";
 
-export default function DashboardPage() {
-  const today = getTodayMetrics();
-  const week = getCurrentWeekStats();
-  const prevWeek = getPreviousWeekStats();
-  const recentActivities = getRecentActivities(5);
+export default async function DashboardPage() {
+  const [today, week, prevWeek, recentActivities] = await Promise.all([
+    getTodayMetrics(),
+    getCurrentWeekStats(),
+    getPreviousWeekStats(),
+    getRecentActivities(5),
+  ]);
 
   const distanceTrend = Math.round(((week.totalDistance - prevWeek.totalDistance) / prevWeek.totalDistance) * 100);
   const paceTrend = Math.round(((prevWeek.avgPace - week.avgPace) / prevWeek.avgPace) * 100); // lower pace = better

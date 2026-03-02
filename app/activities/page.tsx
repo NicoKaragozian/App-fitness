@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { activities, formatPace, formatDuration } from "@/lib/mock-data";
+import { getActivities, formatPace, formatDuration } from "@/lib/data";
 import { MapPin, Clock, Heart, Flame, TrendingUp } from "lucide-react";
 
 function formatDate(dateStr: string): string {
@@ -10,7 +10,8 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export default function ActivitiesPage() {
+export default async function ActivitiesPage() {
+  const activities = await getActivities();
   const sorted = [...activities].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );

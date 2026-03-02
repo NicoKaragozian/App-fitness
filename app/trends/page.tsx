@@ -1,4 +1,5 @@
-import { activities, weeklyStats, healthMetrics, formatPace } from "@/lib/mock-data";
+import { getActivities, getWeeklyStats, getHealthMetrics, formatPace } from "@/lib/data";
+import type { Activity, DailyHealthMetrics, WeeklyStats } from "@/types/fitness";
 import {
   WeeklyDistanceChart,
   PaceTrendChart,
@@ -8,8 +9,7 @@ import {
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
-// Compute weekly average pace from activities
-function buildWeeklyPace() {
+function buildWeeklyPace(weeklyStats: WeeklyStats[]) {
   return weeklyStats.map((w) => ({
     date: w.weekStart,
     pace: w.avgPace,
@@ -17,8 +17,7 @@ function buildWeeklyPace() {
   }));
 }
 
-// Build VO2max trend from activities (one per week, last data point)
-function buildVO2Trend() {
+function buildVO2Trend(activities: Activity[]) {
   const byWeek: { [week: string]: number } = {};
   activities.forEach((a) => {
     if (!a.vo2maxEstimate) return;
@@ -37,8 +36,7 @@ function buildVO2Trend() {
     }));
 }
 
-// Sleep vs pace scatter — pair each activity with prior night sleep
-function buildSleepPerfData() {
+function buildSleepPerfData(activities: Activity[], healthMetrics: DailyHealthMetrics[]) {
   return activities.map((a) => {
     const actDate = a.date.split("T")[0];
     const dayBefore = new Date(new Date(actDate).getTime() - 86400000)
@@ -73,7 +71,13 @@ function TrendBadge({ value, unit, label }: { value: number; unit: string; label
   );
 }
 
-export default function TrendsPage() {
+export default async function TrendsPage() {
+  const [activities, weeklyStats, healthMetrics] = await Promise.all([
+    getActivities(),
+    getWeeklyStats(),
+    getHealthMetrics(28),
+  ]);
+
   const weeklyDistanceData = weeklyStats
     .slice()
     .reverse()
@@ -82,15 +86,14 @@ export default function TrendsPage() {
       distance: Math.round(w.totalDistance * 10) / 10,
     }));
 
-  const paceData = buildWeeklyPace().reverse();
-  const vo2Data = buildVO2Trend();
-  const sleepPerfData = buildSleepPerfData();
+  const paceData = buildWeeklyPace(weeklyStats).reverse();
+  const vo2Data = buildVO2Trend(activities);
+  const sleepPerfData = buildSleepPerfData(activities, healthMetrics);
 
-  // Summary stats
   const latestWeek = weeklyStats[0];
   const oldestWeek = weeklyStats[weeklyStats.length - 1];
   const distanceDiff = latestWeek.totalDistance - oldestWeek.totalDistance;
-  const paceDiff = latestWeek.avgPace - oldestWeek.avgPace; // lower is better
+  const paceDiff = latestWeek.avgPace - oldestWeek.avgPace;
   const latestVO2 = vo2Data[vo2Data.length - 1]?.vo2max ?? 0;
   const oldestVO2 = vo2Data[0]?.vo2max ?? 0;
   const vo2Diff = latestVO2 - oldestVO2;
@@ -120,7 +123,6 @@ export default function TrendsPage() {
 
       {/* Charts grid */}
       <div className="grid grid-cols-2 gap-4">
-        {/* Weekly Distance */}
         <Card>
           <CardHeader>
             <CardTitle>Weekly Distance</CardTitle>
@@ -129,7 +131,6 @@ export default function TrendsPage() {
           <WeeklyDistanceChart data={weeklyDistanceData} />
         </Card>
 
-        {/* Average Pace */}
         <Card>
           <CardHeader>
             <CardTitle>Avg Pace per Week</CardTitle>
@@ -138,7 +139,6 @@ export default function TrendsPage() {
           <PaceTrendChart data={paceData} />
         </Card>
 
-        {/* VO2 Max */}
         <Card>
           <CardHeader>
             <CardTitle>VO2 Max Estimate</CardTitle>
@@ -147,7 +147,6 @@ export default function TrendsPage() {
           <VO2MaxChart data={vo2Data} />
         </Card>
 
-        {/* Sleep vs Performance */}
         <Card>
           <CardHeader>
             <CardTitle>Sleep vs Pace</CardTitle>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateInsights } from "@/lib/claude";
-import { activities, healthMetrics, weeklyStats } from "@/lib/mock-data";
+import { getActivities, getHealthMetrics, getWeeklyStats } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,11 @@ export async function GET() {
   }
 
   try {
+    const [activities, healthMetrics, weeklyStats] = await Promise.all([
+      getActivities(),
+      getHealthMetrics(14),
+      getWeeklyStats(),
+    ]);
     const insights = await generateInsights(activities, healthMetrics, weeklyStats);
     return NextResponse.json(insights);
   } catch (err) {

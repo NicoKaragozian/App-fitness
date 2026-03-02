@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getActivityById, formatPace, formatDuration } from "@/lib/mock-data";
+import { getActivityById, formatPace, formatDuration } from "@/lib/data";
 import { HeartRateChart } from "@/components/charts/HeartRateChart";
 import { ZonesChart } from "@/components/charts/ZonesChart";
 import { PaceChart } from "@/components/charts/PaceChart";
@@ -29,7 +29,7 @@ const ZONE_COLORS = [
 
 export default async function ActivityDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const activity = getActivityById(id);
+  const activity = await getActivityById(id);
 
   if (!activity) notFound();
 

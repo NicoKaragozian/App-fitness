@@ -162,6 +162,44 @@ def get_weekly_stats(weeks: int = Query(default=4, ge=1, le=12)):
 
 # ─── Helper ───────────────────────────────────────────────────────────────────
 
+@app.get("/health-range")
+def get_health_range(
+    start: str = Query(..., description="Start date YYYY-MM-DD"),
+    end: str = Query(..., description="End date YYYY-MM-DD"),
+):
+    """
+    Returns DailyHealthMetrics[] for a date range (inclusive).
+    Fetches each day sequentially to avoid rate limiting.
+    """
+    try:
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    if (end_date - start_date).days > 90:
+        raise HTTPException(status_code=400, detail="Range cannot exceed 90 days")
+
+    client = get_client()
+    results = []
+    current = start_date
+
+    while current <= end_date:
+        date_str = current.isoformat()
+        body_battery = _safe(lambda d=date_str: client.get_body_battery(d))
+        sleep = _safe(lambda d=date_str: client.get_sleep_data(d))
+        rhr = _safe(lambda d=date_str: client.get_rhr_day(d))
+        steps = _safe(lambda d=date_str: client.get_steps_data(d, d))
+        stress = _safe(lambda d=date_str: client.get_stress_data(d))
+        vo2max = _safe(lambda d=date_str: client.get_max_metrics(d))
+        results.append(
+            map_health_metrics(date_str, body_battery, sleep, rhr, steps, stress, vo2max)
+        )
+        current += timedelta(days=1)
+
+    return results
+
+
 def _safe(fn):
     """Call fn, return None on any exception (prevents one bad endpoint killing the response)."""
     try:
