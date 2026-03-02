@@ -8,6 +8,19 @@ import {
   Brain,
 } from "lucide-react";
 
+async function getGarminStatus(): Promise<"connected" | "disconnected" | "mock"> {
+  if (process.env.USE_GARMIN !== "true") return "mock";
+  try {
+    const res = await fetch(`${process.env.GARMIN_SERVICE_URL}/health-check`, {
+      next: { revalidate: 30 },
+    });
+    const data = await res.json();
+    return data.authenticated ? "connected" : "disconnected";
+  } catch {
+    return "disconnected";
+  }
+}
+
 export const metadata: Metadata = {
   title: "FitTrack — Garmin + AI",
   description: "Personal fitness analytics powered by Claude AI",
@@ -20,11 +33,13 @@ const navItems = [
   { href: "/insights", icon: Brain, label: "AI Insights" },
 ];
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const garminStatus = await getGarminStatus();
+
   return (
     <html lang="en">
       <body className="flex h-screen overflow-hidden">
@@ -56,14 +71,42 @@ export default function RootLayout({
           </nav>
 
           {/* Footer */}
-          <div className="px-4 py-4 border-t border-[#2a2d3e]">
+          <div className="px-4 py-4 border-t border-[#2a2d3e] space-y-3">
+            {/* Garmin connection status */}
+            <div className="flex items-center gap-2 px-1">
+              <span
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  garminStatus === "connected"
+                    ? "bg-emerald-400"
+                    : garminStatus === "disconnected"
+                    ? "bg-red-400"
+                    : "bg-gray-500"
+                }`}
+              />
+              <span
+                className={`text-xs font-medium ${
+                  garminStatus === "connected"
+                    ? "text-emerald-400"
+                    : garminStatus === "disconnected"
+                    ? "text-red-400"
+                    : "text-gray-500"
+                }`}
+              >
+                {garminStatus === "connected"
+                  ? "Garmin Connected"
+                  : garminStatus === "disconnected"
+                  ? "Garmin Offline"
+                  : "Mock Data"}
+              </span>
+            </div>
+            {/* User */}
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center">
                 <span className="text-xs font-bold text-indigo-400">NK</span>
               </div>
               <div>
                 <p className="text-xs font-medium text-white">Nico K.</p>
-                <p className="text-xs text-gray-500">Mock Data Mode</p>
+                <p className="text-xs text-gray-500">nico.karagozian@gmail.com</p>
               </div>
             </div>
           </div>
