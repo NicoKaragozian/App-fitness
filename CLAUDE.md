@@ -1,23 +1,23 @@
 # FitTrack — Fitness App con Garmin + AI
 
 ## Qué es este proyecto
-Web app de fitness que muestra datos de entrenamiento con análisis de IA (Claude). Actualmente funciona con **datos simulados (mock)**. La integración real con Garmin Connect es Fase 3.
+Web app de fitness que muestra datos de entrenamiento multi-deporte con análisis de IA (Claude). Soporta running, gimnasio, deportes de agua (surf/wingfoil/windsurf) y tenis. Tiene integración real con Garmin Connect (Fase 3 ✅).
 
 ## Cómo correr el proyecto
 
 ```bash
 cd "C:\Users\nicok\OneDrive\Documents\Pruebas claude\fitness-app"
 npm run dev
-# → http://localhost:3000
+# → http://localhost:3000 (puede ser 3002/3004 si el puerto está ocupado)
 ```
 
-> Si es una terminal nueva después de instalar Node.js, npm ya debería estar en el PATH.
-> Si no: usar la ruta completa `"C:\Program Files\nodejs\npm.cmd" run dev`
+> Si es una terminal nueva: usar `PATH="/c/Program Files/nodejs:$PATH" npm run dev`
+> Si el dashboard muestra categorías incorrectas: `rm -rf .next && npm run dev` (limpia caché)
 
 ## Tech Stack
 - **Next.js 15** (App Router) + TypeScript
 - **Tailwind CSS** para estilos (dark theme, colores en `app/globals.css`)
-- **Recharts** para gráficos (HR, pace, zonas, tendencias)
+- **Recharts** para gráficos (HR, pace, zonas, tendencias, sleep trend, donut)
 - **Anthropic SDK** (`@anthropic-ai/sdk`) para AI Insights con `claude-sonnet-4-6`
 
 ## Estructura de archivos clave
@@ -25,22 +25,39 @@ npm run dev
 ```
 fitness-app/
 ├── app/
-│   ├── page.tsx                    # Dashboard principal
-│   ├── activities/page.tsx         # Lista de actividades
+│   ├── page.tsx                    # Dashboard analytics (Server Component)
+│   ├── activities/page.tsx         # Lista de actividades (multi-deporte)
 │   ├── activities/[id]/page.tsx    # Detalle de actividad (con gráficos)
 │   ├── trends/page.tsx             # Gráficos históricos (4 semanas)
 │   ├── insights/page.tsx           # AI Insights (Claude) — cliente
 │   └── api/insights/route.ts       # Endpoint que llama a Claude API
 ├── components/
-│   ├── dashboard/                  # StatsCard, ActivityFeed, AIWidget
-│   ├── charts/                     # HeartRateChart, PaceChart, ZonesChart, TrendChart
+│   ├── dashboard/
+│   │   ├── AnalyticsHeader.tsx     # Totales del período (30d): sesiones, tiempo, calorías
+│   │   ├── SportCategoryPanel.tsx  # Panel por deporte con sparkline de sesiones
+│   │   ├── SleepTrendCard.tsx      # Card wrapper sueño 14 días
+│   │   ├── ActivitySplitCard.tsx   # Donut: % tiempo por deporte (Client)
+│   │   ├── ActivityFeed.tsx        # Feed sport-aware: ícono y métricas por categoría
+│   │   ├── StatsCard.tsx           # Card genérica de estadística
+│   │   └── AIWidget.tsx            # Widget de Claude AI
+│   ├── charts/
+│   │   ├── SleepTrendChart.tsx     # BarChart 14 días, coloreado por sleep score (Client)
+│   │   ├── WeeklySessionSparkline.tsx  # Mini sparkline 4 semanas (Client)
+│   │   ├── HeartRateChart.tsx      # Gráfico HR por actividad
+│   │   ├── PaceChart.tsx           # Gráfico pace por km
+│   │   ├── ZonesChart.tsx          # Gráfico zonas HR
+│   │   └── TrendChart.tsx          # Gráfico tendencias semanales
 │   └── ui/Card.tsx                 # Componente Card reutilizable
 ├── lib/
-│   ├── mock-data.ts                # 20 actividades + 28 días de métricas de salud
-│   ├── claude.ts                   # Cliente Anthropic — genera insights desde los datos
+│   ├── data.ts                     # Capa de datos unificada (mock ↔ Garmin)
+│   ├── mock-data.ts                # 32 actividades (20 running + 12 multi-deporte)
+│   ├── claude.ts                   # Cliente Anthropic — genera insights
 │   ├── utils.ts                    # cn() helper (clsx + tailwind-merge)
-│   └── garmin/client.ts            # Stub para Fase 3 (Garmin real)
-└── types/fitness.ts                # Tipos: Activity, HealthMetrics, WeeklyStats, etc.
+│   └── garmin/client.ts            # Cliente HTTP al micro-servicio Python
+├── garmin_service/                 # Micro-servicio Python (Flask)
+│   ├── app.py                      # Endpoints: /activities, /health, /health/range, /weekly
+│   └── data_mapper.py              # Mapeo de tipos Garmin → ActivityType de la app
+└── types/fitness.ts                # Tipos: Activity, SportCategory, WeeklyStats, etc.
 ```
 
 ## Configuración de Claude API
@@ -50,21 +67,43 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 Sin la key, la página `/insights` muestra insights pre-generados (fallback estático).
 
-## Estado actual (Fase 1 ✅ + Fase 2 ✅)
-- Dashboard con stats semanales, Body Battery, Sleep Score, VO2 Max
-- Lista y detalle de actividades con gráficos de HR, zonas y pace
-- Página de Tendencias con 4 charts históricos
-- Página de AI Insights: insights estáticos + botón para llamar a Claude en vivo
-- API route `/api/insights` implementada y funcional
+## Configuración de Garmin (opcional)
+```
+USE_GARMIN=true
+GARMIN_SERVICE_URL=http://localhost:5000
+```
+Sin estas variables, la app usa mock data.
 
-## Próximos pasos (Fase 3 — Garmin real)
-1. Crear micro-servicio Python con la librería `garminconnect`
-2. Endpoints: `/activities?days=30` y `/health?date=YYYY-MM-DD`
-3. Reemplazar imports de `mock-data` por llamadas al servicio Python
-4. Agregar variables de entorno: `GARMIN_EMAIL`, `GARMIN_PASSWORD`, `GARMIN_SERVICE_URL`
-5. Ver stub en `lib/garmin/client.ts`
+## Estado actual
+
+### Fase 1 ✅ — App base
+- Dashboard, lista/detalle de actividades, tendencias, AI Insights
+
+### Fase 2 ✅ — Charts y UX
+- HeartRateChart, PaceChart, ZonesChart, TrendChart
+
+### Fase 3 ✅ — Garmin real
+- Micro-servicio Python con Flask + garminconnect
+- Toggle `USE_GARMIN=true` para usar datos reales
+
+### Fase 4 ✅ — Analytics multi-deporte
+- Dashboard rediseñado con paneles por categoría: Gym 🏋️, Water Sports 🌊, Tennis 🎾
+- `AnalyticsHeader`: totales del período (30 días)
+- `SportCategoryPanel`: sesiones, tiempo, calorías, HR avg + sparkline semanal
+- `SleepTrendCard`: 14 barras coloreadas por score (verde/índigo/ámbar/rojo)
+- `ActivitySplitCard`: donut con % de tiempo por deporte
+- `ActivityFeed` sport-aware: sin distancia/pace para gym/tenis, íconos por categoría
+- Bug fix Garmin: tennis/surf/wingfoil caían a "running" → ahora mapeados correctamente
+- `ActivityType` expandido: surf, wingfoil, windsurf, kiteboard, tennis, padel, squash, cardio
+- `distance` y `avgPace` son opcionales en `Activity`
 
 ## Mock Data
-- 20 runs (4 semanas: Feb 1 – Mar 1, 2026)
+- 32 actividades: 20 runs + 3 gym strength + 1 HIIT + 2 surf + 2 wingfoil + 1 windsurf + 3 tennis
 - 28 días de métricas: Body Battery, Sleep Score, RHR, Stress, VO2 max
-- Datos generados con funciones helper en `lib/mock-data.ts` (HR samples, pace samples, zonas)
+- Actividades de gym/tenis/agua no tienen `distance` ni `avgPace`
+
+## Actividades reales del usuario
+- Gimnasio (strength training, HIIT)
+- Deportes de agua: surf, wingfoil, windsurf
+- Tenis (singles y dobles)
+- Running
