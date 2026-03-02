@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getActivities, formatPace, formatDuration } from "@/lib/data";
-import { MapPin, Clock, Heart, Flame, TrendingUp } from "lucide-react";
+import { ACTIVITY_CATEGORY_MAP } from "@/types/fitness";
+import type { ActivityType } from "@/types/fitness";
+import { MapPin, Clock, Heart, Flame } from "lucide-react";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -10,23 +12,57 @@ function formatDate(dateStr: string): string {
   });
 }
 
+const TYPE_ICON: Record<ActivityType, string> = {
+  running: "🏃",
+  cycling: "🚴",
+  swimming: "🏊",
+  hiking: "🥾",
+  strength: "🏋️",
+  cardio: "🏋️",
+  surf: "🌊",
+  wingfoil: "🌊",
+  windsurf: "🌊",
+  kiteboard: "🌊",
+  stand_up_paddling: "🌊",
+  open_water_swimming: "🌊",
+  tennis: "🎾",
+  padel: "🎾",
+  squash: "🎾",
+};
+
+function showsDistance(type: ActivityType): boolean {
+  return type === "running" || type === "cycling" || type === "hiking";
+}
+
+function showsPace(type: ActivityType): boolean {
+  return type === "running";
+}
+
 export default async function ActivitiesPage() {
   const activities = await getActivities();
   const sorted = [...activities].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
+  // Count by category for subtitle
+  const categoryCounts: Record<string, number> = {};
+  for (const act of sorted) {
+    const cat = ACTIVITY_CATEGORY_MAP[act.type] ?? "gym";
+    categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Activities</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          {activities.length} runs · last 4 weeks
+          {activities.length} activities · last 4 weeks
         </p>
       </div>
 
       {/* Table header */}
-      <div className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 pb-2 text-xs text-gray-500 uppercase tracking-wide border-b border-[#2a2d3e]">
+      <div className="grid grid-cols-[32px_1fr_80px_80px_80px_80px_80px] gap-4 px-4 pb-2 text-xs text-gray-500 uppercase tracking-wide border-b border-[#2a2d3e]">
+        <span></span>
         <span>Activity</span>
         <span className="text-right">Distance</span>
         <span className="text-right">Time</span>
@@ -41,8 +77,11 @@ export default async function ActivitiesPage() {
           <Link
             key={activity.id}
             href={`/activities/${activity.id}`}
-            className="grid grid-cols-[1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-3.5 items-center hover:bg-[#1a1d27] transition-colors group"
+            className="grid grid-cols-[32px_1fr_80px_80px_80px_80px_80px] gap-4 px-4 py-3.5 items-center hover:bg-[#1a1d27] transition-colors group"
           >
+            <span className="text-lg" title={activity.type}>
+              {TYPE_ICON[activity.type] ?? "🏃"}
+            </span>
             <div>
               <p className="text-sm font-medium text-white group-hover:text-indigo-300 transition-colors">
                 {activity.name}
@@ -52,13 +91,17 @@ export default async function ActivitiesPage() {
               </p>
             </div>
             <p className="text-sm text-gray-300 text-right font-mono">
-              {activity.distance != null && activity.distance > 0 ? `${activity.distance.toFixed(1)} km` : "—"}
+              {showsDistance(activity.type) && activity.distance != null && activity.distance > 0
+                ? `${activity.distance.toFixed(1)} km`
+                : "—"}
             </p>
             <p className="text-sm text-gray-300 text-right font-mono">
               {formatDuration(activity.duration)}
             </p>
             <p className="text-sm text-gray-300 text-right font-mono">
-              {activity.avgPace != null && activity.avgPace > 0 ? formatPace(activity.avgPace) : "—"}
+              {showsPace(activity.type) && activity.avgPace != null && activity.avgPace > 0
+                ? formatPace(activity.avgPace)
+                : "—"}
             </p>
             <p className="text-sm text-gray-300 text-right font-mono">
               {activity.avgHeartRate}

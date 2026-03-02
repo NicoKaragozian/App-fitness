@@ -104,18 +104,8 @@ const CATEGORY_LABELS: Record<SportCategory, string> = {
   hiking: "Hiking",
 };
 
-// Inline map so this function doesn't depend on import order at runtime
-const TYPE_TO_CATEGORY: Record<string, SportCategory> = {
-  strength: "gym", cardio: "gym", swimming: "gym",
-  running: "running", cycling: "cycling", hiking: "hiking",
-  surf: "water_sports", wingfoil: "water_sports", windsurf: "water_sports",
-  kiteboard: "water_sports", stand_up_paddling: "water_sports", open_water_swimming: "water_sports",
-  tennis: "tennis", padel: "tennis", squash: "tennis",
-};
-
 export async function getSportCategorySummaries(days = 30): Promise<SportCategorySummary[]> {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
   const acts = await getActivities(days);
   const recent = acts.filter((a) => new Date(a.date) >= cutoff);
@@ -140,7 +130,7 @@ export async function getSportCategorySummaries(days = 30): Promise<SportCategor
   }>();
 
   for (const act of recent) {
-    const cat: SportCategory = TYPE_TO_CATEGORY[act.type] ?? "gym";
+    const cat: SportCategory = ACTIVITY_CATEGORY_MAP[act.type] ?? "gym";
     if (!byCategory.has(cat)) {
       byCategory.set(cat, { sessions: 0, totalDuration: 0, totalCalories: 0, totalHR: 0, hrCount: 0, weekCounts: [0, 0, 0, 0] });
     }
