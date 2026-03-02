@@ -62,12 +62,20 @@ ACTIVITY_TYPE_MAP = {
 
 
 def map_activity_type(garmin_type: str) -> str:
-    mapped = ACTIVITY_TYPE_MAP.get(garmin_type.lower())
-    if mapped is None:
-        import logging
-        logging.warning(f"Unknown Garmin activity type: '{garmin_type}' — defaulting to 'strength'")
-        return "strength"
-    return mapped
+    import re
+    key = garmin_type.lower()
+    mapped = ACTIVITY_TYPE_MAP.get(key)
+    if mapped is not None:
+        return mapped
+    # Strip trailing _vN suffix (e.g. tennis_v2 → tennis, surfing_v3 → surfing)
+    stripped = re.sub(r"_v\d+$", "", key)
+    if stripped != key:
+        mapped = ACTIVITY_TYPE_MAP.get(stripped)
+        if mapped is not None:
+            return mapped
+    import logging
+    logging.warning(f"Unknown Garmin activity type: '{garmin_type}' — defaulting to 'strength'")
+    return "strength"
 
 
 def map_hr_zones(zones_data: list[dict]) -> list[dict]:
