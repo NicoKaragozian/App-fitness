@@ -36,10 +36,13 @@ ACTIVITY_TYPE_MAP = {
     "pilates": "strength",
     # Water sports
     "surfing": "surf",
+    "surfing_v2": "surf",
+    "wakesurfing": "surf",
     "sailing": "surf",
     "wakeboarding": "surf",
     "kiteboarding": "kiteboard",
     "windsurfing": "windsurf",
+    "windsurfing_v2": "windsurf",
     "wind_kite_surfing": "windsurf",
     "wingfoil": "wingfoil",
     "wing_foil": "wingfoil",
@@ -47,10 +50,14 @@ ACTIVITY_TYPE_MAP = {
     "open_water_swimming": "open_water_swimming",
     # Tennis / racquet
     "tennis": "tennis",
+    "tennis_v2": "tennis",
     "padel": "padel",
     "squash": "squash",
     "racquet": "tennis",
     "racquetball": "squash",
+    # Other
+    "soccer": "cardio",
+    "other": "cardio",
 }
 
 
