@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: drift
+    runtime: node
+    buildCommand: npm install --legacy-peer-deps && npm run build && cd server && npm install
+    startCommand: cd server && npx tsx src/index.ts
+    disk:
+      name: drift-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /data/drift.db
