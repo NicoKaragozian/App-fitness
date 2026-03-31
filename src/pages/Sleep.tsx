@@ -10,6 +10,8 @@ import { weeklySleepData, monthlySleepData } from '../data/mockData';
 
 type Period = 'weekly' | 'monthly';
 
+const formatHours = (h: number) => `${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`;
+
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -17,7 +19,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
       <p className="font-label text-label-sm text-on-surface-variant mb-1">{label}</p>
       {payload.map((p) => (
         <p key={p.name} className="font-body text-sm font-medium" style={{ color: p.color }}>
-          {p.name}: {typeof p.value === 'number' ? p.value.toFixed(1) : p.value}
+          {p.name}: {p.name === 'HORAS' ? formatHours(p.value) : typeof p.value === 'number' ? p.value.toFixed(0) : p.value}
         </p>
       ))}
     </div>

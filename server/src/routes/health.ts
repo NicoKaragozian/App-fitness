@@ -7,6 +7,22 @@ const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
 router.get('/sleep', (req, res) => {
   const period = (req.query.period as string) || 'weekly';
+
+  // 'daily' → return only the most recent entry (for the dashboard)
+  if (period === 'daily') {
+    const row = db.prepare(
+      `SELECT s.*, h.nightly_avg FROM sleep s LEFT JOIN hrv h ON s.date = h.date ORDER BY s.date DESC LIMIT 1`
+    ).get() as any;
+    if (!row) { res.json([]); return; }
+    res.json([{
+      day: 'HOY',
+      hours: row.duration_seconds ? Math.round((row.duration_seconds / 3600) * 10) / 10 : 0,
+      score: row.score ?? 0,
+      hrv: row.nightly_avg ? Math.round(row.nightly_avg) : 0,
+    }]);
+    return;
+  }
+
   const limit = period === 'weekly' ? 7 : 30;
 
   const rows = db.prepare(
@@ -19,7 +35,7 @@ router.get('/sleep', (req, res) => {
       day: period === 'weekly' ? DAY_NAMES[d.getDay()] : d.getDate(),
       hours: r.duration_seconds ? Math.round((r.duration_seconds / 3600) * 10) / 10 : 0,
       score: r.score ?? 0,
-      hrv: 0, // Will be joined from hrv table
+      hrv: 0,
     };
   });
 
@@ -31,7 +47,7 @@ router.get('/sleep', (req, res) => {
   const hrvMap = new Map(hrvRows.map((r) => [r.date, r.nightly_avg]));
 
   for (let i = 0; i < rows.length && i < data.length; i++) {
-    const hrv = hrvMap.get(rows[rows.length - 1 - i]?.date);
+    const hrv = hrvMap.get(rows[i]?.date);
     if (hrv) data[i].hrv = Math.round(hrv);
   }
 
@@ -125,16 +141,22 @@ router.get('/summary', (_req, res) => {
     `SELECT * FROM daily_summary ORDER BY date DESC LIMIT 1`
   ).get() as any;
 
+  // Use latest sleep score as readiness proxy when body battery is unavailable
+  const sleepRow = db.prepare(
+    `SELECT score FROM sleep ORDER BY date DESC LIMIT 1`
+  ).get() as any;
+
   if (!row) {
-    res.json({ steps: 0, calories: 0, bodyBattery: 0, restingHR: 0 });
+    res.json({ steps: null, calories: null, bodyBattery: null, restingHR: null, sleepScore: sleepRow?.score ?? null });
     return;
   }
 
   res.json({
-    steps: row.steps ?? 0,
-    calories: row.calories ?? 0,
-    bodyBattery: row.body_battery ?? 0,
-    restingHR: row.resting_hr ?? 0,
+    steps: row.steps ?? null,
+    calories: row.calories ?? null,
+    bodyBattery: row.body_battery ?? null,
+    restingHR: row.resting_hr ?? null,
+    sleepScore: sleepRow?.score ?? null,
   });
 });
 

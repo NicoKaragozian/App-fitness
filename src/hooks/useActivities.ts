@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client';
 
+export interface ChartData {
+  water_sports: Array<{ date: string; distance: number; maxSpeed: number; duration: number }>;
+  tennis: Array<{ date: string; duration: number; avgHr: number; calories: number }>;
+  gym: Array<{ date: string; duration: number; calories: number }>;
+}
+
 interface ActivitiesData {
   sports: {
     waterSports: Record<string, unknown>;
@@ -9,6 +15,7 @@ interface ActivitiesData {
     others: Array<{ name: string; sessions: number; distance?: number; duration?: number }>;
   };
   volumeHistory: Array<{ month: string; water: number; tennis: number; gym: number }>;
+  chartData?: ChartData;
   trainingReadiness: number;
   recentSession: {
     sport: string;

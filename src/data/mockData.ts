@@ -93,6 +93,103 @@ export const sportsData = {
   ],
 };
 
+export const chartDataMock = {
+  water_sports: [
+    { date: '2025-10-05', distance: 14.2, maxSpeed: 38, duration: 95 },
+    { date: '2025-10-18', distance: 18.6, maxSpeed: 42, duration: 110 },
+    { date: '2025-11-02', distance: 12.0, maxSpeed: 35, duration: 80 },
+    { date: '2025-11-15', distance: 21.3, maxSpeed: 45, duration: 125 },
+    { date: '2025-12-01', distance: 9.5, maxSpeed: 31, duration: 65 },
+    { date: '2026-01-10', distance: 16.8, maxSpeed: 40, duration: 100 },
+    { date: '2026-01-24', distance: 22.1, maxSpeed: 48, duration: 130 },
+    { date: '2026-02-08', distance: 18.4, maxSpeed: 44, duration: 115 },
+    { date: '2026-02-22', distance: 25.6, maxSpeed: 52, duration: 145 },
+    { date: '2026-03-08', distance: 19.2, maxSpeed: 46, duration: 120 },
+    { date: '2026-03-15', distance: 21.6, maxSpeed: 49, duration: 135 },
+    { date: '2026-03-19', distance: 12.4, maxSpeed: 36, duration: 90 },
+  ],
+  tennis: [
+    { date: '2025-10-07', duration: 90, avgHr: 138, calories: 520 },
+    { date: '2025-10-14', duration: 75, avgHr: 132, calories: 440 },
+    { date: '2025-10-21', duration: 105, avgHr: 145, calories: 610 },
+    { date: '2025-11-04', duration: 90, avgHr: 140, calories: 530 },
+    { date: '2025-11-11', duration: 80, avgHr: 135, calories: 470 },
+    { date: '2025-11-18', duration: 95, avgHr: 142, calories: 555 },
+    { date: '2025-12-03', duration: 70, avgHr: 130, calories: 410 },
+    { date: '2026-01-07', duration: 90, avgHr: 138, calories: 525 },
+    { date: '2026-01-14', duration: 100, avgHr: 143, calories: 585 },
+    { date: '2026-01-21', duration: 85, avgHr: 136, calories: 498 },
+    { date: '2026-02-04', duration: 90, avgHr: 140, calories: 528 },
+    { date: '2026-02-11', duration: 110, avgHr: 147, calories: 642 },
+    { date: '2026-02-18', duration: 90, avgHr: 139, calories: 526 },
+    { date: '2026-03-04', duration: 95, avgHr: 141, calories: 555 },
+    { date: '2026-03-11', duration: 80, avgHr: 134, calories: 468 },
+  ],
+  gym: [
+    { date: '2025-10-03', duration: 60, calories: 380 },
+    { date: '2025-10-10', duration: 65, calories: 410 },
+    { date: '2025-11-05', duration: 55, calories: 350 },
+    { date: '2025-11-12', duration: 70, calories: 440 },
+    { date: '2025-12-08', duration: 60, calories: 380 },
+    { date: '2026-01-05', duration: 65, calories: 410 },
+    { date: '2026-01-12', duration: 70, calories: 445 },
+    { date: '2026-01-19', duration: 60, calories: 382 },
+    { date: '2026-02-02', duration: 75, calories: 472 },
+    { date: '2026-02-09', duration: 65, calories: 411 },
+    { date: '2026-02-16', duration: 60, calories: 380 },
+    { date: '2026-03-02', duration: 70, calories: 442 },
+    { date: '2026-03-09', duration: 65, calories: 411 },
+    { date: '2026-03-16', duration: 60, calories: 380 },
+    { date: '2026-03-18', duration: 65, calories: 411 },
+    { date: '2026-03-20', duration: 55, calories: 350 },
+  ],
+};
+
+export const activityDetailMock = {
+  water_sports: {
+    activities: [
+      { id: 'w1', date: '2026-03-19', sportType: 'windsurfing', duration: 90, distance: 12.4, maxSpeed: 36, avgHr: 142, calories: 580 },
+      { id: 'w2', date: '2026-03-15', sportType: 'kiteboarding', duration: 135, distance: 21.6, maxSpeed: 49, avgHr: 155, calories: 820 },
+      { id: 'w3', date: '2026-03-08', sportType: 'windsurfing', duration: 120, distance: 19.2, maxSpeed: 46, avgHr: 148, calories: 720 },
+    ],
+    stats: { totalSessions: 12, totalDistance: 218.6, totalDuration: 1140, totalCalories: 6960, avgDuration: 95, avgHr: undefined },
+    personalBests: {
+      longestSession: { date: '2026-02-22', value: 145, unit: 'min' },
+      longestDistance: { date: '2026-02-22', value: 25.6, unit: 'km' },
+      highestSpeed: { date: '2026-02-22', value: 52, unit: 'km/h' },
+      mostCalories: { date: '2026-02-22', value: 980, unit: 'kcal' },
+    },
+  },
+  tennis: {
+    activities: [
+      { id: 't1', date: '2026-03-11', sportType: 'tennis', duration: 80, distance: 0, maxSpeed: null, avgHr: 134, calories: 468 },
+      { id: 't2', date: '2026-03-04', sportType: 'tennis', duration: 95, distance: 0, maxSpeed: null, avgHr: 141, calories: 555 },
+      { id: 't3', date: '2026-02-18', sportType: 'tennis', duration: 90, distance: 0, maxSpeed: null, avgHr: 139, calories: 526 },
+    ],
+    stats: { totalSessions: 15, totalDistance: undefined, totalDuration: 1350, totalCalories: 6300, avgDuration: 90, avgHr: 139 },
+    personalBests: {
+      longestSession: { date: '2026-02-11', value: 110, unit: 'min' },
+      longestDistance: null,
+      highestSpeed: null,
+      mostCalories: { date: '2026-02-11', value: 642, unit: 'kcal' },
+    },
+  },
+  gym: {
+    activities: [
+      { id: 'g1', date: '2026-03-20', sportType: 'strength_training', duration: 55, distance: 0, maxSpeed: null, avgHr: null, calories: 350 },
+      { id: 'g2', date: '2026-03-18', sportType: 'strength_training', duration: 65, distance: 0, maxSpeed: null, avgHr: null, calories: 411 },
+      { id: 'g3', date: '2026-03-16', sportType: 'strength_training', duration: 60, distance: 0, maxSpeed: null, avgHr: null, calories: 380 },
+    ],
+    stats: { totalSessions: 16, totalDistance: undefined, totalDuration: 1040, totalCalories: 6080, avgDuration: 65, avgHr: undefined },
+    personalBests: {
+      longestSession: { date: '2026-02-02', value: 75, unit: 'min' },
+      longestDistance: null,
+      highestSpeed: null,
+      mostCalories: { date: '2026-02-02', value: 472, unit: 'kcal' },
+    },
+  },
+};
+
 export const volumeHistoryMonthly = [
   { month: 'Oct', water: 180, tennis: 280, gym: 160 },
   { month: 'Nov', water: 220, tennis: 320, gym: 200 },

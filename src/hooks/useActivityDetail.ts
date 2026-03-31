@@ -1,0 +1,50 @@
+import { useState, useEffect } from 'react';
+import { apiFetch } from '../api/client';
+
+export interface ActivityItem {
+  id: string;
+  date: string;
+  sportType: string;
+  duration: number;
+  distance: number;
+  maxSpeed: number | null;
+  avgHr: number | null;
+  calories: number | null;
+}
+
+export interface ActivityDetailData {
+  activities: ActivityItem[];
+  stats: {
+    totalSessions: number;
+    totalDistance?: number;
+    totalDuration: number;
+    totalCalories: number;
+    avgDuration: number;
+    avgHr?: number | null;
+  };
+  personalBests: {
+    longestSession: { date: string; value: number; unit: string } | null;
+    longestDistance: { date: string; value: number; unit: string } | null;
+    highestSpeed: { date: string; value: number; unit: string } | null;
+    mostCalories: { date: string; value: number; unit: string } | null;
+  };
+}
+
+export function useActivityDetail(category: string) {
+  const [data, setData] = useState<ActivityDetailData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    apiFetch<ActivityDetailData>(`/activities/category/${category}`)
+      .then(setData)
+      .catch((err) => {
+        setError(err);
+        setData(null);
+      })
+      .finally(() => setLoading(false));
+  }, [category]);
+
+  return { data, loading, error };
+}

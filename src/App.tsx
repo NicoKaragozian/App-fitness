@@ -3,6 +3,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { Dashboard } from './pages/Dashboard';
 import { Sports } from './pages/Sports';
+import { SportDetail } from './pages/SportDetail';
 import { Sleep } from './pages/Sleep';
 import { Wellness } from './pages/Wellness';
 import { Login } from './pages/Login';
@@ -18,6 +19,7 @@ function AuthenticatedLayout() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/sports" element={<Sports />} />
+            <Route path="/sports/:category" element={<SportDetail />} />
             <Route path="/sleep" element={<Sleep />} />
             <Route path="/wellness" element={<Wellness />} />
             <Route path="*" element={<Navigate to="/" replace />} />

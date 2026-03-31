@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client';
 
 interface DailySummary {
-  steps: number;
-  calories: number;
-  bodyBattery: number;
-  restingHR: number;
+  steps: number | null;
+  calories: number | null;
+  bodyBattery: number | null;
+  restingHR: number | null;
+  sleepScore: number | null;
 }
 
 export function useDailySummary() {
@@ -18,8 +19,7 @@ export function useDailySummary() {
       .then(setData)
       .catch((err) => {
         setError(err);
-        // Fallback to mock
-        setData({ steps: 12400, calories: 2100, bodyBattery: 78, restingHR: 48 });
+        setData({ steps: null, calories: null, bodyBattery: null, restingHR: null, sleepScore: null });
       })
       .finally(() => setLoading(false));
   }, []);

@@ -49,16 +49,28 @@ async function syncActivities(startDate: Date, endDate: Date) {
   }
 }
 
+// Garmin's API has a systematic 1-day offset: querying date X returns data with calendarDate X-1.
+// To get data for a given dateStr, we must query Garmin for dateStr + 1 day.
+function nextDay(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return garmin.formatDate(d);
+}
+
 async function syncDayData(dateStr: string) {
+  const fetchDate = nextDay(dateStr);
+
   // Sleep
-  const sleepData = await garmin.fetchSleep(dateStr);
+  const sleepData = await garmin.fetchSleep(fetchDate);
   if (sleepData) {
     const dto = sleepData.dailySleepDTO;
+    // Use calendarDate from Garmin response (should equal dateStr) as the DB key
+    const storeDate = (dto as any)?.calendarDate ?? dateStr;
     db.prepare(`
       INSERT OR REPLACE INTO sleep (date, score, duration_seconds, deep_seconds, light_seconds, rem_seconds, awake_seconds, raw_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      dateStr,
+      storeDate,
       (dto as any).sleepScores?.overall?.value ?? null,
       dto.sleepTimeSeconds ?? null,
       dto.deepSleepSeconds ?? null,
@@ -70,7 +82,7 @@ async function syncDayData(dateStr: string) {
   }
 
   // Stress
-  const stressData = await garmin.fetchStress(dateStr);
+  const stressData = await garmin.fetchStress(fetchDate);
   if (stressData) {
     db.prepare(`
       INSERT OR REPLACE INTO stress (date, avg_stress, max_stress, raw_json)
@@ -84,7 +96,7 @@ async function syncDayData(dateStr: string) {
   }
 
   // HRV
-  const hrvData = await garmin.fetchHRV(dateStr);
+  const hrvData = await garmin.fetchHRV(fetchDate);
   if (hrvData) {
     db.prepare(`
       INSERT OR REPLACE INTO hrv (date, nightly_avg, status, raw_json)
@@ -98,7 +110,7 @@ async function syncDayData(dateStr: string) {
   }
 
   // Daily Summary
-  const summary = await garmin.fetchDailySummary(dateStr);
+  const summary = await garmin.fetchDailySummary(fetchDate);
   if (summary) {
     db.prepare(`
       INSERT OR REPLACE INTO daily_summary (date, steps, calories, body_battery, resting_hr, raw_json)

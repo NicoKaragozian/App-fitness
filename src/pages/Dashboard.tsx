@@ -39,13 +39,22 @@ export const Dashboard: React.FC = () => {
 
   const loading = summaryLoading || sleepLoading || activitiesLoading;
 
-  const readinessScore = summary?.bodyBattery ?? 94;
-  const batteryValue = summary?.bodyBattery ?? 78;
-  const sleepScoreValue = sleepData?.[0]?.score ?? 85;
-  const sleepHoursValue = sleepData?.[0]?.hours ? `${Math.floor(sleepData[0].hours)}h ${Math.round((sleepData[0].hours % 1) * 60)}m` : '7h 45m';
-  const restingHRValue = summary?.restingHR ?? 48;
-  const stepsValue = summary?.steps ? `${(summary.steps / 1000).toFixed(1)}K` : '12.4K';
-  const caloriesValue = summary?.calories ? `${(summary.calories / 1000).toFixed(1)}K` : '2.1K';
+  // sleepData[0] = today's entry (backend returns 1 item for 'daily')
+  const todaySleep = sleepData?.[0] ?? null;
+  const sleepScoreValue = todaySleep?.score ?? 0;
+  const sleepHoursValue = todaySleep?.hours
+    ? `${Math.floor(todaySleep.hours)}h ${Math.round((todaySleep.hours % 1) * 60)}m`
+    : '--';
+
+  // Use null-safe fallbacks: null means no data (different from 0)
+  const bodyBattery = summary?.bodyBattery ?? null;
+  // When body battery unavailable (API 403), use sleep score as readiness proxy
+  const readinessProxy = bodyBattery ?? summary?.sleepScore ?? null;
+  const readinessScore = readinessProxy ?? 0;
+  const batteryValue = readinessProxy ?? 0;
+  const restingHRValue = summary?.restingHR ?? null;
+  const stepsValue = summary?.steps != null ? `${(summary.steps / 1000).toFixed(1)}K` : '--';
+  const caloriesValue = summary?.calories != null ? `${(summary.calories / 1000).toFixed(1)}K` : '--';
 
   const lastActivity = activities?.recentSession;
 
@@ -64,14 +73,14 @@ export const Dashboard: React.FC = () => {
                 className="font-display text-on-surface font-bold leading-none"
                 style={{ fontSize: '7rem', color: '#1a1a1a', WebkitTextStroke: '1px #484847', position: 'absolute', top: 20, left: 20, opacity: 0.4, zIndex: 0 }}
               >
-                {readinessScore}
+                {readinessProxy ?? '—'}
               </p>
               <p className="font-display font-bold text-primary relative z-10 text-5xl lg:text-[5rem] leading-none">
-                {readinessScore}
+                {readinessProxy ?? '—'}
               </p>
               <div className="mt-2">
                 <p className="font-label text-label-sm text-on-surface-variant">FC REPOSO</p>
-                <p className="font-label text-label-sm text-secondary">{restingHRValue} BPM</p>
+                <p className="font-label text-label-sm text-secondary">{restingHRValue != null ? `${restingHRValue} BPM` : '--'}</p>
               </div>
             </div>
             <div className="flex gap-3 relative z-10">
@@ -109,7 +118,7 @@ export const Dashboard: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: 'DISTANCIA', value: `${lastActivity?.distance ?? 18.6} KM` },
-              { label: 'VEL. MÁX', value: lastActivity?.speed ?? '24.1 KT' },
+              { label: 'VEL. MÁX', value: lastActivity?.speed ?? 'N/A' },
               { label: 'FC PROM', value: `${lastActivity?.hr ?? 142} BPM` },
               { label: 'DURACIÓN', value: lastActivity?.duration ? `${lastActivity.duration} MIN` : '95 MIN' },
             ].map((m) => (
@@ -159,7 +168,7 @@ export const Dashboard: React.FC = () => {
         {[
           { label: 'PASOS HOY', value: stepsValue, sub: 'META DIARIA', color: '#f3ffca' },
           { label: 'CALORÍAS', value: caloriesValue, sub: 'META: 2.5K', color: '#ff7439' },
-          { label: 'SUEÑO', value: sleepHoursValue, sub: `SCORE: ${sleepScoreValue}`, color: '#6a9cff' },
+          { label: 'SUEÑO', value: sleepHoursValue, sub: sleepScoreValue ? `SCORE: ${sleepScoreValue}` : 'SIN DATOS', color: '#6a9cff' },
         ].map((stat) => (
           <div key={stat.label} className="bg-surface-low rounded-xl p-5 flex items-center justify-between">
             <div>
