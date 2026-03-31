@@ -87,7 +87,7 @@ export async function fetchStress(date: string) {
   try {
     // Use generic get for stress endpoint
     const data = await client.get<any>(
-      `https://connectapi.garmin.com/usersummary-service/stats/stress/daily/${date}/${date}`
+      `https://connectapi.garmin.com/wellness-service/wellness/dailyStress/${date}`
     );
     await sleep(500);
     return data;

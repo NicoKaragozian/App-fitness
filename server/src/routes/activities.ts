@@ -143,16 +143,14 @@ router.get('/', (req, res) => {
       })),
   };
 
-  // Recent session
-  const lastRow = rows[0] as any;
-  const recentSession = lastRow ? {
-    sport: (lastRow.sport_type ?? 'unknown').toUpperCase().replace(/_/g, ' '),
-    location: '',
-    distance: Math.round(((lastRow.distance ?? 0) / 1000) * 10) / 10,
-    speed: lastRow.max_speed ? `${Math.round(lastRow.max_speed * 3.6)} KM/H` : 'N/A',
-    hr: lastRow.avg_hr ?? 0,
-    duration: Math.round((lastRow.duration ?? 0) / 60),
-  } : null;
+  const recentSessions = rows.slice(0, 3).map((r: any) => ({
+    sport: (r.sport_type ?? 'unknown').toUpperCase().replace(/_/g, ' '),
+    date: r.start_time.split('T')[0],
+    duration: Math.round((r.duration ?? 0) / 60),
+    distance: Math.round(((r.distance ?? 0) / 1000) * 10) / 10,
+    hr: r.avg_hr ?? 0,
+    calories: r.calories ?? 0,
+  }));
 
   // Training readiness (use body battery as proxy)
   const todaySummary = db.prepare(
@@ -163,7 +161,7 @@ router.get('/', (req, res) => {
     ...result,
     volumeHistory,
     chartData,
-    recentSession,
+    recentSessions,
     trainingReadiness: todaySummary?.body_battery ?? 94,
   });
 });

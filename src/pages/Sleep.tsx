@@ -10,6 +10,19 @@ import { weeklySleepData, monthlySleepData } from '../data/mockData';
 
 type Period = 'weekly' | 'monthly';
 
+export type SleepDataPoint = { day: string | number; date?: string; hours: number; score: number; hrv: number };
+
+const getRecoveryStatus = (score: number, hrvStatus: string) => {
+  let penalty = 0;
+  if (hrvStatus === 'UNBALANCED' || hrvStatus === 'LOW') penalty = 15;
+  const adjScore = score - penalty;
+
+  if (adjScore >= 85) return { title: 'PEAK RECOVERY', subtitle: 'LISTO PARA ALTO RENDIMIENTO' };
+  if (adjScore >= 70) return { title: 'OPTIMAL RECOVERY', subtitle: 'SISTEMA EQUILIBRADO' };
+  if (adjScore >= 50) return { title: 'MODERATE STRAIN', subtitle: 'FATIGA RESIDUAL - ENTRENAMIENTO MODERADO' };
+  return { title: 'HIGH STRAIN', subtitle: 'SISTEMA NERVIOSO ESTRESADO - PRIORIZA DESCANSO' };
+};
+
 const formatHours = (h: number) => `${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`;
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
@@ -26,58 +39,134 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   );
 };
 
-const ConsistencyMatrix: React.FC = () => {
-  const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-  const weeks = 7;
-  const matrix = Array.from({ length: weeks }, () =>
-    Array.from({ length: 7 }, () => ({
-      value: Math.random() > 0.25 ? Math.random() : 0,
-    }))
-  );
+const ConsistencyMatrix: React.FC<{ data: SleepDataPoint[] }> = ({ data }) => {
+  const [selectedDay, setSelectedDay] = useState<{ dateStr: string; score: number } | null>(null);
+  const days = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+  const weeks = 4;
 
-  const getColor = (val: number) => {
-    if (val === 0) return '#1a1a1a';
-    if (val < 0.3) return '#2a3a2a';
-    if (val < 0.6) return '#3a5a3a';
-    if (val < 0.8) return '#4a7a4a';
-    return '#6aaa6a';
+  const mapDate = new Map(data.filter(d => d.date).map(d => [d.date, d]));
+  
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const dayOfWeek = today.getDay(); // 0 represents Sunday
+  // We want the columns to be Mon-Sun. So the grid always ends on the nearest future Sunday (or today if today is Sunday).
+  const daysToSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  
+  const cells = [];
+  // 28 cells total = 4 weeks * 7 days.
+  for (let i = 27 - daysToSunday; i >= -daysToSunday; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    // Format YYYY-MM-DD safely
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dayDate = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${dayDate}`;
+    
+    const record = mapDate.get(dateStr);
+    cells.push({
+      dateStr,
+      score: record ? record.score / 100 : 0,
+      isFuture: i < 0
+    });
+  }
+
+  const matrix = [];
+  for (let i = 0; i < weeks; i++) {
+    matrix.push(cells.slice(i * 7, i * 7 + 7));
+  }
+
+  const getColor = (val: number, isFuture: boolean) => {
+    if (isFuture) return 'transparent'; // completely empty / invisible
+    if (val === 0) return '#1a1a1a'; // no data (surface-container)
+    if (val < 0.6) return '#ff7439'; // poor (Tertiary)
+    if (val < 0.8) return 'rgba(34, 211, 165, 0.4)'; // moderate (mint green with opacity)
+    return '#22d3a5'; // optimal (mint green)
   };
+  
+  const selectedRecord = selectedDay ? mapDate.get(selectedDay.dateStr) : null;
 
   return (
-    <div>
-      <div className="flex gap-1 mb-2">
-        {days.map((d) => (
-          <div key={d} className="w-8 text-center font-label text-label-sm text-on-surface-variant">{d}</div>
-        ))}
-      </div>
-      <div className="space-y-1">
-        {matrix.map((week, wi) => (
-          <div key={wi} className="flex gap-1">
-            {week.map((cell, di) => (
-              <div
-                key={di}
-                className="w-8 h-8 rounded"
-                style={{ background: getColor(cell.value) }}
-              />
+    <div className="w-full flex flex-col xl:flex-row gap-8 pb-2">
+      <div className="flex-1 overflow-x-auto">
+        <div className="min-w-max mx-auto md:mx-0">
+          <div className="flex gap-2 lg:gap-3 mb-3 pl-8 lg:pl-12">
+            {days.map((d) => (
+              <div key={d} className="w-8 lg:w-10 text-center font-label text-[10px] text-on-surface-variant tracking-widest">{d}</div>
             ))}
           </div>
-        ))}
+          <div className="space-y-2 lg:space-y-3">
+            {matrix.map((week, wi) => (
+              <div key={wi} className="flex gap-2 lg:gap-3 items-center">
+                <div className="w-8 lg:w-10 text-right pr-2 font-label text-[10px] bg-clip-text text-on-surface-variant opacity-60">
+                  S{wi + 1}
+                </div>
+                {week.map((cell, di) => (
+                  <div
+                    key={di}
+                    onClick={() => !cell.isFuture && setSelectedDay(cell)}
+                    className={`w-8 h-8 lg:w-10 lg:h-10 rounded-md transition-all cursor-pointer border ${selectedDay?.dateStr === cell.dateStr ? 'border-primary shadow-[0_0_12px_rgba(243,255,202,0.4)] scale-110' : 'border-surface-container hover:scale-110'} ${cell.isFuture ? 'opacity-0 cursor-default' : ''}`}
+                    style={{ background: getColor(cell.score, cell.isFuture) }}
+                    title={cell.isFuture ? '' : `Fecha: ${cell.dateStr} | Score: ${Math.round(cell.score * 100)}`}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Leyenda */}
+        <div className="flex items-center gap-2 mt-8 pl-10">
+          <span className="font-label text-[10px] tracking-widest text-on-surface-variant mr-1">CALIDAD DE SUEÑO</span>
+          <div className="w-3 h-3 rounded-sm bg-[#1a1a1a]"></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">S/D</span>
+          <div className="w-3 h-3 rounded-sm bg-[#ff7439]"></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">POBRE</span>
+          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'rgba(34, 211, 165, 0.4)' }}></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">MEDIA</span>
+          <div className="w-3 h-3 rounded-sm bg-[#22d3a5]"></div> <span className="font-label text-[9px] text-on-surface-variant">ÓPTIMA</span>
+        </div>
+      </div>
+      
+      {/* Panel de Detalles */}
+      <div className="w-full xl:w-64 bg-surface-container rounded-xl p-5 flex flex-col justify-center min-h-[160px]">
+        {selectedRecord ? (
+          <div className="animate-fade-in">
+            <p className="font-label text-label-sm text-on-surface-variant tracking-widest mb-1">{selectedDay?.dateStr}</p>
+            <p className="font-display font-bold text-3xl mb-4" style={{ color: getColor(selectedDay!.score, false) }}>{selectedRecord.score} <span className="text-sm text-on-surface-variant">/ 100</span></p>
+            
+            <div className="space-y-3">
+              <div>
+                <p className="font-label text-[10px] text-on-surface-variant">DURACIÓN</p>
+                <p className="font-body text-sm font-medium">{formatHours(selectedRecord.hours)}</p>
+              </div>
+              <div>
+                <p className="font-label text-[10px] text-on-surface-variant">NIGHTLY HRV</p>
+                <p className="font-body text-sm font-medium">{selectedRecord.hrv > 0 ? `${selectedRecord.hrv} ms` : 'Sin datos'}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center opacity-50">
+            <p className="font-label text-label-sm text-on-surface-variant mb-2">SELECCIONA UN DÍA</p>
+            <p className="font-body text-xs">Haz click en cualquier cuadro de la matriz para ver los detalles de esa noche.</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-type SleepDataPoint = { day: string | number; hours: number; score: number; hrv: number };
-
 export const Sleep: React.FC = () => {
   const [period, setPeriod] = useState<Period>('weekly');
   const { data: sleepApiData, loading: sleepLoading } = useSleep(period);
   const { data: hrvApiData, loading: hrvLoading } = useHrv(period);
+  
+  // Siempre traemos mensual para la matrix, independientemente de si estamos viendo period="weekly"
+  const { data: monthlySleepApiData } = useSleep('monthly');
 
   const loading = sleepLoading || hrvLoading;
 
   const fallbackData: SleepDataPoint[] = period === 'weekly' ? weeklySleepData : monthlySleepData.slice(0, 30);
   const data: SleepDataPoint[] = sleepApiData?.length ? sleepApiData : fallbackData;
+  const matrixData = monthlySleepApiData?.length ? monthlySleepApiData : monthlySleepData.slice(0, 30);
   const dayKey = 'day';
 
   const latestSleep = data[data.length - 1];
@@ -88,6 +177,8 @@ export const Sleep: React.FC = () => {
   const nightlyHrv = hrvApiData?.nightlyAvg ?? 64;
   const hrvStatus = hrvApiData?.status ?? 'OPTIMAL';
   const hrvData = hrvApiData?.history?.length ? hrvApiData.history : data;
+  
+  const recovery = getRecoveryStatus(sleepScore, hrvStatus);
 
   if (loading) return <LoadingSkeleton />;
 
@@ -96,10 +187,10 @@ export const Sleep: React.FC = () => {
       {/* Hero Row */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 lg:gap-6">
         {/* Big Hero */}
-        <div className="md:col-span-5 bg-surface-low rounded-xl p-5 lg:p-6 relative overflow-hidden">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2">ANÁLISIS DE ANOCHE</p>
-          <h1 className="font-display font-bold text-on-surface uppercase text-3xl lg:text-[3.5rem] leading-tight lg:leading-none">
-            OPTIMAL<br />RECOVERY
+        <div className={`md:col-span-5 rounded-xl p-5 lg:p-6 relative overflow-hidden ${recovery.title === 'PEAK RECOVERY' ? 'bg-[#f3ffca] text-[#0e0e0e]' : 'bg-surface-low text-on-surface'}`}>
+          <p className={`font-label text-label-sm tracking-widest uppercase mb-2 ${recovery.title === 'PEAK RECOVERY' ? 'text-[#0e0e0e]/70' : 'text-on-surface-variant'}`}>{recovery.subtitle}</p>
+          <h1 className="font-display font-bold uppercase text-3xl lg:text-[3.5rem] leading-tight lg:leading-none">
+            {recovery.title.split(' ')[0]}<br />{recovery.title.split(' ')[1]}
           </h1>
           <div className="flex items-center gap-4 lg:gap-6 mt-4">
             <div>
@@ -111,11 +202,11 @@ export const Sleep: React.FC = () => {
               <p className="font-label text-label-sm text-on-surface-variant">CALIDAD</p>
             </div>
             <div>
-              <p className="font-display text-2xl lg:text-display-md font-bold text-secondary">{restingHR} <span className="text-lg">BPM</span></p>
-              <p className="font-label text-label-sm text-on-surface-variant">FC REPOSO</p>
+              <p className={`font-display text-2xl lg:text-display-md font-bold ${recovery.title === 'PEAK RECOVERY' ? 'text-[#0e0e0e]' : 'text-secondary'}`}>{restingHR} <span className="text-lg">BPM</span></p>
+              <p className={`font-label text-label-sm ${recovery.title === 'PEAK RECOVERY' ? 'text-[#0e0e0e]/70' : 'text-on-surface-variant'}`}>FC REPOSO</p>
             </div>
           </div>
-          <div className="absolute right-4 top-4 font-display font-bold text-on-surface-variant/10 text-6xl lg:text-[8rem] leading-none hidden md:block">
+          <div className={`absolute right-4 top-4 font-display font-bold text-6xl lg:text-[8rem] leading-none hidden md:block ${recovery.title === 'PEAK RECOVERY' ? 'text-[#0e0e0e]/10' : 'text-on-surface-variant/10'}`}>
             {sleepScore}
           </div>
         </div>
@@ -242,32 +333,13 @@ export const Sleep: React.FC = () => {
         </div>
       </div>
 
-      {/* HRV Evolution + Consistency Matrix */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-        <div className="bg-surface-low rounded-xl p-4 lg:p-6">
-          <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-1">SLEEPING HRV</p>
-          <p className="font-label text-label-sm text-on-surface-variant mb-4">EVOLUCIÓN {period === 'weekly' ? 'SEMANAL' : 'MENSUAL'}</p>
-          <ResponsiveContainer width="100%" height={160}>
-            <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="hrvGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22d3a5" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#22d3a5" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey={dayKey} tick={{ fill: '#adaaaa', fontSize: 10, fontFamily: 'Lexend' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#adaaaa', fontSize: 10, fontFamily: 'Lexend' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="hrv" name="HRV" stroke="#22d3a5" strokeWidth={2} fill="url(#hrvGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-surface-low rounded-xl p-4 lg:p-6">
+      {/* Consistency Matrix (Enlarged and Full-Width) */}
+      <div className="bg-surface-low rounded-xl p-4 lg:p-8">
+        <div className="mb-6">
           <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-1">CONSISTENCY MATRIX</p>
-          <p className="font-label text-label-sm text-on-surface-variant mb-4">REGULARIDAD DE SUEÑO</p>
-          <ConsistencyMatrix />
+          <p className="font-label text-label-sm text-on-surface-variant">REGULARIDAD DE SUEÑO — HISTÓRICO DE 4 SEMANAS</p>
         </div>
+        <ConsistencyMatrix data={matrixData} />
       </div>
     </div>
   );

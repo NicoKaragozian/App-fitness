@@ -68,6 +68,16 @@ db.exec(`
     completed_at TEXT,
     status TEXT DEFAULT 'running'
   );
+
+  CREATE TABLE IF NOT EXISTS weekly_plan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day TEXT NOT NULL,
+    sport TEXT NOT NULL,
+    detail TEXT,
+    completed INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
 `);
 
 export default db;

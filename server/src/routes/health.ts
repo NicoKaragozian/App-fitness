@@ -23,7 +23,7 @@ router.get('/sleep', (req, res) => {
     return;
   }
 
-  const limit = period === 'weekly' ? 7 : 30;
+  const limit = period === 'weekly' ? 7 : 49;
 
   const rows = db.prepare(
     `SELECT * FROM sleep ORDER BY date DESC LIMIT ?`
@@ -33,6 +33,7 @@ router.get('/sleep', (req, res) => {
     const d = new Date(r.date + 'T00:00:00');
     return {
       day: period === 'weekly' ? DAY_NAMES[d.getDay()] : d.getDate(),
+      date: r.date,
       hours: r.duration_seconds ? Math.round((r.duration_seconds / 3600) * 10) / 10 : 0,
       score: r.score ?? 0,
       hrv: 0,
@@ -57,11 +58,59 @@ router.get('/sleep', (req, res) => {
 router.get('/stress', (req, res) => {
   const period = (req.query.period as string) || 'weekly';
 
+  // Helper to extract distribution and momentum from rows
+  const getMetrics = (dataRows: any[]) => {
+    let rest = 0, low = 0, medium = 0, high = 0;
+    let peakDay = '', minDay = '';
+    let peakStress = -1, minStress = 999;
+
+    for (const r of dataRows) {
+      if (r.avg_stress != null) {
+        if (r.avg_stress > peakStress) { peakStress = r.avg_stress; peakDay = r.date; }
+        if (r.avg_stress < minStress && r.avg_stress > 0) { minStress = r.avg_stress; minDay = r.date; }
+      }
+      try {
+        if (r.raw_json) {
+          const parsed = JSON.parse(r.raw_json);
+          rest += parsed.restStressDuration ?? 0;
+          low += parsed.lowStressDuration ?? 0;
+          medium += parsed.mediumStressDuration ?? 0;
+          high += parsed.highStressDuration ?? 0;
+        }
+      } catch (e) {}
+    }
+
+    const total = rest + low + medium + high;
+    const distribution = total > 0 ? {
+      rest: Math.round((rest / total) * 100),
+      low: Math.round((low / total) * 100),
+      medium: Math.round((medium / total) * 100),
+      high: Math.round((high / total) * 100),
+    } : { rest: 35, low: 40, medium: 20, high: 5 }; // default fallbacks if no data
+
+    const formatDay = (dString: string) => {
+      if (!dString) return '';
+      const d = new Date(dString + 'T00:00:00');
+      return DAY_NAMES[d.getDay()];
+    };
+
+    return {
+      distribution,
+      momentum: {
+        peakDay: formatDay(peakDay),
+        peakStress: peakStress === -1 ? 0 : peakStress,
+        minDay: formatDay(minDay),
+        minStress: minStress === 999 ? 0 : minStress
+      }
+    };
+  };
+
   if (period === 'weekly') {
     const rows = db.prepare(
       `SELECT * FROM stress ORDER BY date DESC LIMIT 7`
     ).all() as any[];
 
+    const metrics = getMetrics(rows);
     const data = rows.reverse().map((r) => {
       const d = new Date(r.date + 'T00:00:00');
       return {
@@ -81,13 +130,14 @@ router.get('/stress', (req, res) => {
       ? Math.round(monthlyRows.reduce((a, b) => a + (b.avg_stress ?? 0), 0) / monthlyRows.length)
       : 0;
 
-    res.json({ data, weeklyAvg: avg, monthlyAvg });
+    res.json({ data, weeklyAvg: avg, monthlyAvg, ...metrics });
   } else {
-    // Monthly: group by week
+    // Monthly
     const rows = db.prepare(
       `SELECT * FROM stress ORDER BY date DESC LIMIT 30`
     ).all() as any[];
 
+    const metrics = getMetrics(rows);
     const weeks: Record<string, number[]> = {};
     rows.forEach((r, i) => {
       const weekKey = `S${Math.floor(i / 7) + 1}`;
@@ -98,7 +148,7 @@ router.get('/stress', (req, res) => {
     const data = Object.entries(weeks).map(([week, values]) => ({
       week,
       stress: Math.round(values.reduce((a, b) => a + b, 0) / values.length),
-    }));
+    })).reverse();
 
     const allValues = rows.map((r) => r.avg_stress ?? 0);
     const weeklyAvg = allValues.length >= 7
@@ -108,7 +158,7 @@ router.get('/stress', (req, res) => {
       ? Math.round(allValues.reduce((a, b) => a + b, 0) / allValues.length)
       : 0;
 
-    res.json({ data, weeklyAvg, monthlyAvg });
+    res.json({ data, weeklyAvg, monthlyAvg, ...metrics });
   }
 });
 
@@ -141,23 +191,64 @@ router.get('/summary', (_req, res) => {
     `SELECT * FROM daily_summary ORDER BY date DESC LIMIT 1`
   ).get() as any;
 
-  // Use latest sleep score as readiness proxy when body battery is unavailable
   const sleepRow = db.prepare(
     `SELECT score FROM sleep ORDER BY date DESC LIMIT 1`
   ).get() as any;
 
-  if (!row) {
-    res.json({ steps: null, calories: null, bodyBattery: null, restingHR: null, sleepScore: sleepRow?.score ?? null });
-    return;
+  const stressRow = db.prepare(
+    `SELECT avg_stress FROM stress ORDER BY date DESC LIMIT 1`
+  ).get() as any;
+
+  const hrvRow = db.prepare(
+    `SELECT status FROM hrv ORDER BY date DESC LIMIT 1`
+  ).get() as any;
+
+  // Composite Readiness Calculation
+  const slpScore = sleepRow?.score ?? 0;
+  const avgStress = stressRow?.avg_stress ?? 0;
+  const stressInverse = avgStress > 0 ? (100 - avgStress) : 0;
+  
+  let hrvMultiplier = 0;
+  const hStatus = (hrvRow?.status ?? '').toUpperCase();
+  if (hStatus === 'OPTIMAL') hrvMultiplier = 100;
+  else if (hStatus === 'BALANCED') hrvMultiplier = 85;
+  else if (hStatus === 'UNBALANCED') hrvMultiplier = 50;
+  else if (hStatus === 'LOW' || hStatus === 'POOR') hrvMultiplier = 25;
+
+  let compositeScore = 0;
+  if (slpScore > 0 || avgStress > 0 || hStatus) {
+    const sleepWeight = slpScore > 0 ? 0.4 : 0;
+    const stressWeight = avgStress > 0 ? 0.3 : 0;
+    const hrvWeight = hStatus ? 0.3 : 0;
+    
+    const totalWeight = sleepWeight + stressWeight + hrvWeight;
+    if (totalWeight > 0) {
+      compositeScore = Math.round(
+        ((slpScore * sleepWeight) + (stressInverse * stressWeight) + (hrvMultiplier * hrvWeight)) / totalWeight
+      );
+    }
   }
 
-  res.json({
-    steps: row.steps ?? null,
-    calories: row.calories ?? null,
-    bodyBattery: row.body_battery ?? null,
-    restingHR: row.resting_hr ?? null,
-    sleepScore: sleepRow?.score ?? null,
-  });
+  // Dynamic Label
+  let readinessTitle = 'HIGH STRAIN';
+  if (compositeScore >= 85) readinessTitle = 'PRIME READINESS';
+  else if (compositeScore >= 70) readinessTitle = 'OPTIMAL READINESS';
+  else if (compositeScore >= 50) readinessTitle = 'MODERATE STRAIN';
+
+  const payload = {
+    steps: row?.steps ?? null,
+    calories: row?.calories ?? null,
+    bodyBattery: row?.body_battery ?? null,
+    restingHR: row?.resting_hr ?? null,
+    sleepScore: slpScore,
+    readiness: {
+      score: compositeScore,
+      title: readinessTitle,
+      breakdown: { sleep: slpScore, stressInverse, hrvScore: hrvMultiplier }
+    }
+  };
+
+  res.json(payload);
 });
 
 export default router;

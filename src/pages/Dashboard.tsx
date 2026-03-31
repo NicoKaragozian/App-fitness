@@ -1,8 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useDailySummary } from '../hooks/useDailySummary';
-import { useSleep } from '../hooks/useSleep';
 import { useActivities } from '../hooks/useActivities';
-import { weeklyPlan } from '../data/mockData';
+import { usePlan, PlanItem } from '../hooks/usePlan';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 
 const ActivityRing: React.FC<{ value: number; color: string; label: string; size?: number }> = ({
@@ -10,7 +9,9 @@ const ActivityRing: React.FC<{ value: number; color: string; label: string; size
 }) => {
   const radius = (size - 20) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (value / 100) * circumference;
+  // Ensure value is between 0 and 100 for visual bounds
+  const clampedValue = Math.min(Math.max(value, 0), 100);
+  const offset = circumference - (clampedValue / 100) * circumference;
   return (
     <div className="flex flex-col items-center gap-2">
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
@@ -27,160 +28,272 @@ const ActivityRing: React.FC<{ value: number; color: string; label: string; size
           style={{ filter: `drop-shadow(0 0 6px ${color}66)`, transition: 'stroke-dashoffset 1s ease' }}
         />
       </svg>
-      <span className="font-label text-label-sm text-on-surface-variant">{label}</span>
+      <span className="font-label text-label-sm text-on-surface-variant font-bold uppercase tracking-wider">{label}</span>
     </div>
   );
 };
 
 export const Dashboard: React.FC = () => {
   const { data: summary, loading: summaryLoading } = useDailySummary();
-  const { data: sleepData, loading: sleepLoading } = useSleep('daily');
   const { data: activities, loading: activitiesLoading } = useActivities('daily');
+  const { data: weeklyPlan, loading: planLoading, addPlanItem, updatePlanItem, deletePlanItem } = usePlan();
 
-  const loading = summaryLoading || sleepLoading || activitiesLoading;
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ sport: '', detail: '' });
+  const [isAdding, setIsAdding] = useState(false);
+  const [addForm, setAddForm] = useState({ day: 'LUN', sport: '', detail: '' });
 
-  // sleepData[0] = today's entry (backend returns 1 item for 'daily')
-  const todaySleep = sleepData?.[0] ?? null;
-  const sleepScoreValue = todaySleep?.score ?? 0;
-  const sleepHoursValue = todaySleep?.hours
-    ? `${Math.floor(todaySleep.hours)}h ${Math.round((todaySleep.hours % 1) * 60)}m`
-    : '--';
+  const loading = summaryLoading || activitiesLoading || planLoading;
 
-  // Use null-safe fallbacks: null means no data (different from 0)
-  const bodyBattery = summary?.bodyBattery ?? null;
-  // When body battery unavailable (API 403), use sleep score as readiness proxy
-  const readinessProxy = bodyBattery ?? summary?.sleepScore ?? null;
-  const readinessScore = readinessProxy ?? 0;
-  const batteryValue = readinessProxy ?? 0;
+  if (loading) return <LoadingSkeleton />;
+
+  // Composite Readiness
+  const rScore = summary?.readiness?.score ?? 0;
+  const rTitle = summary?.readiness?.title ?? 'NO DATA';
+  const stressInverse = summary?.readiness?.breakdown.stressInverse ?? 0;
+  const sleepScoreValue = summary?.readiness?.breakdown.sleep ?? 0;
+  const hrvScoreValue = summary?.readiness?.breakdown.hrvScore ?? 0;
+
+  // General Summary Metrics
   const restingHRValue = summary?.restingHR ?? null;
   const stepsValue = summary?.steps != null ? `${(summary.steps / 1000).toFixed(1)}K` : '--';
   const caloriesValue = summary?.calories != null ? `${(summary.calories / 1000).toFixed(1)}K` : '--';
 
-  const lastActivity = activities?.recentSession;
+  const recentSessions = activities?.recentSessions || [];
 
-  if (loading) return <LoadingSkeleton />;
+  const handleEditClick = (item: PlanItem) => {
+    setEditingId(item.id);
+    setEditForm({ sport: item.sport, detail: item.detail });
+  };
+
+  const saveEdit = (id: number) => {
+    if (editForm.sport.trim()) {
+      updatePlanItem(id, { sport: editForm.sport, detail: editForm.detail });
+    }
+    setEditingId(null);
+  };
+
+  const handleAddSubmit = () => {
+    if (addForm.sport.trim()) {
+      addPlanItem({ day: addForm.day, sport: addForm.sport, detail: addForm.detail });
+      setAddForm({ day: 'LUN', sport: '', detail: '' });
+      setIsAdding(false);
+    }
+  };
+
+  const getReadinessColor = (score: number) => {
+    if (score >= 85) return '#f3ffca'; // Prime
+    if (score >= 70) return '#22d3a5'; // Optimal
+    if (score >= 50) return '#6a9cff'; // Moderate
+    return '#ff7439'; // High Strain
+  };
+
+  const heroColor = getReadinessColor(rScore);
 
   return (
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8">
       {/* Hero Row */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
+        
         {/* Readiness Hero */}
-        <div className="lg:col-span-4 bg-surface-low rounded-xl p-5 lg:p-6 relative overflow-hidden">
-          <p className="font-display text-xs text-on-surface-variant tracking-widest uppercase mb-4">OPTIMAL READINESS</p>
-          <div className="flex items-end gap-4 lg:gap-6">
-            <div>
-              <p
-                className="font-display text-on-surface font-bold leading-none"
-                style={{ fontSize: '7rem', color: '#1a1a1a', WebkitTextStroke: '1px #484847', position: 'absolute', top: 20, left: 20, opacity: 0.4, zIndex: 0 }}
-              >
-                {readinessProxy ?? '—'}
-              </p>
-              <p className="font-display font-bold text-primary relative z-10 text-5xl lg:text-[5rem] leading-none">
-                {readinessProxy ?? '—'}
-              </p>
-              <div className="mt-2">
-                <p className="font-label text-label-sm text-on-surface-variant">FC REPOSO</p>
-                <p className="font-label text-label-sm text-secondary">{restingHRValue != null ? `${restingHRValue} BPM` : '--'}</p>
+        <div className="lg:col-span-5 bg-surface-low rounded-xl p-5 lg:p-6 relative overflow-hidden flex flex-col justify-between">
+          <div>
+            <p className="font-display text-xs text-on-surface-variant tracking-widest uppercase mb-6" style={{ color: heroColor }}>
+              {rTitle}
+            </p>
+            <div className="flex items-end gap-6 mb-8 mt-2">
+              <div className="relative">
+                <p
+                  className="font-display font-bold leading-none absolute"
+                  style={{ fontSize: '8rem', color: 'transparent', WebkitTextStroke: '2px #262626', top: -30, left: -10, opacity: 0.8, zIndex: 0 }}
+                >
+                  {rScore > 0 ? rScore : '—'}
+                </p>
+                <p className="font-display font-bold relative z-10 text-6xl lg:text-[6rem] leading-none" style={{ color: heroColor }}>
+                  {rScore > 0 ? rScore : '—'}
+                </p>
               </div>
             </div>
-            <div className="flex gap-3 relative z-10">
-              <ActivityRing value={readinessScore} color="#f3ffca" label="READY" size={80} />
-              <ActivityRing value={batteryValue} color="#6a9cff" label="BATTERY" size={80} />
-              <ActivityRing value={sleepScoreValue} color="#22d3a5" label="SLEEP" size={80} />
+            
+            <div className="flex gap-4 relative z-10 justify-between mr-8">
+              <ActivityRing value={rScore} color={heroColor} label="GLOBAL" size={70} />
+              <ActivityRing value={sleepScoreValue} color="#22d3a5" label="SLEEP" size={70} />
+              <ActivityRing value={stressInverse} color="#f3ffca" label="RELAX" size={70} />
+              <ActivityRing value={hrvScoreValue} color="#6a9cff" label="HRV" size={70} />
             </div>
           </div>
-          {/* Legend */}
-          <div className="mt-4 space-y-1">
-            {[
-              { color: '#f3ffca', label: 'BODY BATTERY NVL' },
-              { color: '#6a9cff', label: 'SLEEP IN HRS' },
-              { color: '#ff7439', label: 'HRV STATUS BASELINE' },
-            ].map((l) => (
-              <div key={l.label} className="flex items-center gap-2">
-                <div className="w-4 h-0.5" style={{ background: l.color }}></div>
-                <span className="font-label text-label-sm text-on-surface-variant">{l.label}</span>
-              </div>
-            ))}
+          <div className="mt-8 flex items-center gap-6">
+            <div>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">FC REPOSO</p>
+              <p className="font-display font-semibold text-lg text-white mt-1">{restingHRValue ?? '--'} BPM</p>
+            </div>
+            <div className="w-px h-8 bg-surface-container"></div>
+            <div>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">CALORÍAS</p>
+              <p className="font-display font-semibold text-lg text-[#ff7439] mt-1">{caloriesValue}</p>
+            </div>
+            <div className="w-px h-8 bg-surface-container"></div>
+            <div>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">PASOS</p>
+              <p className="font-display font-semibold text-lg text-[#f3ffca] mt-1">{stepsValue}</p>
+            </div>
           </div>
         </div>
 
-        {/* Recent Session */}
-        <div className="lg:col-span-4 bg-surface-low rounded-xl p-5 lg:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">RECENT SESSION</p>
-            <span className="font-label text-label-sm text-secondary bg-secondary/10 px-2 py-0.5 rounded">● {lastActivity?.sport ?? 'WINGFOIL'}</span>
-          </div>
-          <div className="mb-4">
-            <p className="font-display text-headline-lg text-on-surface font-bold tracking-tight">
-              {lastActivity?.location ?? 'PUNTA DEL ESTE'}
+        {/* Metabolic / Physiological Map */}
+        <div className="lg:col-span-3 bg-surface-low rounded-xl p-5 lg:p-6 flex flex-col">
+          <div className="mb-6">
+            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-secondary"></span> PHYSIOLOGICAL MAP
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'DISTANCIA', value: `${lastActivity?.distance ?? 18.6} KM` },
-              { label: 'VEL. MÁX', value: lastActivity?.speed ?? 'N/A' },
-              { label: 'FC PROM', value: `${lastActivity?.hr ?? 142} BPM` },
-              { label: 'DURACIÓN', value: lastActivity?.duration ? `${lastActivity.duration} MIN` : '95 MIN' },
-            ].map((m) => (
-              <div key={m.label} className="bg-surface-container rounded-xl p-3">
-                <p className="font-label text-label-sm text-on-surface-variant">{m.label}</p>
-                <p className="font-body text-on-surface font-semibold text-sm mt-0.5">{m.value}</p>
+
+          <div className="space-y-4 mb-6 flex-1">
+            <p className="font-display text-sm tracking-widest text-on-surface-variant uppercase pb-2 border-b border-surface-container">ÚLTIMAS SESIONES</p>
+            {recentSessions.length > 0 ? (
+              <div className="space-y-3">
+                {recentSessions.map((session, i) => (
+                  <div key={i} className="flex flex-col bg-surface-container/50 p-3 rounded-lg">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-display text-sm font-bold text-on-surface">{session.sport}</span>
+                      <span className="font-label text-[10px] text-on-surface-variant bg-surface px-2 py-0.5 rounded">{session.date}</span>
+                    </div>
+                    <div className="flex gap-4 text-xs font-label text-on-surface-variant">
+                      <span>{session.duration} MIN</span>
+                      {session.hr > 0 && <span className="text-[#ff7439]">{session.hr} BPM</span>}
+                      {session.distance > 0 && <span className="text-[#f3ffca]">{session.distance} KM</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <p className="text-on-surface-variant text-sm py-4">Sin sesiones recientes registradas.</p>
+            )}
+          </div>
+          
+          <div className="bg-surface-container rounded-xl p-4 flex justify-between items-center">
+             <div>
+                <p className="font-label text-[10px] uppercase text-on-surface-variant mb-1 tracking-widest">SUEÑO (HOY)</p>
+                <p className="font-display font-bold text-lg text-[#22d3a5]">{sleepScoreValue > 0 ? `${sleepScoreValue} / 100` : '--'}</p>
+             </div>
+             <div className="text-right">
+                <p className="font-label text-[10px] uppercase text-on-surface-variant mb-1 tracking-widest">RELAX (HOY)</p>
+                <p className="font-display font-bold text-lg text-[#f3ffca]">{stressInverse > 0 ? `${stressInverse} / 100` : '--'}</p>             
+             </div>
           </div>
         </div>
 
         {/* Weekly Plan */}
-        <div className="lg:col-span-4 bg-surface-low rounded-xl p-5 lg:p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="lg:col-span-4 bg-surface-low rounded-xl p-5 lg:p-6 flex flex-col max-h-[500px] overflow-y-auto">
+          <div className="flex items-center justify-between mb-6 sticky top-0 bg-surface-low pb-2 z-10">
             <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">WEEKLY PLAN</p>
             <p className="font-label text-label-sm text-primary">{weeklyPlan.filter(i => i.completed).length}/{weeklyPlan.length} DÍAS</p>
           </div>
-          <div className="space-y-2">
+          
+          <div className="space-y-3 flex-1 pb-4">
             {weeklyPlan.map((item) => (
               <div
-                key={item.day}
-                className={`flex items-center gap-3 p-3 rounded-xl transition-colors ${
-                  item.completed ? 'bg-surface-container' : 'bg-surface-container/40'
+                key={item.id}
+                className={`flex items-start gap-3 p-3 rounded-xl transition-colors border ${
+                  item.completed ? 'bg-surface-container border-transparent' : 'bg-surface border-surface-container'
                 }`}
               >
-                <div className={`w-1 h-8 rounded-full ${
-                  item.sport.includes('GYM') ? 'bg-tertiary' :
-                  item.sport.includes('WING') ? 'bg-secondary' :
-                  'bg-primary'
-                }`}></div>
-                <div className="flex-1 min-w-0">
-                  <p className={`font-display text-xs font-bold tracking-wide ${item.completed ? 'text-on-surface' : 'text-on-surface-variant'}`}>
-                    {item.sport}
-                  </p>
-                  <p className="font-label text-label-sm text-on-surface-variant truncate">{item.detail}</p>
+                {/* Checkbox circle */}
+                <button 
+                  onClick={() => updatePlanItem(item.id, { completed: item.completed ? 0 : 1 })}
+                  className={`mt-1 flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                  item.completed ? 'bg-primary border-primary' : 'border-on-surface-variant'
+                }`}>
+                  {item.completed ? <div className="w-2 h-2 bg-black rounded-full"></div> : null}
+                </button>
+                
+                <div className="flex-1 min-w-0" onDoubleClick={() => handleEditClick(item)}>
+                  {editingId === item.id ? (
+                    <div className="space-y-2">
+                       <input 
+                         type="text" 
+                         value={editForm.sport}
+                         onChange={e => setEditForm({...editForm, sport: e.target.value})}
+                         className="w-full bg-surface-container-high text-on-surface font-display text-sm font-bold p-1 rounded outline-none border border-surface-variant focus:border-primary"
+                         placeholder="Ej. GYM / FUERZA"
+                         autoFocus
+                       />
+                       <input 
+                         type="text" 
+                         value={editForm.detail}
+                         onChange={e => setEditForm({...editForm, detail: e.target.value})}
+                         className="w-full bg-surface-container-high text-on-surface-variant font-label text-xs p-1 rounded outline-none border border-surface-variant focus:border-primary"
+                         placeholder="Ej. Sesión piernas"
+                       />
+                       <div className="flex justify-end gap-2 mt-2">
+                          <button onClick={() => setEditingId(null)} className="text-[10px] text-on-surface-variant font-label px-2 py-1">CANCEL</button>
+                          <button onClick={() => saveEdit(item.id)} className="text-[10px] text-black bg-primary rounded px-2 py-1 font-label font-bold">SAVE</button>
+                       </div>
+                    </div>
+                  ) : (
+                    <div className="cursor-pointer">
+                      <p className={`font-display text-sm font-bold tracking-wide ${item.completed ? 'text-on-surface line-through opacity-50' : 'text-on-surface'}`}>
+                        {item.sport}
+                      </p>
+                      {item.detail && <p className={`font-label text-xs text-on-surface-variant mt-0.5 ${item.completed ? 'line-through opacity-50' : ''}`}>{item.detail}</p>}
+                    </div>
+                  )}
                 </div>
-                <span className="font-label text-label-sm text-on-surface-variant">{item.day}</span>
-                {item.completed && <div className="w-2 h-2 rounded-full bg-primary"></div>}
+                
+                <div className="flex flex-col items-end gap-2">
+                  <span className="font-label text-[10px] text-on-surface-variant bg-surface px-2 py-1 rounded">{item.day}</span>
+                  {!editingId && (
+                     <button onClick={() => deletePlanItem(item.id)} className="text-on-surface-variant opacity-30 hover:opacity-100 hover:text-[#ff4444] transition-colors">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                     </button>
+                  )}
+                </div>
               </div>
             ))}
+
+            {/* Add form */}
+            {isAdding ? (
+               <div className="bg-surface-container/50 border border-surface-variant p-3 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                     <select 
+                        value={addForm.day} 
+                        onChange={e => setAddForm({...addForm, day: e.target.value})}
+                        className="bg-surface text-[10px] text-on-surface font-label p-1 rounded outline-none border border-surface-variant"
+                     >
+                        {['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'].map(d => <option key={d} value={d}>{d}</option>)}
+                     </select>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={addForm.sport}
+                    onChange={e => setAddForm({...addForm, sport: e.target.value})}
+                    className="w-full bg-surface-container text-on-surface font-display text-sm font-bold p-1 rounded outline-none border border-surface-variant focus:border-primary mb-2"
+                    placeholder="Título (Ej. NATACIÓN)"
+                    autoFocus
+                  />
+                  <input 
+                    type="text" 
+                    value={addForm.detail}
+                    onChange={e => setAddForm({...addForm, detail: e.target.value})}
+                    className="w-full bg-surface-container text-on-surface-variant font-label text-xs p-1 rounded outline-none border border-surface-variant focus:border-primary mb-2"
+                    placeholder="Detalles"
+                  />
+                  <div className="flex justify-end gap-2 mt-2">
+                     <button onClick={() => setIsAdding(false)} className="text-[10px] text-on-surface-variant font-label px-2 py-1">CANCEL</button>
+                     <button onClick={handleAddSubmit} disabled={!addForm.sport.trim()} className="text-[10px] text-black bg-primary rounded px-2 py-1 font-label font-bold disabled:opacity-50">ADD</button>
+                  </div>
+               </div>
+            ) : (
+               <button 
+                  onClick={() => setIsAdding(true)}
+                  className="w-full py-3 mt-4 border border-dashed border-surface-variant rounded-xl text-on-surface-variant font-label text-[10px] tracking-widest hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+               >
+                  <span>+ ADD SCHEDULE</span>
+               </button>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Bottom Row - Activity Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: 'PASOS HOY', value: stepsValue, sub: 'META DIARIA', color: '#f3ffca' },
-          { label: 'CALORÍAS', value: caloriesValue, sub: 'META: 2.5K', color: '#ff7439' },
-          { label: 'SUEÑO', value: sleepHoursValue, sub: sleepScoreValue ? `SCORE: ${sleepScoreValue}` : 'SIN DATOS', color: '#6a9cff' },
-        ].map((stat) => (
-          <div key={stat.label} className="bg-surface-low rounded-xl p-5 flex items-center justify-between">
-            <div>
-              <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">{stat.label}</p>
-              <p className="font-display text-display-md font-bold" style={{ color: stat.color }}>{stat.value}</p>
-              <p className="font-label text-label-sm text-on-surface-variant mt-1">{stat.sub}</p>
-            </div>
-            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: `${stat.color}15` }}>
-              <div className="w-10 h-10 rounded-full" style={{ background: `${stat.color}30` }}></div>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );

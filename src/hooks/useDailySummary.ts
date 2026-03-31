@@ -7,6 +7,11 @@ interface DailySummary {
   bodyBattery: number | null;
   restingHR: number | null;
   sleepScore: number | null;
+  readiness: {
+    score: number;
+    title: string;
+    breakdown: { sleep: number; stressInverse: number; hrvScore: number; };
+  };
 }
 
 export function useDailySummary() {
@@ -19,7 +24,7 @@ export function useDailySummary() {
       .then(setData)
       .catch((err) => {
         setError(err);
-        setData({ steps: null, calories: null, bodyBattery: null, restingHR: null, sleepScore: null });
+        setData({ steps: null, calories: null, bodyBattery: null, restingHR: null, sleepScore: null, readiness: { score: 0, title: 'UNKNOWN', breakdown: { sleep: 0, stressInverse: 0, hrvScore: 0 } } });
       })
       .finally(() => setLoading(false));
   }, []);

@@ -89,7 +89,7 @@ async function syncDayData(dateStr: string) {
       VALUES (?, ?, ?, ?)
     `).run(
       dateStr,
-      stressData.overallStressLevel ?? stressData.avgStressLevel ?? null,
+      stressData.overallStressLevel ?? stressData.avgStressLevel ?? stressData.averageStressLevel ?? null,
       stressData.maxStressLevel ?? null,
       JSON.stringify(stressData)
     );

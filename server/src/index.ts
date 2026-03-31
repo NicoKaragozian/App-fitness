@@ -8,6 +8,7 @@ import activitiesRoutes from './routes/activities.js';
 import healthRoutes from './routes/health.js';
 import syncRoutes from './routes/sync.js';
 import * as garmin from './garmin.js';
+import planRoutes from './routes/plan.js';
 import { startPeriodicSync, syncInitial } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,6 +26,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/plan', planRoutes);
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

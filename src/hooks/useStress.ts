@@ -5,6 +5,8 @@ interface StressData {
   data: Array<{ stress: number; day?: string; week?: string; date?: string }>;
   weeklyAvg: number;
   monthlyAvg: number;
+  distribution: { rest: number; low: number; medium: number; high: number };
+  momentum: { peakDay: string; peakStress: number; minDay: string; minStress: number };
 }
 
 export function useStress(period: string) {

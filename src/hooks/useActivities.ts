@@ -17,14 +17,14 @@ interface ActivitiesData {
   volumeHistory: Array<{ month: string; water: number; tennis: number; gym: number }>;
   chartData?: ChartData;
   trainingReadiness: number;
-  recentSession: {
+  recentSessions: Array<{
     sport: string;
-    location: string;
+    date: string;
     distance: number;
-    speed: string;
     hr: number;
+    calories: number;
     duration: number;
-  } | null;
+  }>;
 }
 
 export function useActivities(period: string) {

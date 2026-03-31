@@ -4,7 +4,7 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { useStress } from '../hooks/useStress';
-import { useDailySummary } from '../hooks/useDailySummary';
+
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import {
   weeklyStressData, monthlyStressData,
@@ -38,10 +38,7 @@ type StressDataPoint = { stress: number; day?: string; week?: string; date?: str
 
 export const Wellness: React.FC = () => {
   const [period, setPeriod] = useState<Period>('weekly');
-  const { data: stressApiData, loading: stressLoading } = useStress(period);
-  const { data: summaryData, loading: summaryLoading } = useDailySummary();
-
-  const loading = stressLoading || summaryLoading;
+  const { data: stressApiData, loading } = useStress(period);
 
   const stressData: StressDataPoint[] = stressApiData?.data?.length
     ? stressApiData.data
@@ -49,7 +46,6 @@ export const Wellness: React.FC = () => {
 
   const weeklyStressAvg = stressApiData?.weeklyAvg ?? mockWeeklyAvg;
   const monthlyStressAvg = stressApiData?.monthlyAvg ?? mockMonthlyAvg;
-  const bodyBattery = summaryData?.bodyBattery ?? 82;
   const weeklyLabel = getStressLabel(weeklyStressAvg);
   const monthlyLabel = getStressLabel(monthlyStressAvg);
 
@@ -67,11 +63,6 @@ export const Wellness: React.FC = () => {
           <p className="font-body text-on-surface-variant text-sm mt-2 max-w-md">
             Tu respuesta biológica a demandas cognitivas y físicas analizada mediante procesos HRV.
           </p>
-        </div>
-        <div className="text-left md:text-right">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2">BODY BATTERY</p>
-          <p className="font-display font-bold text-secondary text-4xl lg:text-[5rem] leading-none">{bodyBattery}</p>
-          <p className="font-label text-label-sm text-on-surface-variant">NIVEL ACTUAL</p>
         </div>
       </div>
 
@@ -121,10 +112,10 @@ export const Wellness: React.FC = () => {
           <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">DISTRIBUCIÓN</p>
           <div className="space-y-2 mt-2">
             {[
-              { label: 'RELAJADO', pct: 35, color: '#22d3a5' },
-              { label: 'BAJO', pct: 40, color: '#f3ffca' },
-              { label: 'MEDIO', pct: 20, color: '#ff7439' },
-              { label: 'ALTO', pct: 5, color: '#ff4444' },
+              { label: 'RELAJADO', pct: stressApiData?.distribution?.rest ?? 35, color: '#22d3a5' },
+              { label: 'BAJO', pct: stressApiData?.distribution?.low ?? 40, color: '#f3ffca' },
+              { label: 'MEDIO', pct: stressApiData?.distribution?.medium ?? 20, color: '#ff7439' },
+              { label: 'ALTO', pct: stressApiData?.distribution?.high ?? 5, color: '#ff4444' },
             ].map((s) => (
               <div key={s.label}>
                 <div className="flex justify-between mb-0.5">
@@ -207,15 +198,15 @@ export const Wellness: React.FC = () => {
               {
                 icon: '▲',
                 title: 'PEAK STRESS POINT',
-                desc: 'Jueves mostró el mayor estrés durante el entrenamiento de fuerza',
-                value: 41,
+                desc: `${stressApiData?.momentum?.peakDay || '---'} mostró el mayor estrés del período medido.`,
+                value: stressApiData?.momentum?.peakStress || 0,
                 color: '#ff7439',
               },
               {
                 icon: '▼',
-                title: 'HRV RECOVERY',
-                desc: 'Sistema nervioso parasimpático activado durante el descanso activo',
-                value: 12,
+                title: 'LOWEST STRESS',
+                desc: `Día de mayor relajación registrado el ${stressApiData?.momentum?.minDay || '---'}.`,
+                value: stressApiData?.momentum?.minStress || 0,
                 color: '#6a9cff',
               },
             ].map((m) => (
