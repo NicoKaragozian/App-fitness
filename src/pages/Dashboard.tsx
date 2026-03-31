@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useDailySummary } from '../hooks/useDailySummary';
 import { useActivities } from '../hooks/useActivities';
-import { usePlan, PlanItem } from '../hooks/usePlan';
+import { usePlan, type PlanItem } from '../hooks/usePlan';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 
 const ActivityRing: React.FC<{ value: number; color: string; label: string; size?: number }> = ({
@@ -50,9 +50,9 @@ export const Dashboard: React.FC = () => {
   // Composite Readiness
   const rScore = summary?.readiness?.score ?? 0;
   const rTitle = summary?.readiness?.title ?? 'NO DATA';
-  const stressInverse = summary?.readiness?.breakdown.stressInverse ?? 0;
-  const sleepScoreValue = summary?.readiness?.breakdown.sleep ?? 0;
-  const hrvScoreValue = summary?.readiness?.breakdown.hrvScore ?? 0;
+  const stressInverse = summary?.readiness?.breakdown?.stressInverse ?? 0;
+  const sleepScoreValue = summary?.readiness?.breakdown?.sleep ?? 0;
+  const hrvScoreValue = summary?.readiness?.breakdown?.hrvScore ?? 0;
 
   // General Summary Metrics
   const restingHRValue = summary?.restingHR ?? null;
