@@ -24,6 +24,11 @@ function categorize(sportType: string): string {
 
 export let isSyncing = false;
 export let lastSync: string | null = null;
+let abortSync = false;
+
+export function signalAbortSync() {
+  abortSync = true;
+}
 
 async function syncActivities(startDate: Date, endDate: Date) {
   const activities = await garmin.fetchActivities(startDate, endDate);
@@ -129,6 +134,7 @@ async function syncDayData(dateStr: string) {
 export async function syncInitial() {
   if (isSyncing) return;
   isSyncing = true;
+  abortSync = false;
 
   const logId = db.prepare(
     `INSERT INTO sync_log (sync_type, started_at) VALUES ('initial', datetime('now'))`
@@ -142,6 +148,10 @@ export async function syncInitial() {
     await syncActivities(startDate, endDate);
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      if (abortSync) {
+        console.log('[sync] Sync aborted by logout');
+        break;
+      }
       const dateStr = garmin.formatDate(d);
       await syncDayData(dateStr);
     }

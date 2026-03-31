@@ -46,9 +46,19 @@ export async function login(email: string, password: string): Promise<void> {
   await saveSession();
 }
 
+import fs from 'fs';
+
 export function logout(): void {
   client = null;
   isLoggedIn = false;
+  try {
+    const oauth1 = path.join(SESSION_DIR, 'oauth1_token.json');
+    const oauth2 = path.join(SESSION_DIR, 'oauth2_token.json');
+    if (fs.existsSync(oauth1)) fs.unlinkSync(oauth1);
+    if (fs.existsSync(oauth2)) fs.unlinkSync(oauth2);
+  } catch (err) {
+    console.error('Error deleting tokens:', err);
+  }
 }
 
 export function getStatus(): boolean {
@@ -59,7 +69,7 @@ export async function fetchActivities(startDate: Date, _endDate: Date) {
   if (!client || !isLoggedIn) throw new Error('Not logged in');
   try {
     const activities = await client.getActivities(0, 100);
-    await sleep(500);
+    await sleep(1000);
     return activities.filter((a) => {
       const d = new Date(a.startTimeLocal || a.startTimeGMT || '');
       return d >= startDate;
@@ -74,7 +84,7 @@ export async function fetchSleep(date: string) {
   if (!client || !isLoggedIn) throw new Error('Not logged in');
   try {
     const data = await client.getSleepData(new Date(date));
-    await sleep(500);
+    await sleep(1000);
     return data;
   } catch (err) {
     console.error('fetchSleep error:', err);
@@ -89,7 +99,7 @@ export async function fetchStress(date: string) {
     const data = await client.get<any>(
       `https://connectapi.garmin.com/wellness-service/wellness/dailyStress/${date}`
     );
-    await sleep(500);
+    await sleep(1000);
     return data;
   } catch (err) {
     console.error('fetchStress error:', err);
@@ -101,7 +111,7 @@ export async function fetchHRV(date: string) {
   if (!client || !isLoggedIn) throw new Error('Not logged in');
   try {
     const data = await client.getHRVData(new Date(date));
-    await sleep(500);
+    await sleep(1000);
     return data;
   } catch (err) {
     console.error('fetchHRV error:', err);
@@ -116,14 +126,16 @@ export async function fetchDailySummary(date: string) {
     const data = await client.get<any>(
       `https://connectapi.garmin.com/usersummary-service/usersummary/daily/${date}`
     );
-    await sleep(500);
+    await sleep(1000);
     return data;
   } catch (err) {
     console.error('fetchDailySummary error:', err);
     // Fallback: try to get steps and heart rate individually
     try {
       const steps = await client!.getSteps(new Date(date));
+      await sleep(1000);
       const hr = await client!.getHeartRate(new Date(date));
+      await sleep(1000);
       return { totalSteps: steps, restingHeartRate: (hr as any)?.restingHeartRate ?? null };
     } catch {
       return null;

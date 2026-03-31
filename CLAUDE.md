@@ -129,6 +129,34 @@ console.log(db.prepare('SELECT date, score, duration_seconds FROM sleep ORDER BY
 # Consultar Garmin con fecha de mañana para obtener datos de hoy
 ```
 
+## Rate limiting de Garmin (CRÍTICO — lección aprendida)
+
+Garmin usa Cloudflare WAF. Hacer demasiadas requests seguidas activa el ban de IP (error 429).
+
+**Números concretos**: `syncInitial()` hace hasta ~190 requests (31 días × 4 métricas + fallbacks + actividades).
+
+**Protecciones implementadas**:
+- `sleep(1000)` después de **cada** request en `garmin.ts` (incluyendo el fallback de `fetchDailySummary`)
+- El sync inicial tarda ~3 min — es esperado y seguro
+- Si el 429 persiste, subir a `sleep(2000)` en `garmin.ts`
+
+**Si ves error 429**: esperar 30 min antes de volver a intentar. El server devuelve 429 explícito con mensaje claro.
+
+## Cambio de cuenta — arquitectura de seguridad
+
+El logout es una **purga total**. POST `/api/auth/logout` hace:
+1. `signalAbortSync()` → corta el `syncInitial()` si está corriendo (flag `abortSync` en `sync.ts`)
+2. `garmin.logout()` → destruye sesión en memoria + borra `oauth1_token.json` y `oauth2_token.json`
+3. `DELETE FROM` en las 6 tablas: `activities`, `sleep`, `stress`, `hrv`, `daily_summary`, `sync_log`
+
+Sin esto, cambiar de cuenta mezcla datos de dos usuarios en la misma DB (el sync nuevo inyecta filas sobre los datos del usuario anterior).
+
+## Errores de API — manejo en frontend
+
+`apiFetch()` en `client.ts` lanza un `Error` con `error.status` (el código HTTP) además del mensaje. Usar `error.status === 429` para distinguir ban de Garmin vs `401` credenciales incorrectas.
+
+El backend ya devuelve 429 con mensaje en español cuando detecta rate limiting de Garmin en el login.
+
 ## Notas importantes
 
 1. **Reiniciar el servidor** después de cambios en `server/src/` — tsx no recarga automáticamente
@@ -136,3 +164,4 @@ console.log(db.prepare('SELECT date, score, duration_seconds FROM sleep ORDER BY
 3. El sync periódico solo corre si hay sesión activa (`garmin.getStatus() === true`)
 4. La DB de producción en Render usa el disco montado en `/data/`
 5. Hay ~24 actividades: 14 windsurfing/kiteboarding, 9 tenis, 1 gym (datos reales del usuario)
+6. `fetchDailySummary` falla con 403 y cae al fallback (`getSteps` + `getHeartRate`) — ambos tienen `sleep(1000)`
