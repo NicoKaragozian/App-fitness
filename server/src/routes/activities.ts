@@ -144,7 +144,7 @@ router.get('/', (req, res) => {
   };
 
   const recentSessions = rows.slice(0, 3).map((r: any) => ({
-    sport: (r.sport_type ?? 'unknown').toUpperCase().replace(/_/g, ' '),
+    sport: (r.sport_type ?? 'unknown').toUpperCase().replace(/_V\d+/g, '').replace(/_/g, ' '),
     date: r.start_time.split('T')[0],
     duration: Math.round((r.duration ?? 0) / 60),
     distance: Math.round(((r.distance ?? 0) / 1000) * 10) / 10,

@@ -4,8 +4,8 @@ import { useActivities } from '../hooks/useActivities';
 import { usePlan, type PlanItem } from '../hooks/usePlan';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 
-const ActivityRing: React.FC<{ value: number; color: string; label: string; size?: number }> = ({
-  value, color, label, size = 120,
+const ActivityRing: React.FC<{ value: number; color: string; label: string; subLabel?: string | number; size?: number }> = ({
+  value, color, label, subLabel, size = 120,
 }) => {
   const radius = (size - 20) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -28,7 +28,10 @@ const ActivityRing: React.FC<{ value: number; color: string; label: string; size
           style={{ filter: `drop-shadow(0 0 6px ${color}66)`, transition: 'stroke-dashoffset 1s ease' }}
         />
       </svg>
-      <span className="font-label text-label-sm text-on-surface-variant font-bold uppercase tracking-wider">{label}</span>
+      <div className="flex flex-col items-center">
+        <span className="font-label text-label-sm text-on-surface-variant font-bold uppercase tracking-wider mt-1">{label}</span>
+        {subLabel && <span className="font-display text-xs font-bold mt-0.5 opacity-90" style={{ color }}>{subLabel}</span>}
+      </div>
     </div>
   );
 };
@@ -53,6 +56,7 @@ export const Dashboard: React.FC = () => {
   const stressInverse = summary?.readiness?.breakdown?.stressInverse ?? 0;
   const sleepScoreValue = summary?.readiness?.breakdown?.sleep ?? 0;
   const hrvScoreValue = summary?.readiness?.breakdown?.hrvScore ?? 0;
+  const hrvRawValue = summary?.readiness?.breakdown?.hrvRaw ?? 0;
 
   // General Summary Metrics
   const restingHRValue = summary?.restingHR ?? null;
@@ -116,10 +120,10 @@ export const Dashboard: React.FC = () => {
             </div>
             
             <div className="flex gap-4 relative z-10 justify-between mr-8">
-              <ActivityRing value={rScore} color={heroColor} label="GLOBAL" size={70} />
-              <ActivityRing value={sleepScoreValue} color="#22d3a5" label="SLEEP" size={70} />
-              <ActivityRing value={stressInverse} color="#f3ffca" label="RELAX" size={70} />
-              <ActivityRing value={hrvScoreValue} color="#6a9cff" label="HRV" size={70} />
+              <ActivityRing value={rScore} color={heroColor} label="GLOBAL" subLabel={`${rScore}/100`} size={70} />
+              <ActivityRing value={sleepScoreValue} color="#22d3a5" label="SLEEP" subLabel={sleepScoreValue > 0 ? `${sleepScoreValue}` : '--'} size={70} />
+              <ActivityRing value={stressInverse} color="#f3ffca" label="RELAX" subLabel={stressInverse > 0 ? `${stressInverse}` : '--'} size={70} />
+              <ActivityRing value={hrvScoreValue} color="#6a9cff" label="HRV" subLabel={hrvRawValue > 0 ? `${hrvRawValue}ms` : '--'} size={70} />
             </div>
           </div>
           <div className="mt-8 flex items-center gap-6">

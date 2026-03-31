@@ -196,11 +196,11 @@ router.get('/summary', (_req, res) => {
   ).get() as any;
 
   const stressRow = db.prepare(
-    `SELECT avg_stress FROM stress ORDER BY date DESC LIMIT 1`
+    `SELECT avg_stress FROM stress WHERE avg_stress IS NOT NULL ORDER BY date DESC LIMIT 1`
   ).get() as any;
 
   const hrvRow = db.prepare(
-    `SELECT status FROM hrv ORDER BY date DESC LIMIT 1`
+    `SELECT status, nightly_avg FROM hrv WHERE nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 1`
   ).get() as any;
 
   // Composite Readiness Calculation
@@ -208,23 +208,37 @@ router.get('/summary', (_req, res) => {
   const avgStress = stressRow?.avg_stress ?? 0;
   const stressInverse = avgStress > 0 ? (100 - avgStress) : 0;
   
-  let hrvMultiplier = 0;
-  const hStatus = (hrvRow?.status ?? '').toUpperCase();
-  if (hStatus === 'OPTIMAL') hrvMultiplier = 100;
-  else if (hStatus === 'BALANCED') hrvMultiplier = 85;
-  else if (hStatus === 'UNBALANCED') hrvMultiplier = 50;
-  else if (hStatus === 'LOW' || hStatus === 'POOR') hrvMultiplier = 25;
+  const hrvRaw = hrvRow?.nightly_avg ?? 0;
+  let customHrvScore = 0;
+  
+  if (hrvRaw > 0) {
+    const minBaseline = 38;
+    const maxBaseline = 99;
+    const lowestPossible = 20;
+
+    if (hrvRaw <= lowestPossible) {
+      customHrvScore = 10;
+    } else if (hrvRaw <= minBaseline) {
+      // Maps 20-38 into 10-45 score
+      customHrvScore = Math.round(10 + ((hrvRaw - lowestPossible) / (minBaseline - lowestPossible)) * 35);
+    } else if (hrvRaw >= maxBaseline) {
+      customHrvScore = 100;
+    } else {
+      // Maps 38-99 into 45-100 score
+      customHrvScore = Math.round(45 + ((hrvRaw - minBaseline) / (maxBaseline - minBaseline)) * 55);
+    }
+  }
 
   let compositeScore = 0;
-  if (slpScore > 0 || avgStress > 0 || hStatus) {
+  if (slpScore > 0 || avgStress > 0 || customHrvScore > 0) {
     const sleepWeight = slpScore > 0 ? 0.4 : 0;
     const stressWeight = avgStress > 0 ? 0.3 : 0;
-    const hrvWeight = hStatus ? 0.3 : 0;
+    const hrvWeight = customHrvScore > 0 ? 0.3 : 0;
     
     const totalWeight = sleepWeight + stressWeight + hrvWeight;
     if (totalWeight > 0) {
       compositeScore = Math.round(
-        ((slpScore * sleepWeight) + (stressInverse * stressWeight) + (hrvMultiplier * hrvWeight)) / totalWeight
+        ((slpScore * sleepWeight) + (stressInverse * stressWeight) + (customHrvScore * hrvWeight)) / totalWeight
       );
     }
   }
@@ -244,7 +258,7 @@ router.get('/summary', (_req, res) => {
     readiness: {
       score: compositeScore,
       title: readinessTitle,
-      breakdown: { sleep: slpScore, stressInverse, hrvScore: hrvMultiplier }
+      breakdown: { sleep: slpScore, stressInverse, hrvScore: customHrvScore, hrvRaw: hrvRow?.nightly_avg ?? 0 }
     }
   };
 
