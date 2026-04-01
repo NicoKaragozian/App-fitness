@@ -84,6 +84,25 @@ Siempre mostrar como `Xh Xm`, nunca como decimal (6.9h → 6h 54m):
 `${Math.floor(hours)}h ${Math.round((hours % 1) * 60)}m`
 ```
 
+## Auth — cómo loguearse (Playwright)
+
+Garmin bloqueó el SSO programático con Cloudflare WAF (marzo 2026). El login ahora requiere un browser real.
+
+**Flujo de login:**
+1. Correr `npx tsx server/src/get-tokens.ts` desde la raíz del proyecto
+2. Se abre Chrome — loguearse con credenciales de Garmin
+3. El script captura el ticket del redirect, hace el exchange OAuth1→OAuth2, guarda los tokens en `server/oauth1_token.json` y `server/oauth2_token.json`, y cierra el browser
+4. En el frontend, el polling de `AuthContext` detecta los tokens automáticamente (cada 3s), o usar el botón "YA CORRÍ EL SCRIPT"
+
+**Duración de los tokens**: ~90 días (`refresh_token_expires_in = 7.776.000s`). Al reiniciar el server, `tryRestoreSession()` los carga automáticamente — no hace falta volver a loguearse hasta que expiren.
+
+**Detalles técnicos del script:**
+- Usa `chromium.launch({ channel: 'chrome' })` con `--disable-blink-features=AutomationControlled` para evitar detección de bot
+- Oculta `navigator.webdriver` con `addInitScript`
+- Intercepta el redirect con `page.route()` y lo **aborta** antes de que `connect.garmin.com/app` consuma el ticket (si no se aborta, el ticket queda inválido)
+- `login-url` en el PREAUTH_URL debe ser `https://connect.garmin.com/app` (el service al que Garmin redirige tras login)
+- `GarminConnect` requiere username/password no vacíos en el constructor aunque no se usen — se pasa `'token'` como placeholder
+
 ## Auth UX
 
 - Sidebar desktop: indicador estado + botón Logout
