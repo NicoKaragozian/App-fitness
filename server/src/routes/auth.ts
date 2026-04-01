@@ -5,30 +5,19 @@ import db from '../db.js';
 
 const router = Router();
 
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    res.status(400).json({ error: 'Email and password required' });
-    return;
-  }
-
+// Token-based login: carga los tokens OAuth guardados por get-tokens.ts
+router.post('/token-login', async (_req, res) => {
   try {
-    await garmin.login(email, password);
-    // Start initial sync in background
-    syncInitial().then(() => startPeriodicSync());
-    res.json({ success: true, message: 'Logged in, syncing data...' });
-  } catch (err: any) {
-    console.error('Login error:', err);
-    const msg = err.message || 'Unknown error';
-    if (msg.includes('429')) {
-      res.status(429).json({ error: 'Ban temporal de Garmin (429 Too Many Requests). Espera 30 mins o usa un VPN.' });
+    const ok = await garmin.tryRestoreSession();
+    if (!ok) {
+      res.status(401).json({ error: 'No se encontraron tokens válidos. Corré npx tsx server/src/get-tokens.ts primero.' });
       return;
     }
-
-    const userMsg = msg.includes('OAuth2') || msg.includes('401')
-      ? 'Credenciales incorrectas o Garmin está bloqueando la solicitud.'
-      : msg;
-    res.status(401).json({ error: userMsg });
+    syncInitial().then(() => startPeriodicSync());
+    res.json({ success: true, message: 'Sesión restaurada, sincronizando datos...' });
+  } catch (err: any) {
+    console.error('Token login error:', err);
+    res.status(500).json({ error: err.message || 'Error al restaurar sesión' });
   }
 });
 

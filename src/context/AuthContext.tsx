@@ -6,7 +6,7 @@ interface AuthState {
   isDemoMode: boolean;
   isSyncing: boolean;
   lastSync: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  tokenLogin: () => Promise<void>;
   enterDemoMode: () => void;
   logout: () => void;
 }
@@ -16,7 +16,7 @@ const AuthContext = createContext<AuthState>({
   isDemoMode: false,
   isSyncing: false,
   lastSync: null,
-  login: async () => {},
+  tokenLogin: async () => {},
   enterDemoMode: () => {},
   logout: () => {},
 });
@@ -30,36 +30,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
 
+  const fetchStatus = useCallback(async () => {
+    const data = await apiFetch<{ authenticated: boolean; syncing: boolean; lastSync: string | null }>('/auth/status');
+    setIsAuthenticated(data.authenticated);
+    setIsSyncing(data.syncing);
+    setLastSync(data.lastSync);
+    return data.authenticated;
+  }, []);
+
+  // Carga inicial
   useEffect(() => {
     if (isDemoMode) {
       setChecked(true);
       return;
     }
-    apiFetch<{ authenticated: boolean; syncing: boolean; lastSync: string | null }>('/auth/status')
-      .then((data) => {
-        setIsAuthenticated(data.authenticated);
-        setIsSyncing(data.syncing);
-        setLastSync(data.lastSync);
-      })
-      .catch(() => {
-        // Server not available - stay unauthenticated
-      })
+    fetchStatus()
+      .catch(() => {})
       .finally(() => setChecked(true));
-  }, [isDemoMode]);
+  }, [isDemoMode, fetchStatus]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    setIsSyncing(true);
-    try {
-      await apiFetch('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      });
-      setIsAuthenticated(true);
-      setIsDemoMode(false);
-      localStorage.removeItem('drift_demo');
-    } finally {
-      setIsSyncing(false);
-    }
+  // Polling cada 3 segundos mientras no esté autenticado (para auto-detect tokens)
+  useEffect(() => {
+    if (!checked || isAuthenticated || isDemoMode) return;
+    const id = setInterval(() => {
+      fetchStatus().catch(() => {});
+    }, 3000);
+    return () => clearInterval(id);
+  }, [checked, isAuthenticated, isDemoMode, fetchStatus]);
+
+  const tokenLogin = useCallback(async () => {
+    await apiFetch('/auth/token-login', { method: 'POST' });
+    setIsAuthenticated(true);
+    setIsDemoMode(false);
+    localStorage.removeItem('drift_demo');
   }, []);
 
   const enterDemoMode = useCallback(() => {
@@ -84,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isDemoMode, isSyncing, lastSync, login, enterDemoMode, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, isDemoMode, isSyncing, lastSync, tokenLogin, enterDemoMode, logout }}>
       {children}
     </AuthContext.Provider>
   );

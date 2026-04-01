@@ -25,12 +25,13 @@ async function saveSession() {
 
 export async function tryRestoreSession(): Promise<boolean> {
   try {
-    client = new GarminConnect({ username: '', password: '' });
+    client = new GarminConnect({ username: 'token', password: 'token' });
     await client.loadTokenByFile(SESSION_DIR);
     isLoggedIn = true;
     console.log('[garmin] Session restored from file');
     return true;
-  } catch {
+  } catch (err) {
+    console.error('[garmin] tryRestoreSession failed:', err);
     client = null;
     return false;
   }
