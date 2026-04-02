@@ -221,6 +221,7 @@ router.get('/', (req, res) => {
 
 router.get('/category/:category', (req, res) => {
   const { category } = req.params;
+  const period = (req.query.period as string) || 'total';
 
   // Look up group by id in sport_groups
   const groupRow = db.prepare('SELECT * FROM sport_groups WHERE id = ?').get(category) as any;
@@ -230,11 +231,21 @@ router.get('/category/:category', (req, res) => {
 
   const sportTypes: string[] = JSON.parse(groupRow.sport_types);
 
-  // Match by normalized sport_type
+  // All activities for this group (for personal bests — always all-time)
   const allRows = db.prepare(`SELECT * FROM activities ORDER BY start_time DESC`).all() as any[];
-  const rows = allRows.filter((r) => sportTypes.includes(normalizeSportType(r.sport_type)));
+  const allGroupRows = allRows.filter((r) => sportTypes.includes(normalizeSportType(r.sport_type)));
 
-  const activities = rows.map((r) => ({
+  // Filter by period for stats/chart/list
+  let rows = allGroupRows;
+  if (period !== 'total') {
+    const { start, end } = getDateRange(period);
+    rows = allGroupRows.filter((r) => {
+      const d = r.start_time.split('T')[0];
+      return d >= start && d <= end;
+    });
+  }
+
+  const mapActivity = (r: any) => ({
     id: r.garmin_id,
     date: r.start_time.split('T')[0],
     sportType: r.sport_type,
@@ -243,7 +254,13 @@ router.get('/category/:category', (req, res) => {
     maxSpeed: r.max_speed ? Math.round(r.max_speed * 3.6) : null,
     avgHr: r.avg_hr ?? null,
     calories: r.calories ?? null,
-  }));
+  });
+
+  // Filtered activities (for stats + chart + list)
+  const activities = rows.map(mapActivity);
+
+  // All-time activities (for personal bests only)
+  const allActivities = allGroupRows.map(mapActivity);
 
   const totalSessions = activities.length;
   const totalDuration = activities.reduce((s, a) => s + a.duration, 0);
@@ -255,23 +272,23 @@ router.get('/category/:category', (req, res) => {
     ? Math.round(hrActivities.reduce((s, a) => s + (a.avgHr ?? 0), 0) / hrActivities.length)
     : null;
 
-  const hasDistance = activities.some((a) => a.distance > 0);
-  const hasSpeed = activities.some((a) => a.maxSpeed != null);
+  const hasDistance = allActivities.some((a) => a.distance > 0);
+  const hasSpeed = allActivities.some((a) => a.maxSpeed != null);
 
-  const longestSession = activities.reduce<typeof activities[0] | null>(
+  const longestSession = allActivities.reduce<typeof allActivities[0] | null>(
     (best, a) => a.duration > (best?.duration ?? 0) ? a : best, null
   );
   const longestDistance = hasDistance
-    ? activities.reduce<typeof activities[0] | null>(
+    ? allActivities.reduce<typeof allActivities[0] | null>(
         (best, a) => a.distance > (best?.distance ?? 0) ? a : best, null
       )
     : null;
   const highestSpeed = hasSpeed
-    ? activities.reduce<typeof activities[0] | null>(
+    ? allActivities.reduce<typeof allActivities[0] | null>(
         (best, a) => (a.maxSpeed ?? 0) > (best?.maxSpeed ?? 0) ? a : best, null
       )
     : null;
-  const mostCalories = activities.reduce<typeof activities[0] | null>(
+  const mostCalories = allActivities.reduce<typeof allActivities[0] | null>(
     (best, a) => (a.calories ?? 0) > (best?.calories ?? 0) ? a : best, null
   );
 

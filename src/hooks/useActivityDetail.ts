@@ -42,21 +42,21 @@ export interface ActivityDetailData {
   };
 }
 
-export function useActivityDetail(category: string) {
+export function useActivityDetail(category: string, period: string = 'total') {
   const [data, setData] = useState<ActivityDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    apiFetch<ActivityDetailData>(`/activities/category/${category}`)
+    apiFetch<ActivityDetailData>(`/activities/category/${category}?period=${period}`)
       .then(setData)
       .catch((err) => {
         setError(err);
         setData(null);
       })
       .finally(() => setLoading(false));
-  }, [category]);
+  }, [category, period]);
 
   return { data, loading, error };
 }

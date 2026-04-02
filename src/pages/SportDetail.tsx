@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useActivityDetail } from '../hooks/useActivityDetail';
 import { useAuth } from '../context/AuthContext';
@@ -6,6 +6,22 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { DynamicChart } from '../components/DynamicChart';
 import { mockGroupDetail } from '../data/mockData';
 import type { GroupConfig } from '../hooks/useActivityDetail';
+
+type Period = 'total' | 'daily' | 'weekly' | 'monthly';
+
+const PERIOD_LABELS: Record<Period, string> = {
+  total: 'TOTAL',
+  daily: 'DIARIO',
+  weekly: 'SEMANAL',
+  monthly: 'MENSUAL',
+};
+
+const STATS_LABEL: Record<Period, string> = {
+  total: 'RESUMEN TOTAL',
+  daily: 'ÚLTIMO DÍA',
+  weekly: 'ÚLTIMA SEMANA',
+  monthly: 'ÚLTIMO MES',
+};
 
 function StatCard({ label, value, unit }: { label: string; value: string | number; unit: string }) {
   return (
@@ -44,8 +60,9 @@ export const SportDetail: React.FC = () => {
   const { category } = useParams<{ category: string }>();
   const { isDemoMode } = useAuth();
   const cat = category ?? 'water_sports';
+  const [period, setPeriod] = useState<Period>('total');
 
-  const { data: realData, loading } = useActivityDetail(cat);
+  const { data: realData, loading } = useActivityDetail(cat, period);
   const mockDetail = mockGroupDetail[cat];
   const data = isDemoMode ? mockDetail : realData;
 
@@ -62,8 +79,8 @@ export const SportDetail: React.FC = () => {
   const { activities, stats, personalBests } = data;
   const config: GroupConfig = data.group ?? mockGroupDetail[cat]?.group ?? FALLBACK_CONFIG;
 
-  // Build per-session chart data from activities (chronological, last 20)
-  const sessionChartData = [...activities].reverse().slice(-20).map((a) => ({
+  // Build per-session chart data from activities (chronological)
+  const sessionChartData = [...activities].reverse().map((a) => ({
     date: a.date,
     distance: a.distance,
     maxSpeed: a.maxSpeed ?? 0,
@@ -88,21 +105,42 @@ export const SportDetail: React.FC = () => {
         </div>
       </div>
 
+      {/* Period Toggle */}
+      <div className="flex items-center gap-2">
+        {(['total', 'daily', 'weekly', 'monthly'] as Period[]).map((p) => (
+          <button
+            key={p}
+            onClick={() => setPeriod(p)}
+            className={`px-4 py-1.5 rounded font-label text-label-sm tracking-widest uppercase transition-all ${
+              period === p
+                ? 'bg-primary text-surface font-bold'
+                : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            {PERIOD_LABELS[p]}
+          </button>
+        ))}
+      </div>
+
       {/* Stats Grid */}
       <div>
-        <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">RESUMEN TOTAL</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard label="SESIONES" value={stats.totalSessions} unit="" />
-          <StatCard label="DURACIÓN TOTAL" value={stats.totalDuration} unit="MIN" />
-          {stats.totalDistance !== undefined && (
-            <StatCard label="DISTANCIA TOTAL" value={stats.totalDistance} unit="KM" />
-          )}
-          <StatCard label="CALORÍAS TOTAL" value={stats.totalCalories} unit="KCAL" />
-          <StatCard label="DURACIÓN PROM." value={stats.avgDuration} unit="MIN" />
-          {stats.avgHr != null && (
-            <StatCard label="FC PROMEDIO" value={stats.avgHr} unit="BPM" />
-          )}
-        </div>
+        <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">{STATS_LABEL[period]}</p>
+        {stats.totalSessions === 0 && period !== 'total' ? (
+          <p className="text-on-surface-variant font-label text-label-sm">Sin actividades en este período.</p>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard label="SESIONES" value={stats.totalSessions} unit="" />
+            <StatCard label="DURACIÓN TOTAL" value={stats.totalDuration} unit="MIN" />
+            {stats.totalDistance !== undefined && (
+              <StatCard label="DISTANCIA TOTAL" value={stats.totalDistance} unit="KM" />
+            )}
+            <StatCard label="CALORÍAS TOTAL" value={stats.totalCalories} unit="KCAL" />
+            <StatCard label="DURACIÓN PROM." value={stats.avgDuration} unit="MIN" />
+            {stats.avgHr != null && (
+              <StatCard label="FC PROMEDIO" value={stats.avgHr} unit="BPM" />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Personal Bests */}
@@ -125,7 +163,7 @@ export const SportDetail: React.FC = () => {
       </div>
 
       {/* Session History Chart */}
-      <DynamicChart group={config} data={sessionChartData} />
+      {sessionChartData.length > 0 && <DynamicChart group={config} data={sessionChartData} />}
 
       {/* Activity List */}
       <div>

@@ -131,6 +131,13 @@ async function syncDayData(dateStr: string) {
   }
 }
 
+export async function syncActivitiesOnly() {
+  if (!garmin.getStatus()) throw new Error('Not logged in');
+  const allTimeStart = new Date(0);
+  const endDate = new Date();
+  await syncActivities(allTimeStart, endDate);
+}
+
 export async function syncInitial() {
   if (isSyncing) return;
   isSyncing = true;
@@ -145,7 +152,9 @@ export async function syncInitial() {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
 
-    await syncActivities(startDate, endDate);
+    // Fetch all historical activities (up to 100 — single request, no extra rate limit cost)
+    const allTimeStart = new Date(0);
+    await syncActivities(allTimeStart, endDate);
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       if (abortSync) {
