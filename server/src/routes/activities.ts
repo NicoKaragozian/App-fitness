@@ -152,17 +152,39 @@ router.get('/', (req, res) => {
     calories: r.calories ?? 0,
   }));
 
-  // Training readiness (use body battery as proxy)
-  const todaySummary = db.prepare(
-    `SELECT body_battery FROM daily_summary WHERE date = ? LIMIT 1`
-  ).get(end) as any;
+  // Training readiness: usar el readiness score compuesto (sleep + stress + hrv)
+  const sleepForReadiness = db.prepare(
+    `SELECT score FROM sleep WHERE score IS NOT NULL ORDER BY date DESC LIMIT 1`
+  ).get() as any;
+  const stressForReadiness = db.prepare(
+    `SELECT avg_stress FROM stress WHERE avg_stress IS NOT NULL ORDER BY date DESC LIMIT 1`
+  ).get() as any;
+  const hrvForReadiness = db.prepare(
+    `SELECT nightly_avg FROM hrv WHERE nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 1`
+  ).get() as any;
+
+  const slp = sleepForReadiness?.score ?? 0;
+  const stress = stressForReadiness?.avg_stress ?? 0;
+  const stressInv = stress > 0 ? 100 - stress : 0;
+  const hrv = hrvForReadiness?.nightly_avg ?? 0;
+  let hrvScore = 0;
+  if (hrv > 0) {
+    if (hrv >= 99) hrvScore = 100;
+    else if (hrv <= 20) hrvScore = 10;
+    else if (hrv <= 38) hrvScore = Math.round(10 + ((hrv - 20) / 18) * 35);
+    else hrvScore = Math.round(45 + ((hrv - 38) / 61) * 55);
+  }
+  const weights = (slp > 0 ? 0.4 : 0) + (stress > 0 ? 0.3 : 0) + (hrv > 0 ? 0.3 : 0);
+  const trainingReadiness = weights > 0
+    ? Math.round((slp * (slp > 0 ? 0.4 : 0) + stressInv * (stress > 0 ? 0.3 : 0) + hrvScore * (hrv > 0 ? 0.3 : 0)) / weights)
+    : null;
 
   res.json({
     ...result,
     volumeHistory,
     chartData,
     recentSessions,
-    trainingReadiness: todaySummary?.body_battery ?? 94,
+    trainingReadiness,
   });
 });
 

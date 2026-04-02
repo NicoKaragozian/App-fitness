@@ -75,8 +75,8 @@ export async function fetchActivities(startDate: Date, _endDate: Date) {
       const d = new Date(a.startTimeLocal || a.startTimeGMT || '');
       return d >= startDate;
     });
-  } catch (err) {
-    console.error('fetchActivities error:', err);
+  } catch (err: any) {
+    console.warn('[garmin] fetchActivities failed:', err?.message ?? err);
     return [];
   }
 }
@@ -87,8 +87,8 @@ export async function fetchSleep(date: string) {
     const data = await client.getSleepData(new Date(date));
     await sleep(1000);
     return data;
-  } catch (err) {
-    console.error('fetchSleep error:', err);
+  } catch (err: any) {
+    console.warn('[garmin] fetchSleep failed:', err?.message ?? err);
     return null;
   }
 }
@@ -102,8 +102,8 @@ export async function fetchStress(date: string) {
     );
     await sleep(1000);
     return data;
-  } catch (err) {
-    console.error('fetchStress error:', err);
+  } catch (err: any) {
+    console.warn('[garmin] fetchStress failed:', err?.message ?? err);
     return null;
   }
 }
@@ -114,8 +114,8 @@ export async function fetchHRV(date: string) {
     const data = await client.getHRVData(new Date(date));
     await sleep(1000);
     return data;
-  } catch (err) {
-    console.error('fetchHRV error:', err);
+  } catch (err: any) {
+    console.warn('[garmin] fetchHRV failed:', err?.message ?? err);
     return null;
   }
 }
@@ -129,9 +129,11 @@ export async function fetchDailySummary(date: string) {
     );
     await sleep(1000);
     return data;
-  } catch (err) {
-    console.error('fetchDailySummary error:', err);
-    // Fallback: try to get steps and heart rate individually
+  } catch (err: any) {
+    // 403 es esperado — API bloqueada, caemos al fallback silenciosamente
+    if (err?.status !== 403 && !err?.message?.includes('403')) {
+      console.warn('[garmin] fetchDailySummary failed:', err?.message ?? err);
+    }
     try {
       const steps = await client!.getSteps(new Date(date));
       await sleep(1000);

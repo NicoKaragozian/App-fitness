@@ -192,7 +192,7 @@ router.get('/summary', (_req, res) => {
   ).get() as any;
 
   const sleepRow = db.prepare(
-    `SELECT score FROM sleep ORDER BY date DESC LIMIT 1`
+    `SELECT score FROM sleep WHERE score IS NOT NULL ORDER BY date DESC LIMIT 1`
   ).get() as any;
 
   const stressRow = db.prepare(
