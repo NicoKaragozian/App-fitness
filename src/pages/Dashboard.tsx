@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useDailySummary } from '../hooks/useDailySummary';
 import { useActivities } from '../hooks/useActivities';
 import { usePlan, type PlanItem } from '../hooks/usePlan';
+import { useInsights } from '../hooks/useInsights';
+import { InsightsCard } from '../components/InsightsCard';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 
 const ActivityRing: React.FC<{ value: number; color: string; label: string; subLabel?: string | number; size?: number }> = ({
@@ -40,6 +42,7 @@ export const Dashboard: React.FC = () => {
   const { data: summary, loading: summaryLoading } = useDailySummary();
   const { data: activities, loading: activitiesLoading } = useActivities('daily');
   const { data: weeklyPlan, loading: planLoading, addPlanItem, updatePlanItem, deletePlanItem } = usePlan();
+  const { data: insights, loading: insightsLoading } = useInsights();
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ sport: '', detail: '' });
@@ -96,6 +99,9 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8">
+      {/* Insights */}
+      <InsightsCard recommendations={insights?.recommendations ?? []} loading={insightsLoading} />
+
       {/* Hero Row */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
         

@@ -11,7 +11,7 @@ router.get('/sleep', (req, res) => {
   // 'daily' → return only the most recent entry (for the dashboard)
   if (period === 'daily') {
     const row = db.prepare(
-      `SELECT s.*, h.nightly_avg FROM sleep s LEFT JOIN hrv h ON s.date = h.date ORDER BY s.date DESC LIMIT 1`
+      `SELECT s.*, h.nightly_avg FROM sleep s LEFT JOIN hrv h ON s.date = h.date WHERE s.score IS NOT NULL ORDER BY s.date DESC LIMIT 1`
     ).get() as any;
     if (!row) { res.json([]); return; }
     res.json([{
@@ -26,7 +26,7 @@ router.get('/sleep', (req, res) => {
   const limit = period === 'weekly' ? 7 : 49;
 
   const rows = db.prepare(
-    `SELECT * FROM sleep ORDER BY date DESC LIMIT ?`
+    `SELECT * FROM sleep WHERE score IS NOT NULL ORDER BY date DESC LIMIT ?`
   ).all(limit) as any[];
 
   const data = rows.reverse().map((r) => {
