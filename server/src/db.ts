@@ -78,6 +78,42 @@ db.exec(`
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS sport_groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    subtitle TEXT NOT NULL DEFAULT '',
+    color TEXT NOT NULL DEFAULT '#6a9cff',
+    icon TEXT NOT NULL DEFAULT '◎',
+    sport_types TEXT NOT NULL,
+    metrics TEXT NOT NULL,
+    chart_metrics TEXT NOT NULL DEFAULT '[]',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
 `);
+
+// Seed default sport groups if table is empty
+const groupCount = (db.prepare('SELECT COUNT(*) as c FROM sport_groups').get() as { c: number }).c;
+if (groupCount === 0) {
+  const ins = db.prepare(
+    'INSERT INTO sport_groups (id, name, subtitle, color, icon, sport_types, metrics, chart_metrics, sort_order) VALUES (?,?,?,?,?,?,?,?,?)'
+  );
+  ins.run('water_sports', 'WATER SPORTS', 'WINGFOIL / SURF', '#6a9cff', '◎',
+    JSON.stringify(['surfing','kitesurfing','kiteboarding','windsurfing','stand_up_paddleboarding','sailing','kayaking']),
+    JSON.stringify(['sessions','distance','duration','calories']),
+    JSON.stringify([{dataKey:'distance',name:'DISTANCIA KM',type:'bar'},{dataKey:'maxSpeed',name:'VEL. MÁX KM/H',type:'line'}]),
+    0);
+  ins.run('tennis', 'TENNIS', 'MATCH / TRAINING', '#f3ffca', '◈',
+    JSON.stringify(['tennis']),
+    JSON.stringify(['sessions','duration','calories']),
+    JSON.stringify([{dataKey:'duration',name:'DURACIÓN MIN',type:'bar'},{dataKey:'avgHr',name:'FC PROM BPM',type:'line'}]),
+    1);
+  ins.run('gym', 'GYM / STRENGTH', 'FUERZA / POTENCIA', '#ff7439', '⚡',
+    JSON.stringify(['strength_training','gym','indoor_cardio']),
+    JSON.stringify(['sessions','duration','calories']),
+    JSON.stringify([{dataKey:'calories',name:'CALORÍAS KCAL',type:'bar'}]),
+    2);
+}
 
 export default db;

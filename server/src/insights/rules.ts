@@ -170,7 +170,7 @@ const ruleOptimalState: Rule = (stats) => {
     dataPoints: {
       sleepScore: stats.sleep.current,
       hrvCurrent: stats.hrv.current?.toFixed(0),
-      stressCurrent: stats.stress.current,
+      stressCurrent: stats.stress.current ?? undefined,
     },
   };
 };

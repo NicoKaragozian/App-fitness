@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client';
+import type { ChartMetricConfig } from './useActivities';
+
+export interface GroupConfig {
+  id: string;
+  name: string;
+  subtitle: string;
+  color: string;
+  icon: string;
+  metrics: string[];
+  chartMetrics: ChartMetricConfig[];
+}
 
 export interface ActivityItem {
   id: string;
@@ -13,6 +24,7 @@ export interface ActivityItem {
 }
 
 export interface ActivityDetailData {
+  group?: GroupConfig;
   activities: ActivityItem[];
   stats: {
     totalSessions: number;

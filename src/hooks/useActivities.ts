@@ -1,22 +1,30 @@
 import { useState, useEffect } from 'react';
 import { apiFetch } from '../api/client';
 
-export interface ChartData {
-  water_sports: Array<{ date: string; distance: number; maxSpeed: number; duration: number }>;
-  tennis: Array<{ date: string; duration: number; avgHr: number; calories: number }>;
-  gym: Array<{ date: string; duration: number; calories: number }>;
+export interface ChartMetricConfig {
+  dataKey: string;
+  name: string;
+  type: 'bar' | 'line';
 }
 
-interface ActivitiesData {
-  sports: {
-    waterSports: Record<string, unknown>;
-    tennis: Record<string, unknown>;
-    gym: Record<string, unknown>;
-    others: Array<{ name: string; sessions: number; distance?: number; duration?: number }>;
-  };
-  volumeHistory: Array<{ month: string; water: number; tennis: number; gym: number }>;
-  chartData?: ChartData;
-  trainingReadiness: number;
+export interface SportGroup {
+  id: string;
+  name: string;
+  subtitle: string;
+  color: string;
+  icon: string;
+  metrics: string[];
+  chartMetrics: ChartMetricConfig[];
+  sortOrder: number;
+  data: Record<string, number>;
+}
+
+export interface ActivitiesData {
+  groups: SportGroup[];
+  others: Array<{ name: string; sessions: number; distance?: number; duration?: number }>;
+  volumeHistory: Array<Record<string, number | string>>;
+  chartData: Record<string, Array<Record<string, number | string>>>;
+  trainingReadiness: number | null;
   recentSessions: Array<{
     sport: string;
     date: string;

@@ -217,6 +217,88 @@ export const consistencyMatrix = Array.from({ length: 7 }, (_, week) =>
   }))
 );
 
+// Mock data in the new ActivitiesData format (groups[])
+export const mockActivitiesData = {
+  groups: [
+    {
+      id: 'water_sports',
+      name: 'WATER SPORTS',
+      subtitle: 'WINGFOIL / SURF',
+      color: '#6a9cff',
+      icon: '◎',
+      metrics: ['sessions', 'distance', 'duration', 'calories'],
+      chartMetrics: [
+        { dataKey: 'distance', name: 'DISTANCIA KM', type: 'bar' as const },
+        { dataKey: 'maxSpeed', name: 'VEL. MÁX KM/H', type: 'line' as const },
+      ],
+      sortOrder: 0,
+      data: { sessions: 3, distance: 54.2, duration: 285, calories: 1740, avg_hr: 0, max_speed: 0 },
+    },
+    {
+      id: 'tennis',
+      name: 'TENNIS',
+      subtitle: 'MATCH / TRAINING',
+      color: '#f3ffca',
+      icon: '◈',
+      metrics: ['sessions', 'duration', 'calories'],
+      chartMetrics: [
+        { dataKey: 'duration', name: 'DURACIÓN MIN', type: 'bar' as const },
+        { dataKey: 'avgHr', name: 'FC PROM BPM', type: 'line' as const },
+      ],
+      sortOrder: 1,
+      data: { sessions: 4, distance: 0, duration: 360, calories: 1680, avg_hr: 139, max_speed: 0 },
+    },
+    {
+      id: 'gym',
+      name: 'GYM / STRENGTH',
+      subtitle: 'FUERZA / POTENCIA',
+      color: '#ff7439',
+      icon: '⚡',
+      metrics: ['sessions', 'duration', 'calories'],
+      chartMetrics: [
+        { dataKey: 'calories', name: 'CALORÍAS KCAL', type: 'bar' as const },
+      ],
+      sortOrder: 2,
+      data: { sessions: 4, distance: 0, duration: 260, calories: 1520, avg_hr: 0, max_speed: 0 },
+    },
+  ],
+  others: sportsData.others,
+  volumeHistory: volumeHistoryMonthly.map((v) => ({
+    month: v.month,
+    water_sports: v.water,
+    tennis: v.tennis,
+    gym: v.gym,
+  })),
+  chartData: chartDataMock,
+  trainingReadiness: 85,
+  recentSessions: [
+    { sport: 'WINGFOIL', date: '2026-03-19', duration: 90, distance: 12.4, hr: 142, calories: 580 },
+    { sport: 'TENNIS', date: '2026-03-11', duration: 80, distance: 0, hr: 134, calories: 468 },
+    { sport: 'STRENGTH TRAINING', date: '2026-03-20', duration: 55, distance: 0, hr: 0, calories: 350 },
+  ],
+};
+
+// Mock for SportDetail — keyed by group id
+export const mockGroupDetail: Record<string, {
+  group: { id: string; name: string; subtitle: string; color: string; icon: string; metrics: string[]; chartMetrics: { dataKey: string; name: string; type: 'bar' | 'line' }[] };
+  activities: any[];
+  stats: any;
+  personalBests: any;
+}> = {
+  water_sports: {
+    group: mockActivitiesData.groups[0],
+    ...activityDetailMock.water_sports,
+  },
+  tennis: {
+    group: mockActivitiesData.groups[1],
+    ...activityDetailMock.tennis,
+  },
+  gym: {
+    group: mockActivitiesData.groups[2],
+    ...activityDetailMock.gym,
+  },
+};
+
 export const weeklyPlan = [
   { day: 'LUN', sport: 'GYM / FUERZA', completed: true, detail: 'UPPER BODY STRENGTH' },
   { day: 'MAR', sport: 'WINGFOIL', completed: true, detail: 'SESIÓN TÉCNICA - VIENTO 15KT' },

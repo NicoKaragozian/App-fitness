@@ -17,16 +17,20 @@ App de fitness personal conectada a Garmin Connect. Dashboard de datos biométri
 ### Frontend (`src/`)
 - `pages/` → Dashboard, Sports, Sleep, Wellness
 - `components/layout/` → Sidebar, Header (con logout button)
+- `components/DynamicChart.tsx` → Chart genérico (bars/lines) configurado por `chartMetrics` del grupo
+- `components/SportGroupEditor.tsx` → Modal para crear/editar/reordenar grupos de deportes
+- `components/InsightsCard.tsx` → Tarjetas de recomendaciones del motor de insights
 - `context/AuthContext.tsx` → Auth global con `login`, `logout`, `enterDemoMode`
-- `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`
+- `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`
 - `api/client.ts` → `apiFetch()` helper
 
 ### Backend (`server/src/`)
 - `index.ts` → Express server. En producción sirve `/dist/` estático + SPA fallback
 - `garmin.ts` → Wrapper sobre la librería Garmin. Gestiona sesión OAuth
 - `sync.ts` → Sync de datos: `syncInitial()` (30 días) y `syncToday()` (periódico cada 15min)
-- `db.ts` → SQLite con tables: `activities`, `sleep`, `hrv`, `stress`, `daily_summary`, `sync_log`
-- `routes/` → `auth`, `activities`, `health`, `sync`
+- `db.ts` → SQLite con tables: `activities`, `sleep`, `hrv`, `stress`, `daily_summary`, `sync_log`, `weekly_plan`, `sport_groups`
+- `routes/` → `auth`, `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`
+- `insights/` → Motor de recomendaciones: `stats.ts` (estadísticas), `rules.ts` (8 reglas), `index.ts` (orquestador)
 
 ## El offset sistemático de Garmin (CRÍTICO)
 
@@ -64,14 +68,52 @@ Para sleep, se usa `calendarDate` del response como clave en la DB. Para HRV/str
 
 **Body battery no está disponible via API** → se usa `sleepScore` como proxy en el frontend (rings READY y BATTERY en Dashboard).
 
-## Sport type mapping
+## Sport type mapping y grupos customizables
 
-Garmin devuelve tipos con sufijo `_v2`. La función `categorize()` en `sync.ts` los normaliza:
+Garmin devuelve tipos con sufijo `_v2`. La función `categorize()` en `sync.ts` los normaliza y escribe la columna `category` en `activities`. Esta columna es **legacy** — la fuente de verdad ahora es la tabla `sport_groups`.
+
 ```typescript
 // strip _v\d+ antes de buscar en el map
 const key = sportType.toLowerCase().replace(/\s+/g, '_').replace(/_v\d+$/, '');
 ```
-Categorías: `water_sports` (windsurfing, kiteboarding, surfing...), `tennis`, `gym`, `others`.
+
+### Tabla `sport_groups`
+
+Cada fila define un grupo de deportes customizable:
+- `id` — slug (ej: `water_sports`, `mi_cardio`)
+- `sport_types` — JSON array de sport_types normalizados (ej: `["surfing","kitesurfing"]`)
+- `metrics` — JSON array de métricas a mostrar: `sessions`, `distance`, `duration`, `calories`, `avg_hr`, `max_speed`
+- `chart_metrics` — JSON array `[{dataKey, name, type:"bar"|"line"}]`
+- `sort_order` — orden de aparición en la UI
+
+**Al arrancar el server**, si la tabla está vacía se seedean 3 grupos default (water_sports, tennis, gym) → el usuario existente no ve cambio.
+
+### Rutas sport-groups
+
+| Método | Path | Descripción |
+|--------|------|-------------|
+| GET | `/api/sport-groups` | Todos los grupos |
+| POST | `/api/sport-groups` | Crear grupo |
+| PUT | `/api/sport-groups/:id` | Editar grupo |
+| DELETE | `/api/sport-groups/:id` | Borrar grupo |
+| PUT | `/api/sport-groups/reorder` | Reordenar (`{order: ["id1","id2"]}`) |
+
+### Endpoint `/api/activities`
+
+La respuesta ya **no** tiene `sports.waterSports/tennis/gym` — ahora devuelve `groups[]`:
+```typescript
+{
+  groups: [{ id, name, subtitle, color, icon, metrics, chartMetrics, data: {sessions, distance, ...} }],
+  others: [...],   // sport_types no asignados a ningún grupo
+  chartData: { [groupId]: [{date, distance, maxSpeed, duration, avgHr, calories}] },
+  volumeHistory: [...],
+  trainingReadiness: number | null,
+}
+```
+
+### Endpoint `/api/activities/sport-types`
+
+`GET /api/activities/sport-types` → devuelve todos los `sport_type` distintos registrados en la DB (normalizado). Usado por el editor de grupos para el multi-select.
 
 ## Velocidades
 
@@ -121,11 +163,13 @@ Garmin bloqueó el SSO programático con Cloudflare WAF (marzo 2026). El login a
 
 | Tabla | Clave | Notas |
 |-------|-------|-------|
-| `activities` | `garmin_id` | `category` calculado con `categorize()` |
-| `sleep` | `date` = calendarDate de Garmin | offset -1 día vs query date |
+| `activities` | `garmin_id` | `category` es legacy — la agrupación real viene de `sport_groups` |
+| `sleep` | `date` = calendarDate de Garmin | offset -1 día vs query date; siempre filtrar `WHERE score IS NOT NULL` |
 | `hrv` | `date` = dateStr (con offset aplicado en sync) | |
 | `stress` | `date` = dateStr | |
 | `daily_summary` | `date` = dateStr | `body_battery` siempre null (API bloqueada) |
+| `weekly_plan` | id autoincrement | `day`, `sport`, `detail`, `completed` |
+| `sport_groups` | `id` TEXT (slug) | `sport_types`, `metrics`, `chart_metrics` son JSON arrays |
 
 ## Comandos útiles
 
@@ -176,6 +220,31 @@ Sin esto, cambiar de cuenta mezcla datos de dos usuarios en la misma DB (el sync
 
 El backend ya devuelve 429 con mensaje en español cuando detecta rate limiting de Garmin en el login.
 
+## Motor de Insights (inferencia local)
+
+Motor de recomendaciones en `server/src/insights/` — puro TypeScript, sin dependencias ML.
+
+- `stats.ts` → funciones estadísticas puras: rolling average, media, stddev, z-score, trend (regresión lineal), consecutive training days, training load
+- `rules.ts` → 8 reglas evaluadas en orden de prioridad, devuelve top 3 recomendaciones. Cada regla recibe `InsightStats` y devuelve `Recommendation | null`
+- `index.ts` → orquestador: consulta 30 días de todas las tablas, computa stats, evalúa reglas
+
+**`GET /api/insights`** devuelve:
+```typescript
+{ recommendations: [{ type, title, description, priority, dataPoints }], stats }
+```
+
+**Tipos de recomendación**: `recovery`, `training`, `sleep`, `plan`
+
+**Nota sobre stress trend**: "improving" en stats de stress significa que los valores suben (= peor), por eso el trend se invierte en las reglas.
+
+## Readiness score (compuesto)
+
+No hay `body_battery` disponible via API (403 permanente). Se usa un score compuesto:
+- Sleep 40% + Stress inverso 30% + HRV 30%
+- HRV mapeado a escala 10-100: ≤20ms→10, 20-38ms→10-45, 38-99ms→45-100, ≥99ms→100
+- Calculado en `routes/health.ts` (endpoint `/summary`) y también en `routes/activities.ts`
+- Si alguna métrica vale 0, su peso se redistribuye entre las disponibles
+
 ## Notas importantes
 
 1. **Reiniciar el servidor** después de cambios en `server/src/` — tsx no recarga automáticamente
@@ -184,3 +253,4 @@ El backend ya devuelve 429 con mensaje en español cuando detecta rate limiting 
 4. La DB de producción en Render usa el disco montado en `/data/`
 5. Hay ~24 actividades: 14 windsurfing/kiteboarding, 9 tenis, 1 gym (datos reales del usuario)
 6. `fetchDailySummary` falla con 403 y cae al fallback (`getSteps` + `getHeartRate`) — ambos tienen `sleep(1000)`
+7. **Sleep queries**: siempre filtrar `WHERE score IS NOT NULL` — el sync crea la fila del día siguiente con score null (por el offset de Garmin)

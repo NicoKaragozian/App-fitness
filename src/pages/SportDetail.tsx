@@ -1,37 +1,11 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
-} from 'recharts';
 import { useActivityDetail } from '../hooks/useActivityDetail';
 import { useAuth } from '../context/AuthContext';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
-import { activityDetailMock, chartDataMock } from '../data/mockData';
-
-type Category = 'water_sports' | 'tennis' | 'gym';
-
-const SPORT_CONFIG: Record<Category, { title: string; subtitle: string; icon: string; color: string }> = {
-  water_sports: { title: 'WATER SPORTS', subtitle: 'WINGFOIL / KITEBOARDING / SURF', icon: '◎', color: '#6a9cff' },
-  tennis: { title: 'TENNIS', subtitle: 'MATCH / TRAINING', icon: '◈', color: '#f3ffca' },
-  gym: { title: 'GYM / STRENGTH', subtitle: 'FUERZA / POTENCIA', icon: '⚡', color: '#ff7439' },
-};
-
-const axisStyle = { fill: '#adaaaa', fontSize: 11, fontFamily: 'Lexend' };
-
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="glass rounded-xl p-3 border border-outline-variant/20">
-      <p className="font-label text-label-sm text-on-surface-variant mb-1">{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} className="font-body text-sm font-medium" style={{ color: p.color }}>
-          {p.name}: {typeof p.value === 'number' ? p.value.toFixed(0) : p.value}
-        </p>
-      ))}
-    </div>
-  );
-};
+import { DynamicChart } from '../components/DynamicChart';
+import { mockGroupDetail } from '../data/mockData';
+import type { GroupConfig } from '../hooks/useActivityDetail';
 
 function StatCard({ label, value, unit }: { label: string; value: string | number; unit: string }) {
   return (
@@ -56,16 +30,24 @@ function BestCard({ label, value, unit, date, color }: { label: string; value: n
   );
 }
 
+const FALLBACK_CONFIG: GroupConfig = {
+  id: 'unknown',
+  name: 'DEPORTE',
+  subtitle: '',
+  color: '#6a9cff',
+  icon: '◎',
+  metrics: ['sessions', 'duration', 'calories'],
+  chartMetrics: [{ dataKey: 'duration', name: 'DURACIÓN MIN', type: 'bar' }],
+};
+
 export const SportDetail: React.FC = () => {
   const { category } = useParams<{ category: string }>();
   const { isDemoMode } = useAuth();
-  const cat = (category ?? 'water_sports') as Category;
-  const config = SPORT_CONFIG[cat] ?? SPORT_CONFIG.water_sports;
+  const cat = category ?? 'water_sports';
 
   const { data: realData, loading } = useActivityDetail(cat);
-  const mockDetail = activityDetailMock[cat as keyof typeof activityDetailMock];
+  const mockDetail = mockGroupDetail[cat];
   const data = isDemoMode ? mockDetail : realData;
-  const chartDataByCategory = isDemoMode ? chartDataMock : null;
 
   if (loading && !isDemoMode) return <LoadingSkeleton />;
   if (!data) return (
@@ -78,11 +60,17 @@ export const SportDetail: React.FC = () => {
   );
 
   const { activities, stats, personalBests } = data;
+  const config: GroupConfig = data.group ?? mockGroupDetail[cat]?.group ?? FALLBACK_CONFIG;
 
-  // Build chart data from activities for real mode (most recent 20, reversed for chronological)
-  const sessionChartData = isDemoMode && chartDataByCategory
-    ? chartDataByCategory[cat as keyof typeof chartDataByCategory]
-    : [...activities].reverse().slice(-20);
+  // Build per-session chart data from activities (chronological, last 20)
+  const sessionChartData = [...activities].reverse().slice(-20).map((a) => ({
+    date: a.date,
+    distance: a.distance,
+    maxSpeed: a.maxSpeed ?? 0,
+    duration: a.duration,
+    avgHr: a.avgHr ?? 0,
+    calories: a.calories ?? 0,
+  }));
 
   return (
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8">
@@ -95,7 +83,7 @@ export const SportDetail: React.FC = () => {
           <span className="text-3xl" style={{ color: config.color }}>{config.icon}</span>
           <div>
             <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{config.subtitle}</p>
-            <h1 className="font-display font-bold text-on-surface text-3xl lg:text-[3rem] leading-none">{config.title}</h1>
+            <h1 className="font-display font-bold text-on-surface text-3xl lg:text-[3rem] leading-none">{config.name}</h1>
           </div>
         </div>
       </div>
@@ -122,58 +110,22 @@ export const SportDetail: React.FC = () => {
         <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">PERSONAL BESTS</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {personalBests.longestSession && (
-            <BestCard label="SESIÓN MÁS LARGA" value={personalBests.longestSession.value} unit={personalBests.longestSession.unit} date={personalBests.longestSession.date} color={config.color} />
+            <BestCard label="SESIÓN MÁS LARGA" {...personalBests.longestSession} color={config.color} />
           )}
           {personalBests.longestDistance && (
-            <BestCard label="MAYOR DISTANCIA" value={personalBests.longestDistance.value} unit={personalBests.longestDistance.unit} date={personalBests.longestDistance.date} color={config.color} />
+            <BestCard label="MAYOR DISTANCIA" {...personalBests.longestDistance} color={config.color} />
           )}
           {personalBests.highestSpeed && (
-            <BestCard label="VELOCIDAD MÁX" value={personalBests.highestSpeed.value} unit={personalBests.highestSpeed.unit} date={personalBests.highestSpeed.date} color={config.color} />
+            <BestCard label="VELOCIDAD MÁX" {...personalBests.highestSpeed} color={config.color} />
           )}
           {personalBests.mostCalories && (
-            <BestCard label="MÁS CALORÍAS" value={personalBests.mostCalories.value} unit={personalBests.mostCalories.unit} date={personalBests.mostCalories.date} color={config.color} />
+            <BestCard label="MÁS CALORÍAS" {...personalBests.mostCalories} color={config.color} />
           )}
         </div>
       </div>
 
-      {/* Expanded Chart */}
-      <div className="bg-surface-low rounded-xl p-4 lg:p-6">
-        <p className="font-display text-headline-md font-bold text-on-surface tracking-tight uppercase mb-1">HISTORIAL DE SESIONES</p>
-        <p className="font-label text-label-sm text-on-surface-variant mb-6">
-          {cat === 'water_sports' ? 'DISTANCIA (KM) Y VELOCIDAD MÁX (KM/H)' : cat === 'tennis' ? 'DURACIÓN (MIN) Y FC PROMEDIO (BPM)' : 'CALORÍAS POR SESIÓN'}
-        </p>
-        <ResponsiveContainer width="100%" height={280}>
-          {cat === 'water_sports' ? (
-            <ComposedChart data={sessionChartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
-              <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={(d) => d.slice(5)} interval="preserveStartEnd" />
-              <YAxis yAxisId="left" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="right" orientation="right" tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar yAxisId="left" dataKey="distance" name="DISTANCIA KM" fill={config.color} fillOpacity={0.7} radius={[3, 3, 0, 0]} />
-              <Line yAxisId="right" type="monotone" dataKey="maxSpeed" name="VEL. MÁX KM/H" stroke="#a8c4ff" strokeWidth={2} dot={{ fill: '#a8c4ff', r: 3 }} />
-            </ComposedChart>
-          ) : cat === 'tennis' ? (
-            <ComposedChart data={sessionChartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
-              <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={(d) => d.slice(5)} interval="preserveStartEnd" />
-              <YAxis yAxisId="left" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="right" orientation="right" tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar yAxisId="left" dataKey="duration" name="DURACIÓN MIN" fill={config.color} fillOpacity={0.7} radius={[3, 3, 0, 0]} />
-              <Line yAxisId="right" type="monotone" dataKey="avgHr" name="FC PROM BPM" stroke="#c5d98a" strokeWidth={2} dot={{ fill: '#c5d98a', r: 3 }} />
-            </ComposedChart>
-          ) : (
-            <ComposedChart data={sessionChartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff08" vertical={false} />
-              <XAxis dataKey="date" tick={axisStyle} axisLine={false} tickLine={false} tickFormatter={(d) => d.slice(5)} interval="preserveStartEnd" />
-              <YAxis tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="calories" name="CALORÍAS KCAL" fill={config.color} fillOpacity={0.7} radius={[3, 3, 0, 0]} />
-            </ComposedChart>
-          )}
-        </ResponsiveContainer>
-      </div>
+      {/* Session History Chart */}
+      <DynamicChart group={config} data={sessionChartData} />
 
       {/* Activity List */}
       <div>
