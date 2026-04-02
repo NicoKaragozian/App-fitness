@@ -24,6 +24,50 @@ const CHART_DATAKEYS: { key: string; label: string }[] = [
 const PRESET_COLORS = ['#6a9cff', '#f3ffca', '#ff7439', '#22d3a5', '#c084fc', '#fb923c', '#f472b6', '#34d399'];
 const PRESET_ICONS = ['◎', '◈', '⚡', '●', '◆', '▲', '★', '◉', '◇', '⬟'];
 
+const SPORT_TYPE_GROUPS: { label: string; types: string[] }[] = [
+  {
+    label: 'Agua',
+    types: ['surfing', 'kitesurfing', 'kiteboarding', 'windsurfing', 'stand_up_paddleboarding',
+      'sailing', 'kayaking', 'rowing', 'swimming', 'open_water_swimming', 'diving',
+      'whitewater_rafting', 'wakeboarding', 'water_skiing'],
+  },
+  {
+    label: 'Correr & Caminar',
+    types: ['running', 'trail_running', 'treadmill_running', 'track_running',
+      'walking', 'hiking', 'mountain_hiking'],
+  },
+  {
+    label: 'Ciclismo',
+    types: ['cycling', 'road_cycling', 'mountain_biking', 'gravel_cycling',
+      'indoor_cycling', 'virtual_cycling'],
+  },
+  {
+    label: 'Montaña & Nieve',
+    types: ['mountaineering', 'rock_climbing', 'indoor_climbing', 'skiing', 'snowboarding',
+      'backcountry_skiing', 'cross_country_skiing', 'snowshoeing'],
+  },
+  {
+    label: 'Raqueta',
+    types: ['tennis', 'padel', 'squash', 'badminton', 'table_tennis', 'pickleball'],
+  },
+  {
+    label: 'Gym & Fitness',
+    types: ['strength_training', 'gym', 'indoor_cardio', 'yoga', 'pilates',
+      'hiit', 'cardio', 'aerobics', 'crossfit', 'boxing', 'martial_arts',
+      'dance', 'gymnastics', 'cheerleading'],
+  },
+  {
+    label: 'Otros',
+    types: ['golf', 'triathlon', 'duathlon', 'obstacle_run', 'soccer', 'basketball',
+      'volleyball', 'baseball', 'softball', 'american_football', 'rugby', 'cricket',
+      'field_hockey', 'ice_hockey', 'skating', 'roller_skating', 'skateboarding',
+      'horse_riding', 'hunting', 'fishing', 'other'],
+  },
+];
+
+// Todos los sport types de Garmin (derivado de SPORT_TYPE_GROUPS para evitar duplicados)
+const ALL_GARMIN_SPORT_TYPES = SPORT_TYPE_GROUPS.flatMap((g) => g.types);
+
 function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/, '') || 'group';
 }
@@ -50,6 +94,23 @@ interface GroupFormProps {
 
 const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, existingGroupId, onSave, onCancel, saving, error }) => {
   const [form, setForm] = useState<CreateGroupPayload>(initial);
+
+  // Abrir por defecto las categorías que ya tienen tipos seleccionados
+  const [openCategories, setOpenCategories] = useState<Set<string>>(() => {
+    const open = new Set<string>();
+    SPORT_TYPE_GROUPS.forEach((g) => {
+      if (g.types.some((t) => initial.sportTypes.includes(t))) open.add(g.label);
+    });
+    return open;
+  });
+
+  const toggleCategory = (label: string) => {
+    setOpenCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label); else next.add(label);
+      return next;
+    });
+  };
 
   const toggleMetric = (key: string) => {
     setForm((f) => ({
@@ -154,27 +215,67 @@ const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, exi
         </div>
       </div>
 
-      {/* Sport Types */}
+      {/* Sport Types — agrupados por categoría */}
       <div>
         <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">
           DEPORTES INCLUIDOS
-          {availableSportTypes.length === 0 && <span className="ml-2 text-on-surface-variant/50 normal-case">(sin actividades registradas)</span>}
+          {form.sportTypes.length > 0 && (
+            <span className="ml-2 normal-case font-normal" style={{ color: form.color }}>
+              {form.sportTypes.length} seleccionado{form.sportTypes.length !== 1 ? 's' : ''}
+            </span>
+          )}
         </label>
-        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
-          {availableSportTypes.map((st) => (
-            <button
-              key={st}
-              onClick={() => toggleSportType(st)}
-              className={`px-3 py-1 rounded-full font-label text-xs tracking-wide transition-all ${
-                form.sportTypes.includes(st)
-                  ? 'text-surface font-bold'
-                  : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
-              }`}
-              style={form.sportTypes.includes(st) ? { background: form.color } : {}}
-            >
-              {st.replace(/_/g, ' ')}
-            </button>
-          ))}
+        <div className="space-y-1">
+          {SPORT_TYPE_GROUPS.map((cat) => {
+            // Solo mostrar tipos disponibles para este grupo (no reclamados por otros)
+            const visibleTypes = cat.types.filter((t) => availableSportTypes.includes(t) || form.sportTypes.includes(t));
+            if (visibleTypes.length === 0) return null;
+            const selectedInCat = visibleTypes.filter((t) => form.sportTypes.includes(t)).length;
+            const isOpen = openCategories.has(cat.label);
+            return (
+              <div key={cat.label} className="rounded-lg overflow-hidden border border-outline-variant/20">
+                {/* Cabecera del accordion */}
+                <button
+                  type="button"
+                  onClick={() => toggleCategory(cat.label)}
+                  className="w-full flex items-center justify-between px-3 py-2 bg-surface-container hover:bg-surface-container/80 transition-colors"
+                >
+                  <span className="font-label text-sm text-on-surface">{cat.label}</span>
+                  <div className="flex items-center gap-2">
+                    {selectedInCat > 0 && (
+                      <span
+                        className="px-1.5 py-0.5 rounded-full font-label text-xs font-bold text-surface leading-none"
+                        style={{ background: form.color }}
+                      >
+                        {selectedInCat}
+                      </span>
+                    )}
+                    <span className={`text-on-surface-variant text-xs transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+                  </div>
+                </button>
+                {/* Tipos dentro del accordion */}
+                {isOpen && (
+                  <div className="px-3 py-2.5 flex flex-wrap gap-2 bg-surface-container/40">
+                    {visibleTypes.map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => toggleSportType(st)}
+                        className={`px-3 py-1 rounded-full font-label text-xs tracking-wide transition-all ${
+                          form.sportTypes.includes(st)
+                            ? 'text-surface font-bold'
+                            : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
+                        }`}
+                        style={form.sportTypes.includes(st) ? { background: form.color } : {}}
+                      >
+                        {st.replace(/_/g, ' ')}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -283,10 +384,10 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
         .filter((g) => g.id !== excludeGroupId)
         .flatMap((g) => g.sportTypes)
     );
-    // Include all known types plus any recorded but unclaimed types
-    const all = new Set([...availableSportTypes]);
+    // Combinar: lista completa de Garmin + los registrados en la DB + los que están en grupos
+    const all = new Set([...ALL_GARMIN_SPORT_TYPES, ...availableSportTypes]);
     groups.forEach((g) => g.sportTypes.forEach((st) => all.add(st)));
-    return Array.from(all).filter((st) => !claimed.has(st));
+    return Array.from(all).sort().filter((st) => !claimed.has(st));
   };
 
   const handleSaveCreate = async (payload: CreateGroupPayload) => {
@@ -436,9 +537,10 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
 
               <button
                 onClick={() => { setIsCreating(true); setFormError(null); }}
-                className="w-full py-3 rounded-xl border border-dashed border-outline-variant/40 text-on-surface-variant hover:text-on-surface hover:border-outline-variant/70 font-label text-label-sm tracking-widest uppercase transition-colors"
+                className="w-full py-4 rounded-xl bg-primary/10 border border-primary/40 hover:bg-primary/20 hover:border-primary/70 text-primary font-label font-bold text-sm tracking-widest uppercase transition-all flex items-center justify-center gap-2"
               >
-                + AGREGAR GRUPO
+                <span className="text-lg leading-none">+</span>
+                AGREGAR GRUPO
               </button>
             </>
           )}

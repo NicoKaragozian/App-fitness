@@ -18,7 +18,7 @@ App de fitness personal conectada a Garmin Connect. Dashboard de datos biométri
 - `pages/` → Dashboard, Sports, Sleep, Wellness
 - `components/layout/` → Sidebar, Header (con logout button)
 - `components/DynamicChart.tsx` → Chart genérico (bars/lines) configurado por `chartMetrics` del grupo
-- `components/SportGroupEditor.tsx` → Modal para crear/editar/reordenar grupos de deportes
+- `components/SportGroupEditor.tsx` → Modal para crear/editar/reordenar grupos de deportes (con selector de deportes agrupado por categoría)
 - `components/InsightsCard.tsx` → Tarjetas de recomendaciones del motor de insights
 - `context/AuthContext.tsx` → Auth global con `login`, `logout`, `enterDemoMode`
 - `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`
@@ -113,7 +113,27 @@ La respuesta ya **no** tiene `sports.waterSports/tennis/gym` — ahora devuelve 
 
 ### Endpoint `/api/activities/sport-types`
 
-`GET /api/activities/sport-types` → devuelve todos los `sport_type` distintos registrados en la DB (normalizado). Usado por el editor de grupos para el multi-select.
+`GET /api/activities/sport-types` → devuelve todos los `sport_type` distintos registrados en la DB (normalizado). Usado por el editor de grupos para complementar la lista completa.
+
+### Selector de deportes en SportGroupEditor
+
+El editor de grupos muestra los deportes agrupados en **7 categorías** con accordions colapsables:
+
+| Categoría | Ejemplos |
+|-----------|---------|
+| Agua | surfing, kitesurfing, windsurfing, kayaking, swimming... |
+| Correr & Caminar | running, trail_running, walking, hiking... |
+| Ciclismo | cycling, road_cycling, mountain_biking, indoor_cycling... |
+| Montaña & Nieve | skiing, snowboarding, mountaineering, rock_climbing... |
+| Raqueta | tennis, padel, squash, badminton, pickleball... |
+| Gym & Fitness | strength_training, yoga, crossfit, boxing, dance... |
+| Otros | golf, triathlon, soccer, basketball, skating... |
+
+**Implementación**: `SPORT_TYPE_GROUPS` en `SportGroupEditor.tsx` tiene la lista completa (~70 tipos). `ALL_GARMIN_SPORT_TYPES` se deriva de ahí. `getAvailableSportTypes()` combina esa lista + los de la DB + los de grupos existentes, filtrando los ya reclamados por otros grupos.
+
+- Las categorías con tipos ya seleccionados se **abren automáticamente** al editar
+- Cada categoría muestra un **badge** con el conteo de seleccionados aunque esté colapsada
+- Permite agregar deportes aunque no haya actividades registradas (ej: quiero agrupar "hiking" antes de empezar a usarlo)
 
 ## Velocidades
 
