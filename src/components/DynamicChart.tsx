@@ -24,8 +24,13 @@ function aggregateBucket(
   sessions: Array<Record<string, number | string>>,
   keys: string[],
   label: string,
-): Record<string, number | string> {
-  const result: Record<string, number | string> = { date: label };
+): Record<string, number | string | any> {
+  const result: Record<string, number | string | any> = { date: label };
+  
+  if (sessions.length > 0 && sessions[sessions.length - 1].id) {
+    result.id = sessions[sessions.length - 1].id;
+  }
+
   for (const key of keys) {
     const vals = sessions.map(s => Number(s[key] ?? 0)).filter(v => v > 0);
     if (!vals.length) { result[key] = 0; continue; }
@@ -43,13 +48,20 @@ function aggregateBucket(
   return result;
 }
 
+function getLocalDateString(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function buildTimeline(
   rawData: Array<Record<string, number | string>>,
   period: Period,
   keys: string[],
 ): Array<Record<string, number | string>> {
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = getLocalDateString(today);
 
   const dateOf = (s: Record<string, number | string>) => String(s.date).slice(0, 10);
 
@@ -63,7 +75,7 @@ function buildTimeline(
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = getLocalDateString(d);
       const label = i === 0 ? 'Hoy' : DAY_NAMES[d.getDay()];
       const sessions = rawData.filter(s => dateOf(s) === key);
       result.push(aggregateBucket(sessions, keys, label));
@@ -77,7 +89,7 @@ function buildTimeline(
     for (let i = 29; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = getLocalDateString(d);
       const label = i === 0 ? 'Hoy' : `${d.getDate()}/${d.getMonth() + 1}`;
       const sessions = rawData.filter(s => dateOf(s) === key);
       result.push(aggregateBucket(sessions, keys, label));
@@ -192,7 +204,7 @@ export const DynamicChart: React.FC<DynamicChartProps> = ({ group, data, period,
               fillOpacity={0.7}
               radius={[3, 3, 0, 0]}
               cursor={onBarClick ? 'pointer' : undefined}
-              onClick={onBarClick ? (entry) => onBarClick(entry as Record<string, number | string>) : undefined}
+              onClick={onBarClick ? (entry: any) => onBarClick(entry?.payload || entry) : undefined}
             />
           ))}
           {lines.map((m: ChartMetricConfig) => (
