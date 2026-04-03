@@ -67,10 +67,11 @@ export function consecutiveTrainingDays(activityDates: string[]): number {
 // Días desde el último entrenamiento
 export function daysSinceLastTraining(activityDates: string[]): number {
   if (activityDates.length === 0) return 999;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const latest = new Date(activityDates[0] + 'T12:00:00');
-  const diff = Math.floor((today.getTime() - latest.getTime()) / (1000 * 60 * 60 * 24));
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const latestStr = activityDates[0].slice(0, 10);
+  const todayDate = new Date(todayStr + 'T12:00:00');
+  const latestDate = new Date(latestStr + 'T12:00:00');
+  const diff = Math.floor((todayDate.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(0, diff);
 }
 

@@ -4,6 +4,7 @@ import { useActivityDetail } from '../hooks/useActivityDetail';
 import { useAuth } from '../context/AuthContext';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { DynamicChart } from '../components/DynamicChart';
+import { SessionModal } from '../components/SessionModal';
 import { mockGroupDetail } from '../data/mockData';
 import type { GroupConfig } from '../hooks/useActivityDetail';
 
@@ -61,6 +62,7 @@ export const SportDetail: React.FC = () => {
   const { isDemoMode } = useAuth();
   const cat = category ?? 'water_sports';
   const [period, setPeriod] = useState<Period>('total');
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
 
   const { data: realData, loading } = useActivityDetail(cat, period);
   const mockDetail = mockGroupDetail[cat];
@@ -81,6 +83,7 @@ export const SportDetail: React.FC = () => {
 
   // Build per-session chart data from activities (chronological)
   const sessionChartData = [...activities].reverse().map((a) => ({
+    id: a.id,
     date: a.date,
     distance: a.distance,
     maxSpeed: a.maxSpeed ?? 0,
@@ -163,14 +166,27 @@ export const SportDetail: React.FC = () => {
       </div>
 
       {/* Session History Chart */}
-      {sessionChartData.length > 0 && <DynamicChart group={config} data={sessionChartData} />}
+      {sessionChartData.length > 0 && (
+        <DynamicChart
+          group={config}
+          data={sessionChartData}
+          period={period}
+          onBarClick={(entry) => {
+            if (entry.id) setSelectedActivityId(String(entry.id));
+          }}
+        />
+      )}
 
       {/* Activity List */}
       <div>
         <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">ACTIVIDADES INDIVIDUALES</p>
         <div className="space-y-2">
           {activities.map((a) => (
-            <div key={a.id} className="bg-surface-low rounded-xl p-4 flex flex-wrap items-center gap-x-6 gap-y-1">
+            <div
+              key={a.id}
+              className="bg-surface-low rounded-xl p-4 flex flex-wrap items-center gap-x-6 gap-y-1 cursor-pointer hover:bg-surface-container transition-colors"
+              onClick={() => setSelectedActivityId(a.id)}
+            >
               <div className="w-24">
                 <p className="font-label text-label-sm text-on-surface-variant">{a.date}</p>
                 <p className="font-label text-label-sm text-on-surface uppercase">{a.sportType.replace(/_v\d+$/, '').replace(/_/g, ' ')}</p>
@@ -204,6 +220,15 @@ export const SportDetail: React.FC = () => {
           ))}
         </div>
       </div>
+      {/* Session detail modal */}
+      {selectedActivityId && (
+        <SessionModal
+          activityId={selectedActivityId}
+          groupColor={config.color}
+          groupIcon={config.icon}
+          onClose={() => setSelectedActivityId(null)}
+        />
+      )}
     </div>
   );
 };

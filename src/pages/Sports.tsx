@@ -5,9 +5,10 @@ import type { SportGroup } from '../hooks/useActivities';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { DynamicChart } from '../components/DynamicChart';
 import { SportGroupEditor } from '../components/SportGroupEditor';
+import { SessionModal } from '../components/SessionModal';
 import { mockActivitiesData } from '../data/mockData';
 
-type Period = 'daily' | 'weekly' | 'monthly';
+type Period = 'daily' | 'weekly' | 'monthly' | 'total';
 
 const METRIC_DEFINITIONS: Record<string, { label: string; unit: string }> = {
   sessions:  { label: 'SESIONES',    unit: '' },
@@ -58,6 +59,7 @@ const SportCard: React.FC<{ group: SportGroup; linkTo: string }> = ({ group, lin
 export const Sports: React.FC = () => {
   const [period, setPeriod] = useState<Period>('weekly');
   const [editorOpen, setEditorOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<{ id: string; color: string; icon: string } | null>(null);
   const { data: activitiesData, loading } = useActivities(period);
 
   const groups = activitiesData?.groups ?? mockActivitiesData.groups;
@@ -85,7 +87,7 @@ export const Sports: React.FC = () => {
 
       {/* Period Toggle + Settings */}
       <div className="flex items-center gap-2">
-        {(['daily', 'weekly', 'monthly'] as Period[]).map((p) => (
+        {(['daily', 'weekly', 'monthly', 'total'] as Period[]).map((p) => (
           <button
             key={p}
             onClick={() => setPeriod(p)}
@@ -95,7 +97,7 @@ export const Sports: React.FC = () => {
                 : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            {p === 'daily' ? 'DIARIO' : p === 'weekly' ? 'SEMANAL' : 'MENSUAL'}
+            {p === 'daily' ? 'DIARIO' : p === 'weekly' ? 'SEMANAL' : p === 'monthly' ? 'MENSUAL' : 'TOTAL'}
           </button>
         ))}
         <button
@@ -123,6 +125,10 @@ export const Sports: React.FC = () => {
           key={group.id}
           group={group}
           data={(chartData as Record<string, any[]>)[group.id] ?? []}
+          period={period}
+          onBarClick={(entry) => {
+            if (entry.id) setSelectedSession({ id: String(entry.id), color: group.color, icon: group.icon });
+          }}
         />
       ))}
 
@@ -151,6 +157,16 @@ export const Sports: React.FC = () => {
 
       {/* Group Editor Modal */}
       {editorOpen && <SportGroupEditor onClose={() => setEditorOpen(false)} />}
+
+      {/* Session detail modal */}
+      {selectedSession && (
+        <SessionModal
+          activityId={selectedSession.id}
+          groupColor={selectedSession.color}
+          groupIcon={selectedSession.icon}
+          onClose={() => setSelectedSession(null)}
+        />
+      )}
     </div>
   );
 };

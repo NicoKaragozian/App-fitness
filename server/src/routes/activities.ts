@@ -40,7 +40,6 @@ router.get('/sport-types', (_req, res) => {
 
 router.get('/', (req, res) => {
   const period = (req.query.period as string) || 'weekly';
-  const { start, end } = getDateRange(period);
 
   // Load sport groups
   const groupRows = db.prepare('SELECT * FROM sport_groups ORDER BY sort_order ASC').all() as any[];
@@ -65,9 +64,14 @@ router.get('/', (req, res) => {
   }
 
   // Activities for selected period
-  const rows = db.prepare(
-    `SELECT * FROM activities WHERE date(start_time) >= ? AND date(start_time) <= ? ORDER BY start_time DESC`
-  ).all(start, end) as any[];
+  const rows = period === 'total'
+    ? db.prepare(`SELECT * FROM activities ORDER BY start_time DESC`).all() as any[]
+    : (() => {
+        const { start, end } = getDateRange(period);
+        return db.prepare(
+          `SELECT * FROM activities WHERE date(start_time) >= ? AND date(start_time) <= ? ORDER BY start_time DESC`
+        ).all(start, end) as any[];
+      })();
 
   // Aggregate per group
   const groupData: Record<string, { sessions: number; distance: number; duration: number; calories: number; avg_hr_sum: number; avg_hr_count: number; max_speed: number }> = {};
@@ -158,7 +162,8 @@ router.get('/', (req, res) => {
     const groupId = sportTypeToGroup[normalized];
     if (!groupId) continue;
     chartData[groupId].push({
-      date: row.start_time.split('T')[0],
+      id: row.garmin_id,
+      date: row.start_time.slice(0, 10),
       distance: round((row.distance ?? 0) / 1000),
       maxSpeed: row.max_speed ? Math.round(row.max_speed * 3.6) : 0,
       duration: Math.round((row.duration ?? 0) / 60),
@@ -317,6 +322,59 @@ router.get('/category/:category', (req, res) => {
       highestSpeed: highestSpeed ? { date: highestSpeed.date, value: highestSpeed.maxSpeed, unit: 'km/h' } : null,
       mostCalories: mostCalories ? { date: mostCalories.date, value: mostCalories.calories, unit: 'kcal' } : null,
     },
+  });
+});
+
+// GET /api/activities/:id — full session detail from raw_json
+router.get('/:id', (req, res) => {
+  const { id } = req.params;
+  const row = db.prepare('SELECT * FROM activities WHERE garmin_id = ?').get(id) as any;
+  if (!row) return res.status(404).json({ error: 'Actividad no encontrada' });
+
+  const raw = JSON.parse(row.raw_json ?? '{}');
+
+  const hrZones = [1, 2, 3, 4, 5].map((z) => ({
+    zone: z,
+    seconds: Math.round(raw[`hrTimeInZone_${z}`] ?? 0),
+  }));
+  const totalZoneSeconds = hrZones.reduce((s, z) => s + z.seconds, 0);
+
+  const mapUrl = (raw.startLatitude && raw.startLongitude)
+    ? `https://maps.google.com/?q=${raw.startLatitude},${raw.startLongitude}`
+    : null;
+
+  res.json({
+    id: row.garmin_id,
+    name: raw.activityName ?? 'Actividad',
+    sportType: row.sport_type,
+    date: row.start_time.split('T')[0],
+    startTime: row.start_time,
+    locationName: raw.locationName ?? null,
+    startLat: raw.startLatitude ?? null,
+    startLon: raw.startLongitude ?? null,
+    hasPolyline: raw.hasPolyline ?? false,
+    // Performance
+    duration: Math.round((row.duration ?? 0) / 60),
+    distance: round((row.distance ?? 0) / 1000),
+    avgSpeed: raw.averageSpeed ? round(raw.averageSpeed * 3.6) : null,
+    maxSpeed: row.max_speed ? Math.round(row.max_speed * 3.6) : null,
+    calories: row.calories ?? null,
+    avgHr: row.avg_hr ?? null,
+    maxHr: raw.maxHR ?? null,
+    // Training effect
+    aerobicEffect: raw.aerobicTrainingEffect ? round(raw.aerobicTrainingEffect) : null,
+    anaerobicEffect: raw.anaerobicTrainingEffect ? round(raw.anaerobicTrainingEffect) : null,
+    trainingEffectLabel: raw.trainingEffectLabel ?? null,
+    trainingLoad: raw.activityTrainingLoad ? Math.round(raw.activityTrainingLoad) : null,
+    differenceBodyBattery: raw.differenceBodyBattery ?? null,
+    // HR Zones (seconds + % of total zone time)
+    hrZones: hrZones.map((z) => ({
+      ...z,
+      pct: totalZoneSeconds > 0 ? Math.round((z.seconds / totalZoneSeconds) * 100) : 0,
+    })),
+    lapCount: raw.lapCount ?? null,
+    garminUrl: `https://connect.garmin.com/modern/activity/${row.garmin_id}`,
+    mapUrl,
   });
 });
 
