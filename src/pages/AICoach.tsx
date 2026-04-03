@@ -52,6 +52,11 @@ function MarkdownText({ text }: { text: string }) {
   return <>{elements}</>;
 }
 
+const MODELS = [
+  { id: 'gemma3:4b', label: 'Gemma 4B', badge: 'Rápido' },
+  { id: 'gemma3:12b', label: 'Gemma 12B', badge: 'Potente' },
+];
+
 const SUGGESTIONS = [
   '¿Cómo estuvo mi sueño esta semana?',
   '¿Cuándo fue mi última sesión de tenis?',
@@ -64,9 +69,18 @@ export const AICoach: React.FC = () => {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    return localStorage.getItem('drift_ai_model') || MODELS[0].id;
+  });
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  const handleModelChange = (modelId: string) => {
+    if (isStreaming) return;
+    setSelectedModel(modelId);
+    localStorage.setItem('drift_ai_model', modelId);
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -88,7 +102,7 @@ export const AICoach: React.FC = () => {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: newMessages, model: selectedModel }),
         signal: abortRef.current.signal,
       });
 
@@ -142,7 +156,7 @@ export const AICoach: React.FC = () => {
       abortRef.current = null;
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [messages, isStreaming]);
+  }, [messages, isStreaming, selectedModel]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -160,9 +174,31 @@ export const AICoach: React.FC = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] lg:h-screen max-w-3xl mx-auto w-full">
       {/* Header */}
-      <div className="px-6 py-5 border-b border-outline-variant/20 shrink-0">
-        <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-0.5">Asistente</p>
-        <h1 className="font-display text-xl font-bold text-on-surface tracking-tight">DRIFT AI <span className="text-primary">COACH</span></h1>
+      <div className="px-6 py-4 border-b border-outline-variant/20 shrink-0">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-0.5">Asistente</p>
+            <h1 className="font-display text-xl font-bold text-on-surface tracking-tight">DRIFT AI <span className="text-primary">COACH</span></h1>
+          </div>
+          <div className="flex items-center gap-1 bg-surface-container rounded-xl p-1 border border-outline-variant/20 shrink-0 mt-1">
+            {MODELS.map(m => (
+              <button
+                key={m.id}
+                onClick={() => handleModelChange(m.id)}
+                disabled={isStreaming}
+                title={m.id}
+                className={`flex flex-col items-center px-3 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50 ${
+                  selectedModel === m.id
+                    ? 'bg-primary/20 text-primary'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
+                }`}
+              >
+                <span className="font-label font-semibold tracking-wide leading-none">{m.label}</span>
+                <span className={`font-label text-[0.55rem] tracking-widest uppercase mt-0.5 ${selectedModel === m.id ? 'text-primary/70' : 'text-on-surface-variant/50'}`}>{m.badge}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Messages */}

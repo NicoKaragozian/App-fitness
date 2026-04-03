@@ -240,6 +240,87 @@ Sin esto, cambiar de cuenta mezcla datos de dos usuarios en la misma DB (el sync
 
 El backend ya devuelve 429 con mensaje en español cuando detecta rate limiting de Garmin en el login.
 
+## AI Coach (chat con LLM local)
+
+Chat conversacional con un modelo de lenguaje corriendo localmente via **Ollama**. Sin llamadas a APIs externas — todo corre en la máquina del usuario.
+
+### Archivos
+- `src/pages/AICoach.tsx` → UI del chat (frontend)
+- `server/src/routes/ai.ts` → endpoint POST `/api/ai/chat` (backend)
+
+### Cómo funciona
+
+1. El usuario escribe un mensaje
+2. El frontend hace POST `/api/ai/chat` con `{ messages, model }`
+3. El backend detecta qué datos biométricos son relevantes para la pregunta (keywords)
+4. Inyecta esos datos como contexto en el system prompt
+5. Llama a Ollama con streaming y reenvía tokens via Server-Sent Events
+6. El frontend renderiza el texto en tiempo real con un cursor parpadeante
+
+### Detección de contexto (keyword-based)
+
+`detectNeeds()` en `ai.ts` analiza el último mensaje del usuario y decide qué tablas consultar:
+
+| Flag | Keywords detectadas | Datos que carga |
+|------|--------------------|--------------------|
+| `activities` | actividad, tenis, surf, kite, gym, running, velocidad... | últimas 40 actividades de 30 días |
+| `sleep` | sueño, dormir, rem, profundo, descanso... | últimas 21 noches con score |
+| `wellness` | estrés, hrv, pasos, recuperación, readiness... | HRV + stress + daily_summary (14 días) |
+
+Si no se detecta ningún keyword → carga los 3 contextos (primera pregunta genérica).
+
+### Selección de modelos
+
+El backend acepta el campo `model` en el body del POST. Se valida con regex `/^[a-zA-Z0-9._:\-/]+$/` antes de usarlo.
+
+Variable de entorno `OLLAMA_MODEL` define el default (actualmente `gemma3:4b`).
+
+**Modelos disponibles localmente:**
+- `gemma3:4b` — rápido, respuestas en ~5-10s
+- `gemma3:12b` — más potente/preciso, respuestas más lentas
+
+El frontend guarda el modelo elegido en `localStorage` con key `drift_ai_model`. El selector aparece en el header del chat y se deshabilita mientras hay streaming en curso.
+
+### Variables de entorno (backend)
+
+```
+OLLAMA_MODEL=gemma3:4b     # modelo default
+OLLAMA_URL=http://localhost:11434   # URL de Ollama
+```
+
+### Streaming
+
+- Ollama devuelve NDJSON con `{ message: { content } }` por línea
+- El backend reenvía como SSE: `data: {"token":"..."}` + `data: [DONE]`
+- El frontend usa `ReadableStream` para leer sin buffering
+- Botón de stop llama `AbortController.abort()` y Ollama corta el stream
+
+### MarkdownText
+
+Renderizador inline sin dependencias externas en `AICoach.tsx`. Soporta:
+- `**bold**`, `*italic*`, `` `code` ``
+- `# H1`, `## H2` (renderizados como labels uppercase estilo design system)
+- `- item` / `* item` listas
+- Líneas vacías como espaciado
+
+### Comandos útiles
+
+```bash
+# Ver modelos descargados
+ollama list
+
+# Descargar modelo
+ollama pull gemma3:12b
+
+# Iniciar Ollama (si no está corriendo)
+ollama serve
+
+# Test directo del endpoint
+curl -X POST http://localhost:3001/api/ai/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"messages":[{"role":"user","content":"hola"}],"model":"gemma3:4b"}'
+```
+
 ## Motor de Insights (inferencia local)
 
 Motor de recomendaciones en `server/src/insights/` — puro TypeScript, sin dependencias ML.

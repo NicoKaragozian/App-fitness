@@ -94,14 +94,22 @@ function buildContext(needs: ReturnType<typeof detectNeeds>): string {
   return sections.join('\n\n');
 }
 
+// Valida que el nombre de modelo sea seguro (solo chars válidos de Ollama)
+function isValidModelName(name: string): boolean {
+  return typeof name === 'string' && /^[a-zA-Z0-9._:\-/]+$/.test(name) && name.length < 100;
+}
+
 router.post('/chat', async (req: Request, res: Response) => {
-  const { messages } = req.body as { messages: { role: string; content: string }[] };
+  const { messages, model: requestedModel } = req.body as { messages: { role: string; content: string }[]; model?: string };
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: 'messages requerido' });
     return;
   }
 
+  const model = (requestedModel && isValidModelName(requestedModel)) ? requestedModel : OLLAMA_MODEL;
+
   const lastUser = [...messages].reverse().find(m => m.role === 'user');
+  console.log(`[ai] modelo: ${model}`);
   const needs = detectNeeds(lastUser?.content || '');
   const context = buildContext(needs);
 
@@ -115,7 +123,7 @@ ${context ? `Datos del usuario:\n${context}` : 'Aún no hay datos disponibles en
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: OLLAMA_MODEL,
+        model,
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
         stream: true,
       }),
@@ -131,7 +139,7 @@ ${context ? `Datos del usuario:\n${context}` : 'Aún no hay datos disponibles en
     console.error('[ai] Ollama error:', errText);
     // Si el modelo no existe, dar instrucciones claras
     if (ollamaRes.status === 404 || errText.includes('not found')) {
-      res.status(502).json({ error: `Modelo "${OLLAMA_MODEL}" no encontrado. Descargalo con: ollama pull ${OLLAMA_MODEL}` });
+      res.status(502).json({ error: `Modelo "${model}" no encontrado. Descargalo con: ollama pull ${model}` });
     } else {
       res.status(502).json({ error: `Error de Ollama: ${errText.slice(0, 200)}` });
     }
