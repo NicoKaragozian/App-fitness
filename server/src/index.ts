@@ -11,6 +11,7 @@ import * as garmin from './garmin.js';
 import planRoutes from './routes/plan.js';
 import insightsRoutes from './routes/insights.js';
 import sportGroupsRoutes from './routes/sport-groups.js';
+import aiRoutes from './routes/ai.js';
 import { startPeriodicSync, syncInitial } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -31,6 +32,7 @@ app.use('/api/sync', syncRoutes);
 app.use('/api/plan', planRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/sport-groups', sportGroupsRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {
