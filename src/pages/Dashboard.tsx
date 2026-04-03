@@ -4,6 +4,7 @@ import { useActivities } from '../hooks/useActivities';
 import { usePlan, type PlanItem } from '../hooks/usePlan';
 import { useInsights } from '../hooks/useInsights';
 import { InsightsCard } from '../components/InsightsCard';
+import { AIInsightPanel } from '../components/AIInsightPanel';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 
 const ActivityRing: React.FC<{ value: number; color: string; label: string; subLabel?: string | number; size?: number }> = ({
@@ -101,6 +102,13 @@ export const Dashboard: React.FC = () => {
     <div className="p-4 lg:p-8 space-y-6 lg:space-y-8">
       {/* Insights */}
       <InsightsCard recommendations={insights?.recommendations ?? []} loading={insightsLoading} />
+
+      {/* AI Daily Briefing */}
+      <AIInsightPanel
+        mode="daily"
+        title="BRIEFING DEL DÍA"
+        chatContext="Dame un resumen de cómo estoy hoy"
+      />
 
       {/* Hero Row */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">

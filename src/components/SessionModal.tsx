@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useSessionDetail } from '../hooks/useSessionDetail';
+import { AIInsightPanel } from './AIInsightPanel';
 
 const HR_ZONE_COLORS = ['#4ade80', '#a3e635', '#facc15', '#fb923c', '#f87171'];
 const HR_ZONE_LABELS = ['Z1 Recuperación', 'Z2 Base aeróbica', 'Z3 Aeróbico', 'Z4 Umbral', 'Z5 Máximo'];
@@ -196,6 +197,14 @@ export const SessionModal: React.FC<SessionModalProps> = ({ activityId, groupCol
                 )}
               </div>
             )}
+
+            {/* AI Analysis */}
+            <AIInsightPanel
+              mode="session"
+              payload={{ activityId }}
+              title="ANÁLISIS DE SESIÓN"
+              chatContext={`Analizá mi sesión de ${data.sportType?.replace(/_/g, ' ')} del ${data.date}`}
+            />
 
             {/* Links */}
             <div className="flex flex-wrap gap-3 pt-1">

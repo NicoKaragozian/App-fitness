@@ -6,6 +6,7 @@ import {
 import { useSleep } from '../hooks/useSleep';
 import { useHrv } from '../hooks/useHrv';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { AIInsightPanel } from '../components/AIInsightPanel';
 import { weeklySleepData, monthlySleepData } from '../data/mockData';
 
 type Period = 'weekly' | 'monthly';
@@ -272,6 +273,14 @@ export const Sleep: React.FC = () => {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* AI Analysis */}
+      <AIInsightPanel
+        mode="sleep"
+        payload={{ period }}
+        title="ANÁLISIS DE SUEÑO"
+        chatContext="Analizá mis patrones de sueño"
+      />
 
       {/* Period Toggle */}
       <div className="flex gap-2">

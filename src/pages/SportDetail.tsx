@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { DynamicChart } from '../components/DynamicChart';
 import { SessionModal } from '../components/SessionModal';
+import { AIInsightPanel } from '../components/AIInsightPanel';
 import { mockGroupDetail } from '../data/mockData';
 import type { GroupConfig } from '../hooks/useActivityDetail';
 
@@ -164,6 +165,14 @@ export const SportDetail: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* AI Analysis */}
+      <AIInsightPanel
+        mode="sport"
+        payload={{ groupId: cat, period }}
+        title={`ANÁLISIS ${config.name}`}
+        chatContext={`Analizá mi progreso en ${config.name}`}
+      />
 
       {/* Session History Chart */}
       {sessionChartData.length > 0 && (

@@ -6,6 +6,7 @@ import {
 import { useStress } from '../hooks/useStress';
 
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { AIInsightPanel } from '../components/AIInsightPanel';
 import {
   weeklyStressData, monthlyStressData,
   weeklyStressAvg as mockWeeklyAvg, monthlyStressAvg as mockMonthlyAvg,
@@ -222,14 +223,12 @@ export const Wellness: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-surface-low rounded-xl p-4 lg:p-6 flex flex-col justify-between">
-          <div>
-            <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-2">RE-CENTER</p>
-            <p className="font-label text-label-sm text-on-surface-variant mb-4">
-              Tu nivel de estrés está dentro del rango óptimo. Mantén la rutina de recuperación.
-            </p>
-          </div>
-        </div>
+        <AIInsightPanel
+          mode="wellness"
+          payload={{ period }}
+          title="RE-CENTER"
+          chatContext="Analizá mi estrés y recuperación"
+        />
       </div>
     </div>
   );

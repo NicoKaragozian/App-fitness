@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
 import db from '../db.js';
+import { handleAnalyze } from '../ai/index.js';
 
 const router = Router();
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma3:4b';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e2b';
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 
 // Keywords para detectar qué contexto cargar
@@ -177,5 +178,8 @@ ${context ? `Datos del usuario:\n${context}` : 'Aún no hay datos disponibles en
     res.end();
   }
 });
+
+// POST /api/ai/analyze — Unified contextual analysis endpoint
+router.post('/analyze', handleAnalyze);
 
 export default router;

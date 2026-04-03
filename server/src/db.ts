@@ -78,6 +78,14 @@ db.exec(`
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS ai_cache (
+    cache_key TEXT PRIMARY KEY,
+    mode TEXT NOT NULL,
+    content TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS sport_groups (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
