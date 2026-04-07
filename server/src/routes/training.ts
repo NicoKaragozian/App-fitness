@@ -346,4 +346,52 @@ router.get('/exercises/:id/history', (req: Request, res: Response) => {
   res.json(history);
 });
 
+// POST /api/training/exercises/:id/describe — Generar descripción de cómo hacer el ejercicio
+router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
+  const exerciseId = parseInt(req.params.id as string);
+  if (isNaN(exerciseId)) { res.status(400).json({ error: 'ID inválido' }); return; }
+
+  const exercise = db.prepare('SELECT * FROM training_exercises WHERE id = ?').get(exerciseId) as any;
+  if (!exercise) { res.status(404).json({ error: 'Ejercicio no encontrado' }); return; }
+
+  const { model: requestedModel } = req.body as { model?: string };
+  const model = (requestedModel && isValidModelName(requestedModel)) ? requestedModel : OLLAMA_MODEL;
+
+  const prompt = `Explicá en 2-3 oraciones cortas y claras cómo se ejecuta correctamente el ejercicio "${exercise.name}". Incluí: posición inicial, movimiento principal, y el músculo que trabaja. Sin bullets, sin títulos, solo texto corrido. Respondé en español.`;
+
+  let ollamaRes: globalThis.Response;
+  try {
+    ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+      }),
+    });
+  } catch (err: any) {
+    res.status(503).json({ error: 'Ollama no está corriendo. Inicialo con: ollama serve' });
+    return;
+  }
+
+  if (!ollamaRes.ok) {
+    const errText = await ollamaRes.text();
+    if (ollamaRes.status === 404 || errText.includes('not found')) {
+      res.status(502).json({ error: `Modelo "${model}" no encontrado. Descargalo con: ollama pull ${model}` });
+    } else {
+      res.status(502).json({ error: `Error de Ollama: ${errText.slice(0, 200)}` });
+    }
+    return;
+  }
+
+  const data = await ollamaRes.json() as any;
+  const description = (data.message?.content ?? '').trim();
+
+  // Guardar en DB
+  db.prepare('UPDATE training_exercises SET description = ? WHERE id = ?').run(description, exerciseId);
+
+  res.json({ description });
+});
+
 export default router;

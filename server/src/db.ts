@@ -152,6 +152,11 @@ db.exec(`
 
 `);
 
+// Migration: agregar columna description a training_exercises si no existe
+try {
+  db.exec('ALTER TABLE training_exercises ADD COLUMN description TEXT');
+} catch { /* ya existe, ignorar */ }
+
 // Seed default sport groups if table is empty
 const groupCount = (db.prepare('SELECT COUNT(*) as c FROM sport_groups').get() as { c: number }).c;
 if (groupCount === 0) {

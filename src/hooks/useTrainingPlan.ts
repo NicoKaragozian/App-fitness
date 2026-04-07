@@ -9,6 +9,7 @@ export interface TrainingExercise {
   target_sets: number | null;
   target_reps: string | null;
   notes: string | null;
+  description: string | null;
   sort_order: number;
 }
 

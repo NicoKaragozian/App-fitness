@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTrainingPlan } from '../hooks/useTrainingPlan';
 import { useWorkout } from '../hooks/useWorkout';
 import { useExerciseHistory } from '../hooks/useExerciseHistory';
+import { apiFetch } from '../api/client';
 import type { TrainingExercise, TrainingSession } from '../hooks/useTrainingPlan';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -37,6 +38,41 @@ export const PlanDetail: React.FC = () => {
   const [editingExercise, setEditingExercise] = useState<number | null>(null);
   const [editFields, setEditFields] = useState<Partial<TrainingExercise>>({});
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
+  const [describingId, setDescribingId] = useState<number | null>(null);
+  // Descripciones generadas en esta sesión (por si el componente no se re-fetchea)
+  const [generatedDescs, setGeneratedDescs] = useState<Record<number, string>>({});
+  // Qué ejercicios tienen la descripción abierta
+  const [openDescs, setOpenDescs] = useState<Set<number>>(new Set());
+
+  const handleDescribe = useCallback(async (ex: TrainingExercise) => {
+    const hasDesc = generatedDescs[ex.id] ?? ex.description;
+
+    // Si ya tiene descripción, solo toggle
+    if (hasDesc) {
+      setOpenDescs(prev => {
+        const next = new Set(prev);
+        if (next.has(ex.id)) next.delete(ex.id); else next.add(ex.id);
+        return next;
+      });
+      return;
+    }
+
+    // Sin descripción: generar, guardar y abrir
+    setDescribingId(ex.id);
+    try {
+      const data = await apiFetch<{ description: string }>(`/training/exercises/${ex.id}/describe`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      setGeneratedDescs(prev => ({ ...prev, [ex.id]: data.description }));
+      setOpenDescs(prev => new Set(prev).add(ex.id));
+    } catch (err: any) {
+      setGeneratedDescs(prev => ({ ...prev, [ex.id]: `Error: ${err.message}` }));
+      setOpenDescs(prev => new Set(prev).add(ex.id));
+    } finally {
+      setDescribingId(null);
+    }
+  }, [generatedDescs]);
 
   useEffect(() => {
     if (!planId) return;
@@ -189,7 +225,7 @@ export const PlanDetail: React.FC = () => {
                           onClick={() => setExpandedHistory(expandedHistory === ex.id ? null : ex.id)}
                         >
                           <div className="flex-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-on-surface text-sm font-medium">{ex.name}</p>
                               {ex.target_sets && ex.target_reps && (
                                 <span className="font-label text-[10px] text-primary tracking-widest uppercase bg-primary/10 px-2 py-0.5 rounded">
@@ -200,16 +236,39 @@ export const PlanDetail: React.FC = () => {
                             {ex.notes && (
                               <p className="text-on-surface-variant text-xs mt-0.5">{ex.notes}</p>
                             )}
+                            {/* Descripción colapsable */}
+                            {openDescs.has(ex.id) && (
+                              <p className="text-on-surface-variant text-xs mt-1.5 leading-relaxed border-l-2 border-primary/30 pl-2">
+                                {generatedDescs[ex.id] ?? ex.description}
+                              </p>
+                            )}
                             {expandedHistory === ex.id && (
                               <ExerciseHistoryInline exerciseId={ex.id} />
                             )}
                           </div>
-                          <button
-                            onClick={e => { e.stopPropagation(); setEditingExercise(ex.id); setEditFields({ name: ex.name, target_sets: ex.target_sets ?? undefined, target_reps: ex.target_reps ?? undefined, notes: ex.notes ?? undefined }); }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant text-xs px-2 py-1 rounded hover:bg-surface-container"
-                          >
-                            editar
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                            {/* Botón describir */}
+                            <button
+                              onClick={() => handleDescribe(ex)}
+                              disabled={describingId === ex.id}
+                              title="¿Cómo se hace este ejercicio?"
+                              className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-colors ${
+                                openDescs.has(ex.id)
+                                  ? 'bg-primary/20 text-primary'
+                                  : 'bg-surface-container text-on-surface-variant hover:bg-primary/10 hover:text-primary'
+                              } disabled:opacity-50`}
+                            >
+                              {describingId === ex.id ? (
+                                <span className="w-3 h-3 border border-on-surface-variant/40 border-t-primary rounded-full animate-spin block" />
+                              ) : '?'}
+                            </button>
+                            <button
+                              onClick={() => { setEditingExercise(ex.id); setEditFields({ name: ex.name, target_sets: ex.target_sets ?? undefined, target_reps: ex.target_reps ?? undefined, notes: ex.notes ?? undefined }); }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant text-xs px-2 py-1 rounded hover:bg-surface-container"
+                            >
+                              editar
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
