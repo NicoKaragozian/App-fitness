@@ -15,22 +15,23 @@ App de fitness personal conectada a Garmin Connect. Dashboard de datos biométri
 ## Arquitectura
 
 ### Frontend (`src/`)
-- `pages/` → Dashboard, Sports, Sleep, Wellness
+- `pages/` → Dashboard, Sports, Sleep, Wellness, AICoach, TrainingPlans, PlanDetail, ActiveWorkout
 - `components/layout/` → Sidebar, Header (con logout button)
 - `components/DynamicChart.tsx` → Chart genérico (bars/lines) configurado por `chartMetrics` del grupo
 - `components/SportGroupEditor.tsx` → Modal para crear/editar/reordenar grupos de deportes (con selector de deportes agrupado por categoría)
 - `components/InsightsCard.tsx` → Tarjetas de recomendaciones del motor de insights
 - `context/AuthContext.tsx` → Auth global con `login`, `logout`, `enterDemoMode`
-- `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`
+- `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`, `useTrainingPlans`, `useTrainingPlan`, `useWorkout`, `useExerciseHistory`
 - `api/client.ts` → `apiFetch()` helper
 
 ### Backend (`server/src/`)
 - `index.ts` → Express server. En producción sirve `/dist/` estático + SPA fallback
 - `garmin.ts` → Wrapper sobre la librería Garmin. Gestiona sesión OAuth
 - `sync.ts` → Sync de datos: `syncInitial()` (30 días) y `syncToday()` (periódico cada 15min)
-- `db.ts` → SQLite con tables: `activities`, `sleep`, `hrv`, `stress`, `daily_summary`, `sync_log`, `weekly_plan`, `sport_groups`
-- `routes/` → `auth`, `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`
+- `db.ts` → SQLite con tables: `activities`, `sleep`, `hrv`, `stress`, `daily_summary`, `sync_log`, `weekly_plan`, `sport_groups`, `training_plans`, `training_sessions`, `training_exercises`, `workout_logs`, `workout_sets`
+- `routes/` → `auth`, `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`, `ai`, `training`
 - `insights/` → Motor de recomendaciones: `stats.ts` (estadísticas), `rules.ts` (8 reglas), `index.ts` (orquestador)
+- `ai/` → `prompts.ts` (system prompts por modo), `context.ts` (context builders), `index.ts` (orquestador analyze)
 
 ## El offset sistemático de Garmin (CRÍTICO)
 
@@ -190,6 +191,11 @@ Garmin bloqueó el SSO programático con Cloudflare WAF (marzo 2026). El login a
 | `daily_summary` | `date` = dateStr | `body_battery` siempre null (API bloqueada) |
 | `weekly_plan` | id autoincrement | `day`, `sport`, `detail`, `completed` |
 | `sport_groups` | `id` TEXT (slug) | `sport_types`, `metrics`, `chart_metrics` son JSON arrays |
+| `training_plans` | id autoincrement | `title`, `objective`, `frequency`, `status` (active/archived), `ai_model`, `raw_ai_response` |
+| `training_sessions` | id autoincrement | `plan_id` FK, `name`, `sort_order`, `notes` |
+| `training_exercises` | id autoincrement | `session_id` FK, `name`, `category` (warmup/main/core/cooldown), `target_sets`, `target_reps` TEXT, `notes`, `sort_order` |
+| `workout_logs` | id autoincrement | `plan_id` FK, `session_id` FK, `started_at`, `completed_at`, `notes` |
+| `workout_sets` | id autoincrement | `workout_log_id` FK CASCADE, `exercise_id` FK, `set_number`, `reps`, `weight` REAL (kg), `completed` |
 
 ## Comandos útiles
 
@@ -233,6 +239,8 @@ El logout es una **purga total**. POST `/api/auth/logout` hace:
 3. `DELETE FROM` en las 6 tablas: `activities`, `sleep`, `stress`, `hrv`, `daily_summary`, `sync_log`
 
 Sin esto, cambiar de cuenta mezcla datos de dos usuarios en la misma DB (el sync nuevo inyecta filas sobre los datos del usuario anterior).
+
+**Nota**: las tablas de training plans (`training_plans`, `training_sessions`, etc.) y `weekly_plan` **no se purgan en logout** — son datos del usuario de la app, no de Garmin.
 
 ## Errores de API — manejo en frontend
 
@@ -319,6 +327,76 @@ ollama serve
 curl -X POST http://localhost:3001/api/ai/chat \
   -H 'Content-Type: application/json' \
   -d '{"messages":[{"role":"user","content":"hola"}],"model":"gemma3:4b"}'
+```
+
+## Training Plans (planes de entrenamiento personalizados)
+
+Sección de planes de gym generados por AI, con tracking de ejercicios (sets/reps/peso) y seguimiento de progressive overload.
+
+### Archivos
+- `src/pages/TrainingPlans.tsx` → Hub: lista de planes + formulario de generación
+- `src/pages/PlanDetail.tsx` → Vista de un plan: sesiones, ejercicios, botón "Empezar"
+- `src/pages/ActiveWorkout.tsx` → Tracker de workout en vivo (mobile-first)
+- `src/hooks/useTrainingPlans.ts` → CRUD de planes + `generatePlan(goal, model)`
+- `src/hooks/useTrainingPlan.ts` → Detalle de plan con sessions/exercises + `updateExercise()`
+- `src/hooks/useWorkout.ts` → `startWorkout`, `logSet`, `updateSet`, `finishWorkout`, `useLastWeights`
+- `src/hooks/useExerciseHistory.ts` → Historial de peso/reps por ejercicio
+- `server/src/routes/training.ts` → Todos los endpoints `/api/training/*`
+- `server/src/ai/prompts.ts` → Prompt `training_plan` (JSON mode)
+- `server/src/ai/context.ts` → `buildTrainingContext(goal)` — carga actividades + sport_groups + sleep + HRV + stress
+
+### Rutas `/api/training`
+
+| Método | Path | Descripción |
+|--------|------|-------------|
+| POST | `/generate` | Generar plan via AI (no streaming, JSON mode) |
+| GET | `/plans` | Listar planes con stats (sessionCount, workoutCount, lastWorkout) |
+| GET | `/plans/:id` | Plan completo (sessions + exercises anidados) |
+| PUT | `/plans/:id` | Editar metadata o archivar (`status: 'archived'`) |
+| DELETE | `/plans/:id` | Borrar plan (CASCADE a sessions/exercises/logs/sets) |
+| PUT | `/exercises/:id` | Editar targets de un ejercicio |
+| POST | `/workouts` | Iniciar workout `{planId, sessionId}` → retorna `workoutId` |
+| PUT | `/workouts/:id` | Finalizar workout (setea `completed_at`) |
+| GET | `/workouts` | Historial `?planId=&sessionId=` |
+| GET | `/workouts/:id` | Detalle workout con sus sets |
+| POST | `/workouts/:id/sets` | Logear set `{exerciseId, setNumber, reps, weight}` |
+| PUT | `/sets/:id` | Actualizar set |
+| GET | `/exercises/:id/history` | Historial de peso/reps para progressive overload |
+
+### Generación AI (JSON mode)
+
+- Llama a Ollama con `format: "json"` y `stream: false` — respuesta completa, no SSE
+- El prompt `training_plan` en `prompts.ts` define el schema JSON exacto esperado
+- `buildTrainingContext(goal)` en `context.ts` incluye: objetivo del usuario, actividades 30 días, sport_groups, sleep 14 días, HRV 7 días, stress 7 días
+- Validación de estructura antes de guardar; si falla → 502 con mensaje claro
+- Guarda en DB con `db.transaction()`: plan → sessions → exercises
+
+### UX de workout
+
+- `ActiveWorkout.tsx` es **mobile-first** — se usa en el gym con el celular
+- Timer en vivo arriba
+- Sets pre-creados según `target_sets` del ejercicio
+- **Auto-fill de peso**: carga el peso del último workout completado para esa sesión via `useLastWeights`
+- Cada set tiene inputs de kg y reps + botón de completar (se guarda en backend inmediatamente)
+- Botón "Finalizar Workout" o "Salir" con confirmación
+
+### Colores en botones — CRÍTICO
+
+`surface-lowest` **no existe** en el tailwind config. Para texto oscuro sobre botón primario (`bg-primary = #f3ffca`) usar `text-surface` (`#0e0e0e`).
+
+### Comandos útiles
+
+```bash
+# Generar un plan (test directo)
+curl -X POST http://localhost:3001/api/training/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"goal":"Plan de fuerza funcional para complementar deportes acuáticos","model":"gemma3:12b"}'
+
+# Ver planes guardados
+curl http://localhost:3001/api/training/plans
+
+# Ver historial de un ejercicio
+curl http://localhost:3001/api/training/exercises/1/history
 ```
 
 ## Motor de Insights (inferencia local)
