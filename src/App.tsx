@@ -19,7 +19,7 @@ function AuthenticatedLayout() {
       <Sidebar />
       <div className="flex-1 lg:ml-48 ml-0 flex flex-col min-h-screen pb-16 lg:pb-0">
         <Header />
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto flex flex-col min-h-0">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/sports" element={<Sports />} />
