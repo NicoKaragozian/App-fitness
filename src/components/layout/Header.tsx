@@ -7,6 +7,8 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/sports': { title: 'ANÁLISIS DE DEPORTES', subtitle: 'BIOMETRIC PERFORMANCE OVERVIEW' },
   '/sleep': { title: 'SLEEP INTELLIGENCE', subtitle: "LAST NIGHT'S ANALYSIS" },
   '/wellness': { title: 'WELLNESS', subtitle: 'HOME / SPORTS / SLEEP / WELLNESS' },
+  '/training': { title: 'TRAINING PLANS', subtitle: 'PLANES PERSONALIZADOS' },
+  '/coach': { title: 'AI COACH', subtitle: 'DRIFT AI' },
 };
 
 const formatDate = () => {
@@ -18,7 +20,11 @@ const formatDate = () => {
 
 export const Header: React.FC = () => {
   const location = useLocation();
-  const page = pageTitles[location.pathname] || pageTitles['/'];
+  const pathKey = Object.keys(pageTitles)
+    .filter(k => k !== '/')
+    .find(k => location.pathname === k || location.pathname.startsWith(k + '/'))
+    ?? (pageTitles[location.pathname] ? location.pathname : '/');
+  const page = pageTitles[pathKey] || pageTitles['/'];
   const { isAuthenticated, isDemoMode, logout } = useAuth();
 
   return (

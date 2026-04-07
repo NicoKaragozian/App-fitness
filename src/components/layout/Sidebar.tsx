@@ -8,6 +8,7 @@ const navItems = [
   { path: '/sleep', label: 'Sleep', icon: '◐' },
   { path: '/wellness', label: 'Wellness', icon: '∿' },
   { path: '/coach', label: 'AI Coach', icon: '◎' },
+  { path: '/training', label: 'Training', icon: '▣' },
 ];
 
 export const Sidebar: React.FC = () => {

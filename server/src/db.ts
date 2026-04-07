@@ -99,6 +99,57 @@ db.exec(`
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS training_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    objective TEXT,
+    frequency TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    ai_model TEXT,
+    raw_ai_response TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS training_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL REFERENCES training_plans(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    notes TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS training_exercises (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'main',
+    target_sets INTEGER,
+    target_reps TEXT,
+    notes TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS workout_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL REFERENCES training_plans(id),
+    session_id INTEGER NOT NULL REFERENCES training_sessions(id),
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    notes TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS workout_sets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workout_log_id INTEGER NOT NULL REFERENCES workout_logs(id) ON DELETE CASCADE,
+    exercise_id INTEGER NOT NULL REFERENCES training_exercises(id),
+    set_number INTEGER NOT NULL,
+    reps INTEGER,
+    weight REAL,
+    completed INTEGER DEFAULT 0,
+    notes TEXT
+  );
+
 `);
 
 // Seed default sport groups if table is empty

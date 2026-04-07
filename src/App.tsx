@@ -7,6 +7,9 @@ import { SportDetail } from './pages/SportDetail';
 import { Sleep } from './pages/Sleep';
 import { Wellness } from './pages/Wellness';
 import { AICoach } from './pages/AICoach';
+import { TrainingPlans } from './pages/TrainingPlans';
+import { PlanDetail } from './pages/PlanDetail';
+import { ActiveWorkout } from './pages/ActiveWorkout';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -24,6 +27,9 @@ function AuthenticatedLayout() {
             <Route path="/sleep" element={<Sleep />} />
             <Route path="/wellness" element={<Wellness />} />
             <Route path="/coach" element={<AICoach />} />
+            <Route path="/training" element={<TrainingPlans />} />
+            <Route path="/training/workout/:id" element={<ActiveWorkout />} />
+            <Route path="/training/:id" element={<PlanDetail />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

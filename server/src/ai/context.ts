@@ -283,6 +283,75 @@ Carga 3d: ${stats.trainingLoad.last3d}min | Carga 7d: ${stats.trainingLoad.last7
   return sections.join('\n\n');
 }
 
+// --- Training plan context ---
+export function buildTrainingContext(goal: string): string {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const sections: string[] = [];
+
+  sections.push(`## Objetivo del usuario\n${goal}`);
+
+  // Activities
+  const activities = db.prepare(`
+    SELECT sport_type, start_time, duration, distance, avg_hr, max_speed, calories
+    FROM activities WHERE start_time >= ? ORDER BY start_time DESC LIMIT 40
+  `).all(cutoff + 'T00:00:00') as any[];
+  if (activities.length > 0) {
+    const lines = activities.map((a: any) => {
+      const dur = a.duration ? `${Math.round(a.duration / 60)}min` : '-';
+      const dist = a.distance ? `${(a.distance / 1000).toFixed(1)}km` : '-';
+      const spd = a.max_speed ? `${(a.max_speed * 3.6).toFixed(1)}km/h` : '-';
+      return `${a.start_time.slice(0, 10)} | ${a.sport_type} | ${dur} | ${dist} | velMax:${spd} | FC:${a.avg_hr ?? '-'}bpm`;
+    });
+    sections.push(`## Actividades recientes (30 días)\nFecha | Deporte | Duración | Distancia | VelMax | FC.Prom\n${lines.join('\n')}`);
+  }
+
+  // Sport groups (para saber categorías del usuario)
+  const groups = db.prepare('SELECT name, sport_types FROM sport_groups ORDER BY sort_order').all() as any[];
+  if (groups.length > 0) {
+    const groupStr = groups.map((g: any) => {
+      const types = JSON.parse(g.sport_types ?? '[]').join(', ');
+      return `- ${g.name}: ${types}`;
+    }).join('\n');
+    sections.push(`## Categorías de deportes del usuario\n${groupStr}`);
+  }
+
+  // Sleep (últimas 2 semanas)
+  const sleep = db.prepare(`
+    SELECT date, score, duration_seconds, deep_seconds, rem_seconds
+    FROM sleep WHERE date >= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 14
+  `).all(cutoff) as any[];
+  if (sleep.length > 0) {
+    const avgScore = Math.round(sleep.reduce((s: number, r: any) => s + r.score, 0) / sleep.length);
+    const lines = sleep.slice(0, 7).map((s: any) => {
+      const dur = s.duration_seconds ? `${Math.floor(s.duration_seconds / 3600)}h${Math.round((s.duration_seconds % 3600) / 60)}m` : '-';
+      return `${s.date} | score:${s.score} | total:${dur}`;
+    });
+    sections.push(`## Sueño reciente (score promedio: ${avgScore})\n${lines.join('\n')}`);
+  }
+
+  // HRV
+  const hrv = db.prepare(`
+    SELECT date, nightly_avg, status FROM hrv
+    WHERE date >= ? AND nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 7
+  `).all(cutoff) as any[];
+  if (hrv.length > 0) {
+    const avgHrv = (hrv.reduce((s: number, r: any) => s + r.nightly_avg, 0) / hrv.length).toFixed(1);
+    sections.push(`## HRV reciente (promedio: ${avgHrv}ms)\n${hrv.map((h: any) => `${h.date} | ${Number(h.nightly_avg).toFixed(1)}ms | ${h.status ?? '-'}`).join('\n')}`);
+  }
+
+  // Stress
+  const stress = db.prepare(`
+    SELECT date, avg_stress FROM stress
+    WHERE date >= ? AND avg_stress IS NOT NULL ORDER BY date DESC LIMIT 7
+  `).all(cutoff) as any[];
+  if (stress.length > 0) {
+    const avgStress = Math.round(stress.reduce((s: number, r: any) => s + r.avg_stress, 0) / stress.length);
+    sections.push(`## Estrés reciente (promedio: ${avgStress})\n${stress.map((s: any) => `${s.date} | ${s.avg_stress}`).join('\n')}`);
+  }
+
+  return sections.join('\n\n');
+}
+
 // --- Main dispatcher ---
 export type AnalyzeMode = 'session' | 'sleep' | 'wellness' | 'sport' | 'monthly' | 'daily';
 
