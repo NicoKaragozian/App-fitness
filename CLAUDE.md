@@ -193,7 +193,7 @@ Garmin bloqueó el SSO programático con Cloudflare WAF (marzo 2026). El login a
 | `sport_groups` | `id` TEXT (slug) | `sport_types`, `metrics`, `chart_metrics` son JSON arrays |
 | `training_plans` | id autoincrement | `title`, `objective`, `frequency`, `status` (active/archived), `ai_model`, `raw_ai_response` |
 | `training_sessions` | id autoincrement | `plan_id` FK, `name`, `sort_order`, `notes` |
-| `training_exercises` | id autoincrement | `session_id` FK, `name`, `category` (warmup/main/core/cooldown), `target_sets`, `target_reps` TEXT, `notes`, `sort_order` |
+| `training_exercises` | id autoincrement | `session_id` FK, `name`, `category` (warmup/main/core/cooldown), `target_sets`, `target_reps` TEXT, `notes`, `sort_order`, `description` TEXT (generado por AI, nullable) |
 | `workout_logs` | id autoincrement | `plan_id` FK, `session_id` FK, `started_at`, `completed_at`, `notes` |
 | `workout_sets` | id autoincrement | `workout_log_id` FK CASCADE, `exercise_id` FK, `set_number`, `reps`, `weight` REAL (kg), `completed` |
 
@@ -303,10 +303,18 @@ OLLAMA_URL=http://localhost:11434   # URL de Ollama
 - El frontend usa `ReadableStream` para leer sin buffering
 - Botón de stop llama `AbortController.abort()` y Ollama corta el stream
 
+### Historial de chats
+
+El historial de conversaciones se persiste en `localStorage`:
+- Key `drift_ai_chats` → array de chats `{ id, title, messages, model, createdAt }`
+- Key `drift_ai_current` → ID del chat activo
+- Sidebar izquierda muestra los chats guardados, permite crear uno nuevo o borrar
+- Al enviar el primer mensaje de un chat nuevo, se genera el título automáticamente del contenido del mensaje
+
 ### MarkdownText
 
-Renderizador inline sin dependencias externas en `AICoach.tsx`. Soporta:
-- `**bold**`, `*italic*`, `` `code` ``
+Componente separado en `src/components/ui/MarkdownText.tsx` (no inline en `AICoach.tsx`). Soporta:
+- `***bold italic***`, `**bold**`, `*italic*`, `` `code` ``
 - `# H1`, `## H2` (renderizados como labels uppercase estilo design system)
 - `- item` / `* item` listas
 - Líneas vacías como espaciado
@@ -355,12 +363,15 @@ Sección de planes de gym generados por AI, con tracking de ejercicios (sets/rep
 | PUT | `/plans/:id` | Editar metadata o archivar (`status: 'archived'`) |
 | DELETE | `/plans/:id` | Borrar plan (CASCADE a sessions/exercises/logs/sets) |
 | PUT | `/exercises/:id` | Editar targets de un ejercicio |
+| POST | `/exercises/:id/describe` | Generar descripción AI de cómo ejecutar el ejercicio (guarda en `description`) |
 | POST | `/workouts` | Iniciar workout `{planId, sessionId}` → retorna `workoutId` |
 | PUT | `/workouts/:id` | Finalizar workout (setea `completed_at`) |
+| DELETE | `/workouts/:id` | Borrar workout log (CASCADE a sets) |
 | GET | `/workouts` | Historial `?planId=&sessionId=` |
-| GET | `/workouts/:id` | Detalle workout con sus sets |
+| GET | `/workouts/:id` | Detalle workout con sus sets (incluye `exercise_name` y `exercise_sort_order`) |
 | POST | `/workouts/:id/sets` | Logear set `{exerciseId, setNumber, reps, weight}` |
-| PUT | `/sets/:id` | Actualizar set |
+| PUT | `/sets/:id` | Actualizar set (solo actualiza los campos presentes en el body) |
+| DELETE | `/sets/:id` | Borrar un set individual |
 | GET | `/exercises/:id/history` | Historial de peso/reps para progressive overload |
 
 ### Generación AI (JSON mode)
@@ -379,6 +390,20 @@ Sección de planes de gym generados por AI, con tracking de ejercicios (sets/rep
 - **Auto-fill de peso**: carga el peso del último workout completado para esa sesión via `useLastWeights`
 - Cada set tiene inputs de kg y reps + botón de completar (se guarda en backend inmediatamente)
 - Botón "Finalizar Workout" o "Salir" con confirmación
+
+### Descripción de ejercicios (AI)
+
+`POST /api/training/exercises/:id/describe` genera en Ollama una descripción de 2-3 oraciones sobre cómo ejecutar el ejercicio (posición inicial, movimiento, músculo trabajado). Se guarda en la columna `description` de `training_exercises`. El botón aparece en `PlanDetail.tsx` y solo llama al endpoint si el ejercicio no tiene descripción aún.
+
+La columna `description TEXT` se agregó via migration en `db.ts` (ALTER TABLE con try/catch para idempotencia).
+
+### Historial de sesiones en PlanDetail
+
+`PlanDetail.tsx` muestra el historial de workouts por sesión con `SessionHistoryPanel` (componente interno). Al hacer click en "N× completada" de una sesión:
+- Se expande/colapsa el panel con todos los workouts de esa sesión
+- Cada workout es expandible para ver los sets (carga detalle bajo demanda)
+- Permite editar sets inline y borrar workouts o sets individuales
+- Usa `DELETE /workouts/:id` y `DELETE /sets/:id`
 
 ### Colores en botones — CRÍTICO
 

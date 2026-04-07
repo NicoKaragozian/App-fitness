@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDailySummary } from '../hooks/useDailySummary';
 import { useActivities } from '../hooks/useActivities';
 import { usePlan, type PlanItem } from '../hooks/usePlan';
@@ -6,6 +7,9 @@ import { useInsights } from '../hooks/useInsights';
 import { InsightsCard } from '../components/InsightsCard';
 import { AIInsightPanel } from '../components/AIInsightPanel';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
+import { apiFetch } from '../api/client';
+
+const DAYS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 
 const ActivityRing: React.FC<{ value: number; color: string; label: string; subLabel?: string | number; size?: number }> = ({
   value, color, label, subLabel, size = 120,
@@ -40,15 +44,17 @@ const ActivityRing: React.FC<{ value: number; color: string; label: string; subL
 };
 
 export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const { data: summary, loading: summaryLoading } = useDailySummary();
   const { data: activities, loading: activitiesLoading } = useActivities('daily');
   const { data: weeklyPlan, loading: planLoading, addPlanItem, updatePlanItem, deletePlanItem } = usePlan();
   const { data: insights, loading: insightsLoading } = useInsights();
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ sport: '', detail: '' });
+  const [editForm, setEditForm] = useState({ day: 'LUN', sport: '', detail: '' });
   const [isAdding, setIsAdding] = useState(false);
   const [addForm, setAddForm] = useState({ day: 'LUN', sport: '', detail: '' });
+  const [startingId, setStartingId] = useState<number | null>(null);
 
   const loading = summaryLoading || activitiesLoading || planLoading;
 
@@ -71,14 +77,32 @@ export const Dashboard: React.FC = () => {
 
   const handleEditClick = (item: PlanItem) => {
     setEditingId(item.id);
-    setEditForm({ sport: item.sport, detail: item.detail });
+    setEditForm({ day: item.day, sport: item.sport, detail: item.detail });
   };
 
   const saveEdit = (id: number) => {
     if (editForm.sport.trim()) {
-      updatePlanItem(id, { sport: editForm.sport, detail: editForm.detail });
+      updatePlanItem(id, { day: editForm.day, sport: editForm.sport, detail: editForm.detail });
     }
     setEditingId(null);
+  };
+
+  const handleStartLinkedWorkout = async (item: PlanItem) => {
+    if (!item.plan_id || !item.session_id) return;
+    setStartingId(item.id);
+    try {
+      const plan = await apiFetch<{ id: number; sessions: Array<{ id: number; name: string; notes: string | null; exercises: any[] }> }>(`/training/plans/${item.plan_id}`);
+      const session = plan.sessions.find(s => s.id === item.session_id);
+      if (!session) throw new Error('Sesión no encontrada');
+      const result = await apiFetch<{ workoutId: number }>('/training/workouts', {
+        method: 'POST',
+        body: JSON.stringify({ planId: item.plan_id, sessionId: item.session_id }),
+      });
+      navigate(`/training/workout/${result.workoutId}`, { state: { session, planId: item.plan_id } });
+    } catch (err: any) {
+      alert('Error iniciando workout: ' + err.message);
+      setStartingId(null);
+    }
   };
 
   const handleAddSubmit = () => {
@@ -228,16 +252,23 @@ export const Dashboard: React.FC = () => {
                 <div className="flex-1 min-w-0" onDoubleClick={() => handleEditClick(item)}>
                   {editingId === item.id ? (
                     <div className="space-y-2">
-                       <input 
-                         type="text" 
+                       <select
+                         value={editForm.day}
+                         onChange={e => setEditForm({...editForm, day: e.target.value})}
+                         className="bg-surface text-[10px] text-on-surface font-label p-1 rounded outline-none border border-surface-variant"
+                       >
+                         {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                       </select>
+                       <input
+                         type="text"
                          value={editForm.sport}
                          onChange={e => setEditForm({...editForm, sport: e.target.value})}
                          className="w-full bg-surface-container-high text-on-surface font-display text-sm font-bold p-1 rounded outline-none border border-surface-variant focus:border-primary"
                          placeholder="Ej. GYM / FUERZA"
                          autoFocus
                        />
-                       <input 
-                         type="text" 
+                       <input
+                         type="text"
                          value={editForm.detail}
                          onChange={e => setEditForm({...editForm, detail: e.target.value})}
                          className="w-full bg-surface-container-high text-on-surface-variant font-label text-xs p-1 rounded outline-none border border-surface-variant focus:border-primary"
@@ -254,10 +285,19 @@ export const Dashboard: React.FC = () => {
                         {item.sport}
                       </p>
                       {item.detail && <p className={`font-label text-xs text-on-surface-variant mt-0.5 ${item.completed ? 'line-through opacity-50' : ''}`}>{item.detail}</p>}
+                      {item.plan_id && item.session_id && !item.completed && (
+                        <button
+                          onClick={e => { e.stopPropagation(); handleStartLinkedWorkout(item); }}
+                          disabled={startingId === item.id}
+                          className="mt-1.5 font-label text-[10px] tracking-widest uppercase text-primary hover:opacity-70 transition-opacity disabled:opacity-40"
+                        >
+                          {startingId === item.id ? 'iniciando…' : '▶ Empezar'}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex flex-col items-end gap-2">
                   <span className="font-label text-[10px] text-on-surface-variant bg-surface px-2 py-1 rounded">{item.day}</span>
                   {!editingId && (

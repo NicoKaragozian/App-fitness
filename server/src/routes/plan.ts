@@ -16,19 +16,19 @@ router.get('/', (req, res) => {
 
 // Create a new item
 router.post('/', (req, res) => {
-  const { day, sport, detail } = req.body;
+  const { day, sport, detail, plan_id, session_id } = req.body;
   if (!day || !sport) {
     res.status(400).json({ error: 'Missing day or sport' });
     return;
   }
-  
+
   try {
     const result = db.prepare(`
-      INSERT INTO weekly_plan (day, sport, detail, completed)
-      VALUES (?, ?, ?, 0)
-    `).run(day, sport, detail || '');
-    
-    res.json({ id: result.lastInsertRowid, day, sport, detail, completed: 0 });
+      INSERT INTO weekly_plan (day, sport, detail, completed, plan_id, session_id)
+      VALUES (?, ?, ?, 0, ?, ?)
+    `).run(day, sport, detail || '', plan_id ?? null, session_id ?? null);
+
+    res.json({ id: result.lastInsertRowid, day, sport, detail: detail || '', completed: 0, plan_id: plan_id ?? null, session_id: session_id ?? null });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -37,17 +37,19 @@ router.post('/', (req, res) => {
 // Update an item
 router.put('/:id', (req, res) => {
   const { id } = req.params;
-  const { day, sport, detail, completed } = req.body;
-  
+  const { day, sport, detail, completed, plan_id, session_id } = req.body;
+
   try {
     db.prepare(`
-      UPDATE weekly_plan 
+      UPDATE weekly_plan
       SET day = COALESCE(?, day),
           sport = COALESCE(?, sport),
           detail = COALESCE(?, detail),
-          completed = COALESCE(?, completed)
+          completed = COALESCE(?, completed),
+          plan_id = CASE WHEN ? IS NOT NULL THEN ? ELSE plan_id END,
+          session_id = CASE WHEN ? IS NOT NULL THEN ? ELSE session_id END
       WHERE id = ?
-    `).run(day, sport, detail, completed, id);
+    `).run(day, sport, detail, completed, plan_id, plan_id, session_id, session_id, id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });

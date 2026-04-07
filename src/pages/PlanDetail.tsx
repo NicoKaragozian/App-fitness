@@ -4,7 +4,9 @@ import { useTrainingPlan } from '../hooks/useTrainingPlan';
 import { useWorkout } from '../hooks/useWorkout';
 import { useExerciseHistory } from '../hooks/useExerciseHistory';
 import { apiFetch } from '../api/client';
-import type { TrainingExercise, TrainingSession } from '../hooks/useTrainingPlan';
+import type { TrainingExercise, TrainingSession, TrainingPlanDetail } from '../hooks/useTrainingPlan';
+
+const DAYS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 
 const CATEGORY_LABELS: Record<string, string> = {
   warmup: 'Calentamiento',
@@ -38,6 +40,7 @@ export const PlanDetail: React.FC = () => {
   const [editingExercise, setEditingExercise] = useState<number | null>(null);
   const [editFields, setEditFields] = useState<Partial<TrainingExercise>>({});
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
+  const [showAddToWeekly, setShowAddToWeekly] = useState(false);
   const [describingId, setDescribingId] = useState<number | null>(null);
   const [openSessionHistory, setOpenSessionHistory] = useState<Set<number>>(new Set());
   // Descripciones generadas en esta sesión (por si el componente no se re-fetchea)
@@ -143,6 +146,12 @@ export const PlanDetail: React.FC = () => {
             <span className="font-label text-label-sm text-primary tracking-widest uppercase">Plan activo</span>
             <h1 className="font-display text-2xl text-on-surface mt-1">{plan.title}</h1>
           </div>
+          <button
+            onClick={() => setShowAddToWeekly(true)}
+            className="shrink-0 bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase px-3 py-2 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors text-xs"
+          >
+            + Weekly Plan
+          </button>
         </div>
         {plan.objective && (
           <p className="text-on-surface-variant text-sm">{plan.objective}</p>
@@ -159,6 +168,14 @@ export const PlanDetail: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Modal: agregar al weekly plan */}
+      {showAddToWeekly && (
+        <AddToWeeklyPlanModal
+          plan={plan}
+          onClose={() => setShowAddToWeekly(false)}
+        />
+      )}
 
       {/* Sesiones */}
       {plan.sessions.map((session) => {
@@ -602,6 +619,94 @@ function EditExerciseForm({ exercise, fields, onChange, onSave, onCancel }: {
       <div className="flex gap-2">
         <button onClick={onSave} className="flex-1 bg-primary text-surface font-label text-[10px] tracking-widest uppercase px-3 py-1.5 rounded">Guardar</button>
         <button onClick={onCancel} className="flex-1 bg-surface-container text-on-surface-variant font-label text-[10px] tracking-widest uppercase px-3 py-1.5 rounded">Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+function AddToWeeklyPlanModal({ plan, onClose }: { plan: TrainingPlanDetail; onClose: () => void }) {
+  // sessionId → day ('' = no agregar)
+  const [assignments, setAssignments] = useState<Record<number, string>>(() => {
+    const init: Record<number, string> = {};
+    plan.sessions.forEach((s, i) => {
+      init[s.id] = DAYS[i % DAYS.length];
+    });
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleConfirm = async () => {
+    const toAdd = plan.sessions.filter(s => assignments[s.id]);
+    if (toAdd.length === 0) { onClose(); return; }
+    setSaving(true);
+    try {
+      await Promise.all(toAdd.map(s =>
+        apiFetch('/plan', {
+          method: 'POST',
+          body: JSON.stringify({
+            day: assignments[s.id],
+            sport: plan.title,
+            detail: s.name,
+            plan_id: plan.id,
+            session_id: s.id,
+          }),
+        })
+      ));
+      setSaved(true);
+      setTimeout(onClose, 900);
+    } catch (err: any) {
+      alert('Error guardando: ' + err.message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div
+        className="bg-surface-low rounded-2xl p-6 w-full max-w-sm space-y-5 shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div>
+          <p className="font-label text-label-sm text-primary tracking-widest uppercase">Agregar al Weekly Plan</p>
+          <p className="font-display text-lg text-on-surface mt-1">{plan.title}</p>
+          <p className="text-on-surface-variant text-xs mt-1">Elegí qué día hacer cada sesión. Dejá vacío para no incluirla.</p>
+        </div>
+
+        <div className="space-y-3">
+          {plan.sessions.map(s => (
+            <div key={s.id} className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-on-surface text-sm truncate">{s.name}</p>
+                {s.notes && <p className="text-on-surface-variant text-xs truncate">{s.notes}</p>}
+              </div>
+              <select
+                value={assignments[s.id] ?? ''}
+                onChange={e => setAssignments(prev => ({ ...prev, [s.id]: e.target.value }))}
+                className="bg-surface-container text-on-surface font-label text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">— no agregar</option>
+                {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:opacity-80"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={saving || saved}
+            className="flex-1 bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:opacity-90 disabled:opacity-60"
+          >
+            {saved ? '✓ Guardado' : saving ? 'Guardando…' : 'Confirmar'}
+          </button>
+        </div>
       </div>
     </div>
   );

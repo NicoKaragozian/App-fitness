@@ -7,6 +7,8 @@ export interface PlanItem {
   sport: string;
   detail: string;
   completed: number;
+  plan_id?: number | null;
+  session_id?: number | null;
 }
 
 export function usePlan() {

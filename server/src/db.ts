@@ -157,6 +157,14 @@ try {
   db.exec('ALTER TABLE training_exercises ADD COLUMN description TEXT');
 } catch { /* ya existe, ignorar */ }
 
+// Migration: vincular weekly_plan con training_plans/sessions
+try {
+  db.exec('ALTER TABLE weekly_plan ADD COLUMN plan_id INTEGER');
+} catch { /* ya existe */ }
+try {
+  db.exec('ALTER TABLE weekly_plan ADD COLUMN session_id INTEGER');
+} catch { /* ya existe */ }
+
 // Seed default sport groups if table is empty
 const groupCount = (db.prepare('SELECT COUNT(*) as c FROM sport_groups').get() as { c: number }).c;
 if (groupCount === 0) {
