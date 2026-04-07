@@ -104,18 +104,20 @@ export const ActiveWorkout: React.FC = () => {
     const set = sets[exId]?.[setIdx];
     if (!set) return;
 
+    const toggling = set.completed; // true = desmarcar, false = marcar
     const reps = set.reps ? parseInt(set.reps) : null;
     const weight = set.weight ? parseFloat(set.weight) : null;
 
     setSets(prev => ({
       ...prev,
-      [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, completed: true } : s),
+      [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, completed: !toggling } : s),
     }));
 
     try {
       if (set.savedId != null) {
-        await updateSet(set.savedId, reps, weight);
-      } else {
+        await updateSet(set.savedId, reps, weight, !toggling);
+      } else if (!toggling) {
+        // solo loguear si estamos marcando (no desmarcar algo que no está guardado)
         const savedId = await logSet(workoutId, exId, setIdx + 1, reps, weight);
         setSets(prev => ({
           ...prev,
@@ -126,7 +128,7 @@ export const ActiveWorkout: React.FC = () => {
       // revert
       setSets(prev => ({
         ...prev,
-        [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, completed: false } : s),
+        [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, completed: toggling } : s),
       }));
     }
   }, [workoutId, sets, logSet, updateSet]);
@@ -310,8 +312,25 @@ interface SetRowProps {
 function SetRow({ setIndex, set, onChangeReps, onChangeWeight, onComplete }: SetRowProps) {
   return (
     <div className={`flex items-center gap-3 px-4 py-3 transition-colors ${set.completed ? 'bg-primary/5' : ''}`}>
+      {/* Checkbox */}
+      <button
+        onClick={onComplete}
+        className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all active:scale-90 ${
+          set.completed
+            ? 'bg-primary border-primary text-surface'
+            : 'border-outline-variant bg-transparent hover:border-primary/60'
+        }`}
+        title={set.completed ? 'Desmarcar serie' : 'Marcar serie como completada'}
+      >
+        {set.completed && (
+          <svg viewBox="0 0 12 10" className="w-3 h-3 fill-none stroke-current stroke-2">
+            <polyline points="1,5 4.5,8.5 11,1" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+
       {/* Set number */}
-      <span className="font-label text-label-sm text-on-surface-variant tracking-widest w-5 shrink-0 text-center">
+      <span className="font-label text-label-sm text-on-surface-variant tracking-widest w-4 shrink-0 text-center">
         {setIndex + 1}
       </span>
 
@@ -324,7 +343,7 @@ function SetRow({ setIndex, set, onChangeReps, onChangeWeight, onComplete }: Set
           value={set.weight}
           onChange={e => onChangeWeight(e.target.value)}
           disabled={set.completed}
-          className="w-full bg-surface-container rounded-lg px-3 py-2.5 text-on-surface text-center text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-surface-container rounded-lg px-3 py-2.5 text-on-surface text-center text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
           placeholder="—"
         />
       </div>
@@ -338,23 +357,10 @@ function SetRow({ setIndex, set, onChangeReps, onChangeWeight, onComplete }: Set
           value={set.reps}
           onChange={e => onChangeReps(e.target.value)}
           disabled={set.completed}
-          className="w-full bg-surface-container rounded-lg px-3 py-2.5 text-on-surface text-center text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-surface-container rounded-lg px-3 py-2.5 text-on-surface text-center text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
           placeholder="—"
         />
       </div>
-
-      {/* Complete button */}
-      <button
-        onClick={onComplete}
-        disabled={set.completed}
-        className={`shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-all ${
-          set.completed
-            ? 'bg-primary text-surface'
-            : 'bg-surface-container text-on-surface-variant hover:bg-primary/20 hover:text-primary active:scale-95'
-        }`}
-      >
-        {set.completed ? '✓' : '○'}
-      </button>
     </div>
   );
 }

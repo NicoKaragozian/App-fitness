@@ -276,10 +276,22 @@ router.get('/workouts/:id', (req: Request, res: Response) => {
   if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
   const log = db.prepare('SELECT * FROM workout_logs WHERE id = ?').get(id) as any;
   if (!log) { res.status(404).json({ error: 'Workout no encontrado' }); return; }
-  const sets = db.prepare(
-    'SELECT * FROM workout_sets WHERE workout_log_id = ? ORDER BY exercise_id, set_number'
-  ).all(id) as any[];
+  const sets = db.prepare(`
+    SELECT ws.*, te.name as exercise_name, te.sort_order as exercise_sort_order
+    FROM workout_sets ws
+    LEFT JOIN training_exercises te ON te.id = ws.exercise_id
+    WHERE ws.workout_log_id = ?
+    ORDER BY te.sort_order, ws.set_number
+  `).all(id) as any[];
   res.json({ ...log, sets });
+});
+
+// DELETE /api/training/workouts/:id — Borrar workout log (CASCADE a sets)
+router.delete('/workouts/:id', (req: Request, res: Response) => {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  db.prepare('DELETE FROM workout_logs WHERE id = ?').run(id);
+  res.json({ ok: true });
 });
 
 // POST /api/training/workouts/:id/sets — Logear un set
@@ -301,15 +313,24 @@ router.post('/workouts/:id/sets', (req: Request, res: Response) => {
 router.put('/sets/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
-  const { reps, weight, completed, notes } = req.body as any;
-  db.prepare(`
-    UPDATE workout_sets SET
-      reps = COALESCE(?, reps),
-      weight = COALESCE(?, weight),
-      completed = COALESCE(?, completed),
-      notes = COALESCE(?, notes)
-    WHERE id = ?
-  `).run(reps ?? null, weight ?? null, completed != null ? (completed ? 1 : 0) : null, notes ?? null, id);
+  const body = req.body as any;
+  const updates: string[] = [];
+  const params: any[] = [];
+  if ('reps' in body) { updates.push('reps = ?'); params.push(body.reps ?? null); }
+  if ('weight' in body) { updates.push('weight = ?'); params.push(body.weight ?? null); }
+  if ('completed' in body) { updates.push('completed = ?'); params.push(body.completed ? 1 : 0); }
+  if ('notes' in body) { updates.push('notes = ?'); params.push(body.notes ?? null); }
+  if (updates.length === 0) { res.json({ ok: true }); return; }
+  params.push(id);
+  db.prepare(`UPDATE workout_sets SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  res.json({ ok: true });
+});
+
+// DELETE /api/training/sets/:id — Borrar un set individual
+router.delete('/sets/:id', (req: Request, res: Response) => {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  db.prepare('DELETE FROM workout_sets WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 

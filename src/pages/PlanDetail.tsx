@@ -39,6 +39,7 @@ export const PlanDetail: React.FC = () => {
   const [editFields, setEditFields] = useState<Partial<TrainingExercise>>({});
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
   const [describingId, setDescribingId] = useState<number | null>(null);
+  const [openSessionHistory, setOpenSessionHistory] = useState<Set<number>>(new Set());
   // Descripciones generadas en esta sesión (por si el componente no se re-fetchea)
   const [generatedDescs, setGeneratedDescs] = useState<Record<number, string>>({});
   // Qué ejercicios tienen la descripción abierta
@@ -177,9 +178,16 @@ export const PlanDetail: React.FC = () => {
                   <div className="flex gap-3 mt-2">
                     {hist ? (
                       <>
-                        <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-                          {hist.count}× completada
-                        </span>
+                        <button
+                          onClick={() => setOpenSessionHistory(prev => {
+                            const next = new Set(prev);
+                            if (next.has(session.id)) next.delete(session.id); else next.add(session.id);
+                            return next;
+                          })}
+                          className="font-label text-label-sm text-primary tracking-widest uppercase hover:opacity-70 transition-opacity"
+                        >
+                          {hist.count}× completada {openSessionHistory.has(session.id) ? '▲' : '▼'}
+                        </button>
                         {hist.last && (
                           <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
                             Última: {formatDate(hist.last)}
@@ -199,6 +207,11 @@ export const PlanDetail: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {/* Historial de sesiones */}
+            {openSessionHistory.has(session.id) && planId && (
+              <SessionHistoryPanel sessionId={session.id} planId={planId} />
+            )}
 
             {/* Ejercicios */}
             <div className="divide-y divide-outline-variant/10">
@@ -282,6 +295,273 @@ export const PlanDetail: React.FC = () => {
     </div>
   );
 };
+
+interface WorkoutSetDetail {
+  id: number;
+  set_number: number;
+  reps: number | null;
+  weight: number | null;
+  completed: number;
+  exercise_id: number;
+  exercise_name: string | null;
+}
+
+interface WorkoutDetail {
+  id: number;
+  session_id: number;
+  plan_id: number;
+  started_at: string;
+  completed_at: string | null;
+  notes: string | null;
+  sets: WorkoutSetDetail[];
+}
+
+function formatDuration(start: string, end: string | null): string {
+  if (!end) return '';
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
+
+function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId: number }) {
+  const [logs, setLogs] = useState<WorkoutDetail[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [details, setDetails] = useState<Record<number, WorkoutDetail>>({});
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingSet, setEditingSet] = useState<number | null>(null);
+  const [editSetFields, setEditSetFields] = useState<{ reps: string; weight: string }>({ reps: '', weight: '' });
+
+  useEffect(() => {
+    apiFetch<WorkoutDetail[]>(`/training/workouts?planId=${planId}&sessionId=${sessionId}`)
+      .then(data => {
+        setLogs(data.filter(l => l.completed_at).sort((a, b) =>
+          new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime()
+        ));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [sessionId, planId]);
+
+  const loadDetail = useCallback(async (workoutId: number) => {
+    if (details[workoutId]) return;
+    const data = await apiFetch<WorkoutDetail>(`/training/workouts/${workoutId}`);
+    setDetails(prev => ({ ...prev, [workoutId]: data }));
+  }, [details]);
+
+  const handleToggleExpand = async (workoutId: number) => {
+    if (expandedId === workoutId) { setExpandedId(null); return; }
+    setExpandedId(workoutId);
+    await loadDetail(workoutId);
+  };
+
+  const handleDeleteWorkout = async (workoutId: number) => {
+    if (!window.confirm('¿Eliminar esta sesión del historial? Se borrarán todos sus sets.')) return;
+    setDeletingId(workoutId);
+    try {
+      await apiFetch(`/training/workouts/${workoutId}`, { method: 'DELETE' });
+      setLogs(prev => prev.filter(l => l.id !== workoutId));
+      if (expandedId === workoutId) setExpandedId(null);
+    } catch (err: any) {
+      alert('Error eliminando: ' + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleEditSet = (set: WorkoutSetDetail) => {
+    setEditingSet(set.id);
+    setEditSetFields({
+      reps: set.reps != null ? String(set.reps) : '',
+      weight: set.weight != null ? String(set.weight) : '',
+    });
+  };
+
+  const handleSaveSet = async (setId: number, workoutId: number) => {
+    try {
+      await apiFetch(`/training/sets/${setId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          reps: editSetFields.reps !== '' ? parseInt(editSetFields.reps) : null,
+          weight: editSetFields.weight !== '' ? parseFloat(editSetFields.weight) : null,
+        }),
+      });
+      setDetails(prev => {
+        const d = prev[workoutId];
+        if (!d) return prev;
+        return {
+          ...prev,
+          [workoutId]: {
+            ...d,
+            sets: d.sets.map(s => s.id === setId ? {
+              ...s,
+              reps: editSetFields.reps !== '' ? parseInt(editSetFields.reps) : null,
+              weight: editSetFields.weight !== '' ? parseFloat(editSetFields.weight) : null,
+            } : s),
+          },
+        };
+      });
+    } catch (err: any) {
+      alert('Error guardando: ' + err.message);
+    }
+    setEditingSet(null);
+  };
+
+  const handleDeleteSet = async (setId: number, workoutId: number) => {
+    try {
+      await apiFetch(`/training/sets/${setId}`, { method: 'DELETE' });
+      setDetails(prev => {
+        const d = prev[workoutId];
+        if (!d) return prev;
+        return { ...prev, [workoutId]: { ...d, sets: d.sets.filter(s => s.id !== setId) } };
+      });
+    } catch (err: any) {
+      alert('Error eliminando set: ' + err.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="px-5 py-3 border-t border-outline-variant/20 animate-pulse">
+        <div className="h-4 bg-surface-container rounded w-32" />
+      </div>
+    );
+  }
+
+  if (logs.length === 0) {
+    return (
+      <div className="px-5 py-3 border-t border-outline-variant/20">
+        <p className="text-on-surface-variant text-xs">Sin sesiones completadas</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-outline-variant/20 divide-y divide-outline-variant/10">
+      {logs.map(log => {
+        const isExpanded = expandedId === log.id;
+        const detail = details[log.id];
+        const duration = formatDuration(log.started_at, log.completed_at);
+
+        // Agrupar sets por ejercicio
+        const setsByExercise: Record<string, { name: string; sets: WorkoutSetDetail[] }> = {};
+        if (detail) {
+          for (const s of detail.sets) {
+            const key = String(s.exercise_id);
+            if (!setsByExercise[key]) setsByExercise[key] = { name: s.exercise_name ?? 'Ejercicio', sets: [] };
+            setsByExercise[key].sets.push(s);
+          }
+        }
+
+        return (
+          <div key={log.id} className="bg-surface-container/20">
+            {/* Fila del workout */}
+            <div className="flex items-center gap-3 px-5 py-2.5">
+              <button
+                onClick={() => handleToggleExpand(log.id)}
+                className="flex-1 flex items-center gap-3 text-left"
+              >
+                <span className="font-label text-[10px] tracking-widest uppercase text-on-surface-variant">
+                  {isExpanded ? '▲' : '▼'}
+                </span>
+                <span className="text-on-surface text-xs font-medium">
+                  {new Date(log.completed_at!).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </span>
+                {duration && (
+                  <span className="font-label text-[10px] tracking-widest uppercase text-on-surface-variant">{duration}</span>
+                )}
+              </button>
+              <button
+                onClick={() => handleDeleteWorkout(log.id)}
+                disabled={deletingId === log.id}
+                className="text-on-surface-variant hover:text-red-400 transition-colors text-xs px-2 py-1 rounded hover:bg-surface-container disabled:opacity-40"
+                title="Eliminar esta sesión"
+              >
+                {deletingId === log.id ? '…' : '✕'}
+              </button>
+            </div>
+
+            {/* Sets expandidos */}
+            {isExpanded && (
+              <div className="px-5 pb-3 space-y-3">
+                {!detail ? (
+                  <p className="text-on-surface-variant text-xs animate-pulse">Cargando…</p>
+                ) : Object.keys(setsByExercise).length === 0 ? (
+                  <p className="text-on-surface-variant text-xs">Sin sets registrados</p>
+                ) : (
+                  Object.values(setsByExercise).map(({ name, sets }) => (
+                    <div key={name}>
+                      <p className="font-label text-[10px] tracking-widest uppercase text-on-surface-variant mb-1.5">{name}</p>
+                      <div className="space-y-1">
+                        {sets.map(s => (
+                          <div key={s.id} className="flex items-center gap-2">
+                            {editingSet === s.id ? (
+                              <>
+                                <span className="font-label text-[10px] text-on-surface-variant w-8">S{s.set_number}</span>
+                                <input
+                                  type="number"
+                                  value={editSetFields.reps}
+                                  onChange={e => setEditSetFields(f => ({ ...f, reps: e.target.value }))}
+                                  placeholder="reps"
+                                  className="w-16 bg-surface-container rounded px-2 py-0.5 text-on-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                                <span className="text-on-surface-variant text-xs">×</span>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  value={editSetFields.weight}
+                                  onChange={e => setEditSetFields(f => ({ ...f, weight: e.target.value }))}
+                                  placeholder="kg"
+                                  className="w-16 bg-surface-container rounded px-2 py-0.5 text-on-surface text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                                <button
+                                  onClick={() => handleSaveSet(s.id, log.id)}
+                                  className="text-primary text-xs font-label tracking-widest uppercase hover:opacity-70"
+                                >ok</button>
+                                <button
+                                  onClick={() => setEditingSet(null)}
+                                  className="text-on-surface-variant text-xs hover:opacity-70"
+                                >✕</button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-label text-[10px] text-on-surface-variant w-8">S{s.set_number}</span>
+                                <span className="text-on-surface text-xs w-12">
+                                  {s.reps != null ? `${s.reps} reps` : '-'}
+                                </span>
+                                <span className="text-on-surface-variant text-xs w-14">
+                                  {s.weight != null && s.weight > 0 ? `${s.weight} kg` : '—'}
+                                </span>
+                                <button
+                                  onClick={() => handleEditSet(s)}
+                                  className="text-on-surface-variant text-[10px] hover:text-primary transition-colors px-1"
+                                  title="Editar set"
+                                >editar</button>
+                                <button
+                                  onClick={() => handleDeleteSet(s.id, log.id)}
+                                  className="text-on-surface-variant text-[10px] hover:text-red-400 transition-colors px-1"
+                                  title="Eliminar set"
+                                >✕</button>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {log.notes && (
+                  <p className="text-on-surface-variant text-xs border-l-2 border-outline-variant/30 pl-2 mt-2">{log.notes}</p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function EditExerciseForm({ exercise, fields, onChange, onSave, onCancel }: {
   exercise: TrainingExercise;

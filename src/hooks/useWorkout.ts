@@ -51,10 +51,10 @@ export function useWorkout() {
     return data.setId;
   }, []);
 
-  const updateSet = useCallback(async (setId: number, reps: number | null, weight: number | null) => {
+  const updateSet = useCallback(async (setId: number, reps: number | null, weight: number | null, completed = true) => {
     await apiFetch(`/training/sets/${setId}`, {
       method: 'PUT',
-      body: JSON.stringify({ reps, weight, completed: true }),
+      body: JSON.stringify({ reps, weight, completed }),
     });
   }, []);
 
