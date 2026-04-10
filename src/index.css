@@ -13,11 +13,13 @@ body {
   color: #e8e4e4;
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* Safe areas para iPhone con notch / Dynamic Island */
-  padding-top: env(safe-area-inset-top);
+  overflow-x: hidden;
+}
+
+#root {
+  overflow-x: hidden;
+  /* Safe area para el bottom nav en iPhone con home indicator */
   padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
 }
 
 ::-webkit-scrollbar {
