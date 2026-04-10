@@ -14,14 +14,12 @@ import usersRoutes from './routes/users.js';
 import activitiesRoutes from './routes/activities.js';
 import healthRoutes from './routes/health.js';
 import syncRoutes from './routes/sync.js';
-import * as garmin from './garmin.js';
 import planRoutes from './routes/plan.js';
 import insightsRoutes from './routes/insights.js';
 import sportGroupsRoutes from './routes/sport-groups.js';
 import aiRoutes from './routes/ai.js';
 import trainingRoutes from './routes/training.js';
 import healthkitRoutes from './routes/healthkit.js';
-import { startPeriodicSync, syncInitial } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -74,16 +72,6 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Try to restore session on startup
-async function init() {
-  const restored = await garmin.tryRestoreSession();
-  if (restored) {
-    syncInitial().then(() => startPeriodicSync());
-  }
-
-  app.listen(PORT, () => {
-    console.log(`[server] DRIFT backend running on http://localhost:${PORT}`);
-  });
-}
-
-init();
+app.listen(PORT, () => {
+  console.log(`[server] DRIFT backend running on http://localhost:${PORT}`);
+});
