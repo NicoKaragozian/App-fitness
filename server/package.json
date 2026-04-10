@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@gooin/garmin-connect": "^1.7.6",
+    "bcryptjs": "^3.0.3",
     "better-sqlite3": "^11.6.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.0",
@@ -19,7 +21,9 @@
     "playwright": "^1.59.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.12",
+    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",

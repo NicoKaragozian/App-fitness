@@ -3,79 +3,65 @@ import { apiFetch } from '../api/client';
 
 interface AuthState {
   isAuthenticated: boolean;
-  isDemoMode: boolean;
-  isSyncing: boolean;
-  lastSync: string | null;
-  tokenLogin: () => Promise<void>;
-  enterDemoMode: () => void;
-  logout: () => void;
+  username: string | null;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string, inviteCode?: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState>({
   isAuthenticated: false,
-  isDemoMode: false,
-  isSyncing: false,
-  lastSync: null,
-  tokenLogin: async () => {},
-  enterDemoMode: () => {},
-  logout: () => {},
+  username: null,
+  login: async () => {},
+  register: async () => {},
+  logout: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(() => localStorage.getItem('drift_demo') === '1');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
 
-  const fetchStatus = useCallback(async () => {
-    const data = await apiFetch<{ authenticated: boolean; syncing: boolean; lastSync: string | null }>('/auth/status');
-    setIsAuthenticated(data.authenticated);
-    setIsSyncing(data.syncing);
-    setLastSync(data.lastSync);
-    return data.authenticated;
-  }, []);
-
-  // Carga inicial
+  // Verificar sesión al cargar
   useEffect(() => {
-    if (isDemoMode) {
-      setChecked(true);
-      return;
-    }
-    fetchStatus()
+    apiFetch<{ authenticated: boolean }>('/auth/status')
+      .then(data => {
+        if (data.authenticated) {
+          // Obtener el username
+          return apiFetch<{ username: string }>('/users/me').then(me => {
+            setIsAuthenticated(true);
+            setUsername(me.username);
+          });
+        }
+      })
       .catch(() => {})
       .finally(() => setChecked(true));
-  }, [isDemoMode, fetchStatus]);
+  }, []);
 
-  // Polling cada 3 segundos mientras no esté autenticado (para auto-detect tokens)
-  useEffect(() => {
-    if (!checked || isAuthenticated || isDemoMode) return;
-    const id = setInterval(() => {
-      fetchStatus().catch(() => {});
-    }, 3000);
-    return () => clearInterval(id);
-  }, [checked, isAuthenticated, isDemoMode, fetchStatus]);
-
-  const tokenLogin = useCallback(async () => {
-    await apiFetch('/auth/token-login', { method: 'POST' });
+  const login = useCallback(async (user: string, password: string) => {
+    const data = await apiFetch<{ username: string }>('/users/login', {
+      method: 'POST',
+      body: JSON.stringify({ username: user, password }),
+    });
     setIsAuthenticated(true);
-    setIsDemoMode(false);
-    localStorage.removeItem('drift_demo');
+    setUsername(data.username);
   }, []);
 
-  const enterDemoMode = useCallback(() => {
-    localStorage.setItem('drift_demo', '1');
-    setIsDemoMode(true);
+  const register = useCallback(async (user: string, password: string, inviteCode?: string) => {
+    const data = await apiFetch<{ username: string }>('/users/register', {
+      method: 'POST',
+      body: JSON.stringify({ username: user, password, inviteCode }),
+    });
+    setIsAuthenticated(true);
+    setUsername(data.username);
   }, []);
 
-  const logout = useCallback(() => {
-    apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
+  const logout = useCallback(async () => {
+    await apiFetch('/users/logout', { method: 'POST' }).catch(() => {});
     setIsAuthenticated(false);
-    setIsDemoMode(false);
-    setLastSync(null);
-    localStorage.removeItem('drift_demo');
+    setUsername(null);
   }, []);
 
   if (!checked) {
@@ -87,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isDemoMode, isSyncing, lastSync, tokenLogin, enterDemoMode, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, username, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

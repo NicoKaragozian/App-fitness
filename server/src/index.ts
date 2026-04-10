@@ -8,7 +8,9 @@ dotenvConfig({ path: path.join(_serverDir, '.env') });
 
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.js';
+import usersRoutes from './routes/users.js';
 import activitiesRoutes from './routes/activities.js';
 import healthRoutes from './routes/health.js';
 import syncRoutes from './routes/sync.js';
@@ -29,9 +31,11 @@ if (process.env.NODE_ENV !== 'production') {
   app.use(cors({ origin: true, credentials: true }));
 }
 app.use(express.json());
+app.use(cookieParser());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/sync', syncRoutes);

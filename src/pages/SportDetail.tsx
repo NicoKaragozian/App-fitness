@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useActivityDetail } from '../hooks/useActivityDetail';
-import { useAuth } from '../context/AuthContext';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { DynamicChart } from '../components/DynamicChart';
 import { SessionModal } from '../components/SessionModal';
@@ -60,16 +59,13 @@ const FALLBACK_CONFIG: GroupConfig = {
 
 export const SportDetail: React.FC = () => {
   const { category } = useParams<{ category: string }>();
-  const { isDemoMode } = useAuth();
   const cat = category ?? 'water_sports';
   const [period, setPeriod] = useState<Period>('total');
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
 
-  const { data: realData, loading } = useActivityDetail(cat, period);
-  const mockDetail = mockGroupDetail[cat];
-  const data = isDemoMode ? mockDetail : realData;
+  const { data, loading } = useActivityDetail(cat, period);
 
-  if (loading && !isDemoMode) return <LoadingSkeleton />;
+  if (loading) return <LoadingSkeleton />;
   if (!data) return (
     <div className="p-8">
       <Link to="/sports" className="text-on-surface-variant hover:text-on-surface font-label text-label-sm tracking-widest uppercase">

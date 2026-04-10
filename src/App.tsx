@@ -39,9 +39,9 @@ function AuthenticatedLayout() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, isDemoMode } = useAuth();
+  const { isAuthenticated } = useAuth();
 
-  if (!isAuthenticated && !isDemoMode) {
+  if (!isAuthenticated) {
     return (
       <Routes>
         <Route path="*" element={<Login />} />

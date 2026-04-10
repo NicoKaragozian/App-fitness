@@ -25,7 +25,7 @@ export const Header: React.FC = () => {
     .find(k => location.pathname === k || location.pathname.startsWith(k + '/'))
     ?? (pageTitles[location.pathname] ? location.pathname : '/');
   const page = pageTitles[pathKey] || pageTitles['/'];
-  const { isAuthenticated, isDemoMode, logout } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
 
   return (
     <header className="flex items-center justify-between px-4 py-3 lg:px-8 lg:py-5 bg-surface-low/80 backdrop-blur-sm sticky top-0 z-40">
@@ -34,19 +34,19 @@ export const Header: React.FC = () => {
         <h2 className="font-display text-headline-md text-on-surface font-bold tracking-tight">{page.title}</h2>
       </div>
       <div className="flex items-center gap-4">
-        {(isAuthenticated || isDemoMode) && (
+        {isAuthenticated && (
           <button
             onClick={logout}
             className="hidden md:flex items-center gap-2 bg-surface-container px-3 py-1.5 rounded-xl hover:bg-surface-container/70 transition-all cursor-pointer"
             title="Cerrar sesión"
           >
-            <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isDemoMode ? 'bg-yellow-400' : 'bg-primary'}`}></div>
-            <span className="font-label text-label-sm text-on-surface-variant">{isDemoMode ? 'DEMO MODE' : 'GARMIN CONNECTED'}</span>
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-primary"></div>
+            <span className="font-label text-label-sm text-on-surface-variant">CONECTADO</span>
             <span className="font-label text-label-sm text-on-surface-variant opacity-60">⏏</span>
           </button>
         )}
         {/* Mobile logout icon */}
-        {(isAuthenticated || isDemoMode) && (
+        {isAuthenticated && (
           <button
             onClick={logout}
             className="flex md:hidden items-center justify-center w-8 h-8 rounded-xl bg-surface-container text-on-surface-variant hover:text-on-surface transition-all"

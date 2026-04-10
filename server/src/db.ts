@@ -152,6 +152,30 @@ db.exec(`
 
 `);
 
+// Auth tables (Fase 1 MVP — multi-user)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS invite_codes (
+    code TEXT PRIMARY KEY,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    used_by INTEGER REFERENCES users(id),
+    used_at TEXT
+  );
+`);
+
 // Migration: agregar columna description a training_exercises si no existe
 try {
   db.exec('ALTER TABLE training_exercises ADD COLUMN description TEXT');

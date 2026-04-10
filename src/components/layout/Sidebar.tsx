@@ -12,9 +12,9 @@ const navItems = [
 ];
 
 export const Sidebar: React.FC = () => {
-  const { isAuthenticated, isDemoMode, logout } = useAuth();
-  const statusLabel = isDemoMode ? 'DEMO' : isAuthenticated ? 'CONECTADO' : 'DESCONECTADO';
-  const statusColor = isDemoMode ? 'bg-yellow-400' : isAuthenticated ? 'bg-primary' : 'bg-red-400';
+  const { isAuthenticated, username, logout } = useAuth();
+  const statusLabel = isAuthenticated ? (username?.toUpperCase() ?? 'CONECTADO') : 'DESCONECTADO';
+  const statusColor = isAuthenticated ? 'bg-primary' : 'bg-red-400';
 
   return (
     <>
@@ -48,7 +48,7 @@ export const Sidebar: React.FC = () => {
             <div className={`w-1.5 h-1.5 rounded-full ${statusColor} animate-pulse`}></div>
             <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{statusLabel}</span>
           </div>
-          {(isAuthenticated || isDemoMode) && (
+          {isAuthenticated && (
             <button
               onClick={logout}
               className="flex items-center gap-2 px-3 py-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50 transition-all font-label text-label-sm tracking-wider uppercase"
