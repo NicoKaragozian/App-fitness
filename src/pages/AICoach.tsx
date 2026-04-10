@@ -17,10 +17,9 @@ interface ChatSession {
 }
 
 const MODELS = [
-  { id: 'gemma3:4b', label: 'G3 · 4B', badge: 'Rápido' },
-  { id: 'gemma3:12b', label: 'G3 · 12B', badge: 'Potente' },
-  { id: 'gemma4:26b', label: 'G4 · 26B', badge: 'Top Local' },
-  { id: 'gemma4:e2b', label: 'G4 · E2B', badge: 'Mobile' },
+  { id: 'llama-3.3-70b-versatile', label: 'Llama 70B', badge: 'Recomendado' },
+  { id: 'llama-3.1-8b-instant', label: 'Llama 8B', badge: 'Rápido' },
+  { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B', badge: 'Largo' },
 ];
 
 const SUGGESTIONS = [

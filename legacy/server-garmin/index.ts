@@ -1,13 +1,8 @@
-import { config as dotenvConfig } from 'dotenv';
-import { fileURLToPath } from 'url';
-import path from 'path';
-
-// Carga el .env desde server/ sin importar desde dónde se corra el proceso
-const _serverDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-dotenvConfig({ path: path.join(_serverDir, '.env') });
-
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import activitiesRoutes from './routes/activities.js';
 import healthRoutes from './routes/health.js';

@@ -3,10 +3,9 @@ import type { Request, Response } from 'express';
 import db from '../db.js';
 import { buildTrainingContext } from '../ai/context.js';
 import { PROMPTS } from '../ai/prompts.js';
+import { chatJSON, chatCompletion, DEFAULT_MODEL } from '../ai/llm.js';
 
 const router = Router();
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e2b';
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 
 function isValidModelName(name: string): boolean {
   return typeof name === 'string' && /^[a-zA-Z0-9._:\-/]+$/.test(name) && name.length < 100;
@@ -49,52 +48,25 @@ router.post('/generate', async (req: Request, res: Response) => {
     return;
   }
 
-  const model = (requestedModel && isValidModelName(requestedModel)) ? requestedModel : OLLAMA_MODEL;
+  const model = (requestedModel && isValidModelName(requestedModel)) ? requestedModel : DEFAULT_MODEL;
   const context = buildTrainingContext(goal.trim());
   const systemPrompt = `${PROMPTS.training_plan}\n\nDatos del usuario:\n${context}`;
-
-  let ollamaRes: globalThis.Response;
-  try {
-    ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generá mi plan de entrenamiento personalizado. Objetivo: ${goal.trim()}` },
-        ],
-        stream: false,
-        format: 'json',
-      }),
-    });
-  } catch (err: any) {
-    console.error('[training] No se pudo conectar a Ollama:', err.message);
-    res.status(503).json({ error: 'Ollama no está corriendo. Inicialo con: ollama serve' });
-    return;
-  }
-
-  if (!ollamaRes.ok) {
-    const errText = await ollamaRes.text();
-    console.error('[training] Ollama error:', errText);
-    if (ollamaRes.status === 404 || errText.includes('not found')) {
-      res.status(502).json({ error: `Modelo "${model}" no encontrado. Descargalo con: ollama pull ${model}` });
-    } else {
-      res.status(502).json({ error: `Error de Ollama: ${errText.slice(0, 200)}` });
-    }
-    return;
-  }
 
   let rawContent: string;
   let plan: AIPlan;
   try {
-    const ollamaData = await ollamaRes.json() as any;
-    rawContent = ollamaData.message?.content ?? '';
+    rawContent = await chatJSON(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Generá mi plan de entrenamiento personalizado. Objetivo: ${goal.trim()}` },
+      ],
+      model
+    );
     const parsed = JSON.parse(rawContent);
     plan = validatePlan(parsed);
   } catch (err: any) {
-    console.error('[training] Error parseando respuesta de Ollama:', err.message);
-    res.status(502).json({ error: `El modelo no devolvió un JSON válido: ${err.message}` });
+    console.error('[training] Error generando plan:', err.message);
+    res.status(502).json({ error: `Error al generar el plan: ${err.message}` });
     return;
   }
 
@@ -376,38 +348,20 @@ router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
   if (!exercise) { res.status(404).json({ error: 'Ejercicio no encontrado' }); return; }
 
   const { model: requestedModel } = req.body as { model?: string };
-  const model = (requestedModel && isValidModelName(requestedModel)) ? requestedModel : OLLAMA_MODEL;
+  const model = (requestedModel && isValidModelName(requestedModel)) ? requestedModel : DEFAULT_MODEL;
 
   const prompt = `Explicá en 2-3 oraciones cortas y claras cómo se ejecuta correctamente el ejercicio "${exercise.name}". Incluí: posición inicial, movimiento principal, y el músculo que trabaja. Sin bullets, sin títulos, solo texto corrido. Respondé en español.`;
 
-  let ollamaRes: globalThis.Response;
+  let description: string;
   try {
-    ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: false,
-      }),
-    });
+    description = (await chatCompletion(
+      [{ role: 'user', content: prompt }],
+      model
+    )).trim();
   } catch (err: any) {
-    res.status(503).json({ error: 'Ollama no está corriendo. Inicialo con: ollama serve' });
+    res.status(502).json({ error: `Error al generar descripción: ${err.message}` });
     return;
   }
-
-  if (!ollamaRes.ok) {
-    const errText = await ollamaRes.text();
-    if (ollamaRes.status === 404 || errText.includes('not found')) {
-      res.status(502).json({ error: `Modelo "${model}" no encontrado. Descargalo con: ollama pull ${model}` });
-    } else {
-      res.status(502).json({ error: `Error de Ollama: ${errText.slice(0, 200)}` });
-    }
-    return;
-  }
-
-  const data = await ollamaRes.json() as any;
-  const description = (data.message?.content ?? '').trim();
 
   // Guardar en DB
   db.prepare('UPDATE training_exercises SET description = ? WHERE id = ?').run(description, exerciseId);

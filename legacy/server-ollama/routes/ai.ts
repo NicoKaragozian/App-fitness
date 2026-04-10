@@ -1,11 +1,14 @@
+// Versión original de routes/ai.ts que usa Ollama directamente (antes de migrar a Groq)
+// Para restaurar: copiar a server/src/routes/ai.ts
+
 import { Router, Request, Response } from 'express';
 import db from '../db.js';
 import { handleAnalyze } from '../ai/index.js';
-import { chatStream, DEFAULT_MODEL } from '../ai/llm.js';
 
 const router = Router();
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e2b';
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 
-// Keywords para detectar qué contexto cargar
 const ACTIVITY_KW = ['actividad', 'actividades', 'entreno', 'entrenamiento', 'deporte', 'tenis', 'tennis', 'surf', 'kite', 'wingfoil', 'windsurf', 'gym', 'carrera', 'running', 'caminata', 'ejercicio', 'sesión', 'sesiones', 'rendimiento', 'velocidad', 'distancia', 'caloría', 'frecuencia cardíaca', 'fc prom', 'bpm', 'sport', 'activity', 'cycling', 'ciclismo', 'natación', 'swimming', 'hiking'];
 const SLEEP_KW = ['sueño', 'dormir', 'dormí', 'descanso', 'sleep', 'horas de sueño', 'profundo', 'rem', 'score sueño', 'calidad del sueño', 'desperté', 'hora de dormir'];
 const WELLNESS_KW = ['estrés', 'estres', 'stress', 'hrv', 'variabilidad', 'bienestar', 'wellness', 'pasos', 'steps', 'recuperación', 'readiness', 'fc reposo', 'frecuencia en reposo'];
@@ -15,7 +18,6 @@ function detectNeeds(message: string): { activities: boolean; sleep: boolean; we
   const needsActivities = ACTIVITY_KW.some(kw => lower.includes(kw));
   const needsSleep = SLEEP_KW.some(kw => lower.includes(kw));
   const needsWellness = WELLNESS_KW.some(kw => lower.includes(kw));
-  // Si no se detectó nada específico, traer todo (primera pregunta genérica)
   const anyDetected = needsActivities || needsSleep || needsWellness;
   return {
     activities: !anyDetected || needsActivities,
@@ -94,7 +96,6 @@ function buildContext(needs: ReturnType<typeof detectNeeds>): string {
   return sections.join('\n\n');
 }
 
-// Valida que el nombre de modelo sea seguro (solo chars válidos de Ollama)
 function isValidModelName(name: string): boolean {
   return typeof name === 'string' && /^[a-zA-Z0-9._:\-/]+$/.test(name) && name.length < 100;
 }
@@ -106,7 +107,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     return;
   }
 
-  const model = (requestedModel && isValidModelName(requestedModel)) ? requestedModel : DEFAULT_MODEL;
+  const model = (requestedModel && isValidModelName(requestedModel)) ? requestedModel : OLLAMA_MODEL;
 
   const lastUser = [...messages].reverse().find(m => m.role === 'user');
   console.log(`[ai] modelo: ${model}`);
@@ -117,22 +118,31 @@ router.post('/chat', async (req: Request, res: Response) => {
 
 ${context ? `Datos del usuario:\n${context}` : 'Aún no hay datos disponibles en la base de datos.'}`;
 
-  let groqRes: globalThis.Response;
+  let ollamaRes: globalThis.Response;
   try {
-    groqRes = await chatStream(
-      [{ role: 'system', content: systemPrompt }, ...messages],
-      model
-    );
+    ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, ...messages],
+        stream: true,
+      }),
+    });
   } catch (err: any) {
-    console.error('[ai] Error llamando a Groq:', err.message);
-    res.status(503).json({ error: err.message });
+    console.error('[ai] No se pudo conectar a Ollama:', err.message);
+    res.status(503).json({ error: 'Ollama no está corriendo. Inicialo con: ollama serve' });
     return;
   }
 
-  if (!groqRes.ok) {
-    const errText = await groqRes.text();
-    console.error('[ai] Groq error:', errText);
-    res.status(502).json({ error: `Error del LLM (${groqRes.status}): ${errText.slice(0, 200)}` });
+  if (!ollamaRes.ok) {
+    const errText = await ollamaRes.text();
+    console.error('[ai] Ollama error:', errText);
+    if (ollamaRes.status === 404 || errText.includes('not found')) {
+      res.status(502).json({ error: `Modelo "${model}" no encontrado. Descargalo con: ollama pull ${model}` });
+    } else {
+      res.status(502).json({ error: `Error de Ollama: ${errText.slice(0, 200)}` });
+    }
     return;
   }
 
@@ -140,7 +150,7 @@ ${context ? `Datos del usuario:\n${context}` : 'Aún no hay datos disponibles en
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
-  const reader = groqRes.body!.getReader();
+  const reader = ollamaRes.body!.getReader();
   const decoder = new TextDecoder();
 
   try {
@@ -148,20 +158,15 @@ ${context ? `Datos del usuario:\n${context}` : 'Aún no hay datos disponibles en
       const { done, value } = await reader.read();
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
-      // Groq usa formato OpenAI SSE: "data: {...}\n\n"
       for (const line of chunk.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
-        const payload = trimmed.slice(6);
-        if (payload === '[DONE]') {
-          res.write('data: [DONE]\n\n');
-          continue;
-        }
+        if (!line.trim()) continue;
         try {
-          const json = JSON.parse(payload);
-          const content = json.choices?.[0]?.delta?.content;
-          if (content) {
-            res.write(`data: ${JSON.stringify({ token: content })}\n\n`);
+          const json = JSON.parse(line);
+          if (json.message?.content) {
+            res.write(`data: ${JSON.stringify({ token: json.message.content })}\n\n`);
+          }
+          if (json.done) {
+            res.write('data: [DONE]\n\n');
           }
         } catch { /* skip */ }
       }
@@ -173,7 +178,6 @@ ${context ? `Datos del usuario:\n${context}` : 'Aún no hay datos disponibles en
   }
 });
 
-// POST /api/ai/analyze — Unified contextual analysis endpoint
 router.post('/analyze', handleAnalyze);
 
 export default router;
