@@ -24,18 +24,19 @@ App de fitness personal. Dashboard de datos biométricos: sueño, HRV, actividad
 - `components/DynamicChart.tsx` → Chart genérico (bars/lines) configurado por `chartMetrics` del grupo
 - `components/SportGroupEditor.tsx` → Modal para crear/editar/reordenar grupos de deportes (con selector de deportes agrupado por categoría)
 - `components/InsightsCard.tsx` → Tarjetas de recomendaciones del motor de insights
-- `context/AuthContext.tsx` → Auth global con `login`, `logout`, `enterDemoMode`
+- `context/AuthContext.tsx` → Auth global con `login`, `register`, `logout`. Sin demo mode — auth real con session cookie
 - `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`, `useTrainingPlans`, `useTrainingPlan`, `useWorkout`, `useExerciseHistory`
-- `api/client.ts` → `apiFetch()` helper
+- `api/client.ts` → `apiFetch()` helper — incluye `credentials: 'include'` para cookies de sesión
 
 ### Backend (`server/src/`)
-- `index.ts` → Express server. Carga `.env` con path explícito desde `server/.env`. En producción sirve `/dist/` estático + SPA fallback
-- `garmin.ts` → Wrapper sobre la librería Garmin. Gestiona sesión OAuth (**legacy — se eliminará en Fase 3**)
-- `sync.ts` → Sync de datos: `syncInitial()` (30 días) y `syncToday()` (periódico cada 15min) (**legacy**)
-- `db.ts` → SQLite con tables: `activities`, `sleep`, `hrv`, `stress`, `daily_summary`, `sync_log`, `weekly_plan`, `sport_groups`, `training_plans`, `training_sessions`, `training_exercises`, `workout_logs`, `workout_sets`
-- `routes/` → `auth`, `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`, `ai`, `training`
-- `insights/` → Motor de recomendaciones: `stats.ts` (estadísticas), `rules.ts` (8 reglas), `index.ts` (orquestador)
-- `ai/` → `prompts.ts` (system prompts), `context.ts` (context builders), `index.ts` (orquestador analyze), **`llm.ts` (abstracción LLM → Groq)**
+- `index.ts` → Express server. Carga `.env` con path explícito desde `server/.env`. Incluye `cookie-parser`. En producción sirve `/dist/` estático + SPA fallback
+- `garmin.ts` → Wrapper sobre la librería Garmin (**legacy — se eliminará en Fase 3**)
+- `sync.ts` → Sync de datos Garmin (**legacy**)
+- `db.ts` → SQLite. Tablas de datos + tablas de auth: `users`, `sessions`, `invite_codes`
+- `routes/` → `auth` (status), `users` (register/login/logout/me/invite), `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`, `ai`, `training`
+- `middleware/auth.ts` → `requireAuth` middleware — lee cookie `drift_session`, valida contra tabla `sessions`, setea `req.userId` y `req.username`
+- `insights/` → Motor de recomendaciones: `stats.ts`, `rules.ts`, `index.ts`
+- `ai/` → `prompts.ts`, `context.ts`, `index.ts`, `llm.ts` (abstracción Groq)
 
 ## Variables de entorno (server/.env)
 
@@ -113,17 +114,47 @@ Siempre mostrar como `Xh Xm`, nunca como decimal (6.9h → 6h 54m):
 `${Math.floor(hours)}h ${Math.round((hours % 1) * 60)}m`
 ```
 
-## Auth — estado actual (Garmin, legacy)
+## Auth — sistema actual (Fase 1 completada)
 
-Garmin bloqueó el SSO programático con Cloudflare WAF (marzo 2026). El login requiere un browser real via `npx tsx server/src/get-tokens.ts`. Flujo: abre Chrome → login manual → captura ticket OAuth → guarda tokens → server los restaura al reiniciar.
+Auth con username/password + session cookies. Sin Garmin, sin demo mode.
 
-**Esto se eliminará en Fase 3 del MVP.** En la versión final el auth será username/password con invite codes.
+### Rutas `/api/users`
 
-## Auth UX (actual)
+| Método | Path | Descripción |
+|--------|------|-------------|
+| POST | `/register` | Registrar usuario. Sin invite code si no hay usuarios (bootstrap). Con invite code si ya existen usuarios |
+| POST | `/login` | Login → setea cookie `drift_session` (httpOnly, 30 días) |
+| POST | `/logout` | Borra la sesión de la DB y limpia la cookie |
+| GET | `/me` | Retorna `{userId, username}` del usuario autenticado |
+| GET | `/has-users` | `{hasUsers: bool}` — para UI de registro (saber si pedir invite code) |
+| POST | `/invite` | Genera un invite code (requiere auth) |
 
-- Sidebar desktop: indicador estado + botón Logout
-- Header: badge clickeable (desktop) + icono logout (mobile)
-- `AuthContext.logout()` llama POST `/api/auth/logout` y limpia estado
+### Ruta `/api/auth`
+
+| Método | Path | Descripción |
+|--------|------|-------------|
+| GET | `/status` | `{authenticated: bool}` — verifica si hay sesión activa via cookie |
+
+### Flujo de sesión
+
+1. `AuthContext` hace GET `/api/auth/status` al cargar → si autenticado, hace GET `/api/users/me` para obtener username
+2. `login()` → POST `/api/users/login` → backend setea cookie → `AuthContext` actualiza estado
+3. `logout()` → POST `/api/users/logout` → backend borra sesión y cookie
+4. `apiFetch()` incluye `credentials: 'include'` → cookies viajan en todas las requests
+
+### Bootstrap (primer usuario)
+
+Si la DB no tiene usuarios, el formulario de registro no pide invite code. El primer usuario puede crear su cuenta directamente.
+
+### Invite codes
+
+Para invitar a otros usuarios: POST `/api/users/invite` (requiere estar autenticado). Devuelve un código de 8 caracteres (ej: `A1B2C3D4`).
+
+### Auth UX
+
+- Sidebar desktop: muestra username + botón Logout
+- Header: badge "CONECTADO" (desktop) + icono logout (mobile)
+- `AuthContext.logout()` llama POST `/api/users/logout` y limpia estado local
 
 ## Deploy (Render)
 
@@ -330,8 +361,8 @@ Plan completo en `MVP_PLAN.md`. Fases:
 | Fase | Estado | Descripción |
 |------|--------|-------------|
 | 0: AI → Groq | ✅ Completada | `llm.ts` abstrae Groq. AI Coach y Training Plans funcionan con Groq |
-| 1: Auth multi-user | 🔄 En curso | username/password + sessions + invite codes |
-| 2: Capacitor + HealthKit | Pendiente | Wrap del SPA como app iOS, sync con Apple Health |
+| 1: Auth multi-user | ✅ Completada | username/password + sessions + invite codes. Sin demo mode |
+| 2: Capacitor + HealthKit | 🔄 En curso | Wrap del SPA como app iOS, sync con Apple Health |
 | 3: Limpiar Garmin | Pendiente | Borrar garmin.ts, sync.ts, get-tokens.ts y deps |
 | 4: Testing en iPhone | Pendiente | Dev signing gratuito, expira cada 7 días |
 | 5: App Store | Pendiente | Requiere pagar $99/año Apple Developer |
@@ -351,3 +382,5 @@ Plan completo en `MVP_PLAN.md`. Fases:
 4. Hay ~24 actividades: 14 windsurfing/kiteboarding, 9 tenis, 1 gym (datos reales del usuario)
 5. **Sleep queries**: siempre filtrar `WHERE score IS NOT NULL` — el sync crea la fila del día siguiente con score null
 6. **Groq rate limit**: 30 RPM en free tier. Para uso personal es suficiente.
+7. **No hay demo mode** — fue eliminado en Fase 1. El único acceso es con cuenta registrada.
+8. **CORS en Capacitor**: cuando se agregue la app iOS, hay que permitir el origin `capacitor://localhost` en el servidor.
