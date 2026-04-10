@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../api/client';
-import type { TrainingSession } from './useTrainingPlan';
 
 export interface WorkoutSet {
   id?: number;
