@@ -433,12 +433,10 @@ async function ensurePlugin() {
 // Uso: await ensurePlugin(); _hkPlugin.requestAuthorization(...)
 ```
 
-### Express body limit para sync — PENDIENTE DE DEPLOY
+### Express body limit para sync
 
 El payload de 90 días de HealthKit supera el límite default de Express (100kb) → error 413.
-
-**Fix ya aplicado en código** (`server/src/index.ts`): `express.json({ limit: '10mb' })`.
-**Pendiente**: hacer commit y push a GitHub para que Render lo deploje. Sin eso, la sync falla con 413 en producción.
+Fix: `express.json({ limit: '10mb' })` en `server/src/index.ts`.
 
 ### UI en iPhone — fixes aplicados
 
