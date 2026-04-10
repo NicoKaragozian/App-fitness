@@ -12,8 +12,12 @@ import { PlanDetail } from './pages/PlanDetail';
 import { ActiveWorkout } from './pages/ActiveWorkout';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useHealthKitSync } from './hooks/useHealthKitSync';
 
 function AuthenticatedLayout() {
+  // Auto-sync HealthKit al abrir la app (solo iOS nativo, no-op en web)
+  useHealthKitSync();
+
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />

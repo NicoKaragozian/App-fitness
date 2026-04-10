@@ -25,15 +25,17 @@ App de fitness personal. Dashboard de datos biométricos: sueño, HRV, actividad
 - `components/SportGroupEditor.tsx` → Modal para crear/editar/reordenar grupos de deportes (con selector de deportes agrupado por categoría)
 - `components/InsightsCard.tsx` → Tarjetas de recomendaciones del motor de insights
 - `context/AuthContext.tsx` → Auth global con `login`, `register`, `logout`. Sin demo mode — auth real con session cookie
-- `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`, `useTrainingPlans`, `useTrainingPlan`, `useWorkout`, `useExerciseHistory`
-- `api/client.ts` → `apiFetch()` helper — incluye `credentials: 'include'` para cookies de sesión
+- `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`, `useTrainingPlans`, `useTrainingPlan`, `useWorkout`, `useExerciseHistory`, `useHealthKitSync`
+- `native/healthkit.ts` → wrapper sobre `@perfood/capacitor-healthkit`. No-op en web/Android.
+- `api/client.ts` → `apiFetch()` helper — soporta `VITE_API_URL` para builds Capacitor (URLs absolutas)
 
 ### Backend (`server/src/`)
 - `index.ts` → Express server. Carga `.env` con path explícito desde `server/.env`. Incluye `cookie-parser`. En producción sirve `/dist/` estático + SPA fallback
 - `garmin.ts` → Wrapper sobre la librería Garmin (**legacy — se eliminará en Fase 3**)
 - `sync.ts` → Sync de datos Garmin (**legacy**)
 - `db.ts` → SQLite. Tablas de datos + tablas de auth: `users`, `sessions`, `invite_codes`
-- `routes/` → `auth` (status), `users` (register/login/logout/me/invite), `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`, `ai`, `training`
+- `routes/` → `auth` (status), `users` (register/login/logout/me/invite), `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`, `ai`, `training`, `healthkit`
+- `healthkit-mapper.ts` → mapeo `HKWorkoutActivityType` (rawValue int) → `sport_type` string + helpers de sleep score
 - `middleware/auth.ts` → `requireAuth` middleware — lee cookie `drift_session`, valida contra tabla `sessions`, setea `req.userId` y `req.username`
 - `insights/` → Motor de recomendaciones: `stats.ts`, `rules.ts`, `index.ts`
 - `ai/` → `prompts.ts`, `context.ts`, `index.ts`, `llm.ts` (abstracción Groq)
@@ -168,11 +170,11 @@ Para invitar a otros usuarios: POST `/api/users/invite` (requiere estar autentic
 
 | Tabla | Clave | Notas |
 |-------|-------|-------|
-| `activities` | `garmin_id` | `category` es legacy — la agrupación real viene de `sport_groups` |
-| `sleep` | `date` = calendarDate de Garmin | offset -1 día vs query date; siempre filtrar `WHERE score IS NOT NULL` |
-| `hrv` | `date` = dateStr (con offset aplicado en sync) | |
-| `stress` | `date` = dateStr | |
-| `daily_summary` | `date` = dateStr | `body_battery` siempre null (API bloqueada) |
+| `activities` | `garmin_id` | `category` es legacy. `garmin_id` es `hk_<uuid>` para actividades de HealthKit. `source` = `'garmin'` o `'healthkit'` |
+| `sleep` | `date` | `source` = `'garmin'` o `'healthkit'`. HealthKit no tiene etapas (deep/light/rem). `score` es estimado si viene de HK |
+| `hrv` | `date` = dateStr | solo Garmin por ahora (HealthKit no tiene HRV en este plugin) |
+| `stress` | `date` = dateStr | solo Garmin |
+| `daily_summary` | `date` = dateStr | `body_battery` siempre null. `resting_hr` viene de HealthKit. `source` = `'garmin'` o `'healthkit'` |
 | `weekly_plan` | id autoincrement | `day`, `sport`, `detail`, `completed` |
 | `sport_groups` | `id` TEXT (slug) | `sport_types`, `metrics`, `chart_metrics` son JSON arrays |
 | `training_plans` | id autoincrement | `title`, `objective`, `frequency`, `status` (active/archived), `ai_model`, `raw_ai_response` |
@@ -331,6 +333,64 @@ curl -X POST http://localhost:3001/api/training/generate \
   -d '{"goal":"Plan de fuerza funcional para complementar deportes acuáticos","model":"llama-3.3-70b-versatile"}'
 ```
 
+## Apple HealthKit (Fase 2 — completada)
+
+Plugin: `@perfood/capacitor-healthkit` v1.3.2
+
+### Archivos
+- `src/native/healthkit.ts` → wrapper. `requestHealthKitPermissions()` + `fetchHealthKitData(days)`. No-op en web.
+- `src/hooks/useHealthKitSync.ts` → hook que auto-sincroniza al abrir la app. Respeta cooldown de 12h via localStorage (`drift_hk_last_sync`).
+- `server/src/healthkit-mapper.ts` → `hkActivityToSportType(activityId)` convierte `HKWorkoutActivityType` rawValue a sport_type string. `aggregateSleepByNight()` agrupa samples HK por noche.
+- `server/src/routes/healthkit.ts` → `POST /api/healthkit/sync` (requiere auth). Recibe `{workouts, sleep, restingHR, steps}`, inserta en DB.
+- `capacitor.config.ts` → `appId: 'com.drift.app'`, `appName: 'DRIFT'`, `webDir: 'dist'`
+- `.env.capacitor` → template con `VITE_API_URL=https://drift.onrender.com`
+
+### Datos que devuelve el plugin
+
+| Tipo | Campos clave | Quirks |
+|------|-------------|--------|
+| Workouts | `uuid`, `startDate`, `endDate`, `duration` (HORAS), `workoutActivityId` (int), `totalEnergyBurned` (kcal), `totalDistance` (metros) | `duration` en horas — convertir a minutos: `× 60` |
+| Sleep | `uuid`, `startDate`, `endDate`, `duration` (HORAS), `sleepState` (`'InBed'` \| `'Asleep'`) | Sin etapas (deep/light/rem). Score estimado en mapper. |
+| RestingHR | `uuid`, `startDate`, `endDate`, `duration`, `value`, `unitName` | Un sample por día aprox. |
+| Steps | idem RestingHR | Múltiples samples por día — sumar por fecha |
+
+### Permisos iOS requeridos (Info.plist)
+
+```xml
+<key>NSHealthShareUsageDescription</key>
+<string>DRIFT lee tus actividades, sueño y métricas de salud para analizar tu rendimiento.</string>
+<key>NSHealthUpdateUsageDescription</key>
+<string>DRIFT no escribe datos en Apple Health.</string>
+```
+
+Estos se agregan cuando se configura el proyecto iOS en Xcode (Fase 4).
+
+### Build para iOS (resumen de pasos)
+
+```bash
+# 1. Copiar variables de entorno para Capacitor
+cp .env.capacitor .env.local
+
+# 2. Build frontend
+npm run build
+
+# 3. Sync con iOS
+npx cap sync ios
+
+# 4. Abrir Xcode
+npx cap open ios
+# → Agregar HealthKit capability en Xcode
+# → Build & run en iPhone
+```
+
+### Variables de entorno para Capacitor
+
+```
+VITE_API_URL=https://drift.onrender.com  # en .env.local
+```
+
+`apiFetch()` usa `(import.meta.env.VITE_API_URL || '') + '/api'` — en web es `/api`, en iOS es la URL absoluta.
+
 ## Motor de Insights (inferencia local)
 
 Motor de recomendaciones en `server/src/insights/` — puro TypeScript, sin dependencias ML.
@@ -362,7 +422,7 @@ Plan completo en `MVP_PLAN.md`. Fases:
 |------|--------|-------------|
 | 0: AI → Groq | ✅ Completada | `llm.ts` abstrae Groq. AI Coach y Training Plans funcionan con Groq |
 | 1: Auth multi-user | ✅ Completada | username/password + sessions + invite codes. Sin demo mode |
-| 2: Capacitor + HealthKit | 🔄 En curso | Wrap del SPA como app iOS, sync con Apple Health |
+| 2: Capacitor + HealthKit | ✅ Completada | `capacitor.config.ts`, `native/healthkit.ts`, `useHealthKitSync`, `routes/healthkit.ts`, CORS para `capacitor://localhost` |
 | 3: Limpiar Garmin | Pendiente | Borrar garmin.ts, sync.ts, get-tokens.ts y deps |
 | 4: Testing en iPhone | Pendiente | Dev signing gratuito, expira cada 7 días |
 | 5: App Store | Pendiente | Requiere pagar $99/año Apple Developer |
@@ -383,4 +443,7 @@ Plan completo en `MVP_PLAN.md`. Fases:
 5. **Sleep queries**: siempre filtrar `WHERE score IS NOT NULL` — el sync crea la fila del día siguiente con score null
 6. **Groq rate limit**: 30 RPM en free tier. Para uso personal es suficiente.
 7. **No hay demo mode** — fue eliminado en Fase 1. El único acceso es con cuenta registrada.
-8. **CORS en Capacitor**: cuando se agregue la app iOS, hay que permitir el origin `capacitor://localhost` en el servidor.
+8. **CORS en Capacitor**: ya configurado — `capacitor://localhost` está en la lista de orígenes permitidos.
+9. **Build para iOS**: copiar `.env.capacitor` a `.env.local` antes de `npm run build`, luego `npx cap sync ios`.
+10. **HealthKit sync**: automático al abrir la app (hook `useHealthKitSync` en `AuthenticatedLayout`). Re-sincroniza cada 12h máximo. Los últimos 90 días de datos.
+11. **`garmin_id` para HealthKit**: se prefija con `hk_` (`hk_<uuid>`) para evitar conflictos con Garmin IDs en la columna UNIQUE.

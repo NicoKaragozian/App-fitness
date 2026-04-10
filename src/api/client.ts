@@ -1,4 +1,6 @@
-const BASE = '/api';
+// En builds de Capacitor, VITE_API_URL apunta al backend en Render (URL absoluta)
+// En web/dev, queda vacío y '/api' funciona vía el proxy de Vite
+const BASE = (import.meta.env.VITE_API_URL || '') + '/api';
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {

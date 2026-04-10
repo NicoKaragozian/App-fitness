@@ -20,6 +20,7 @@ import insightsRoutes from './routes/insights.js';
 import sportGroupsRoutes from './routes/sport-groups.js';
 import aiRoutes from './routes/ai.js';
 import trainingRoutes from './routes/training.js';
+import healthkitRoutes from './routes/healthkit.js';
 import { startPeriodicSync, syncInitial } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,9 +28,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-if (process.env.NODE_ENV !== 'production') {
-  app.use(cors({ origin: true, credentials: true }));
-}
+// Orígenes permitidos: dev local + Capacitor iOS
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'capacitor://localhost',   // origen de la app iOS nativa
+  'ionic://localhost',       // fallback por si acaso
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    // Sin origin → curl/Postman/producción SPA → permitir
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin) || process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -44,6 +61,7 @@ app.use('/api/insights', insightsRoutes);
 app.use('/api/sport-groups', sportGroupsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/training', trainingRoutes);
+app.use('/api/healthkit', healthkitRoutes);
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

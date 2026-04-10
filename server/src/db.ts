@@ -181,6 +181,26 @@ try {
   db.exec('ALTER TABLE training_exercises ADD COLUMN description TEXT');
 } catch { /* ya existe, ignorar */ }
 
+// Migration: columna source en activities (healthkit vs garmin)
+try {
+  db.exec("ALTER TABLE activities ADD COLUMN source TEXT DEFAULT 'garmin'");
+} catch { /* ya existe */ }
+
+// Migration: columna source en sleep
+try {
+  db.exec("ALTER TABLE sleep ADD COLUMN source TEXT DEFAULT 'garmin'");
+} catch { /* ya existe */ }
+
+// Migration: columna resting_hr en daily_summary
+try {
+  db.exec("ALTER TABLE daily_summary ADD COLUMN resting_hr INTEGER");
+} catch { /* ya existe */ }
+
+// Migration: columna source en daily_summary
+try {
+  db.exec("ALTER TABLE daily_summary ADD COLUMN source TEXT DEFAULT 'garmin'");
+} catch { /* ya existe */ }
+
 // Migration: vincular weekly_plan con training_plans/sessions
 try {
   db.exec('ALTER TABLE weekly_plan ADD COLUMN plan_id INTEGER');
