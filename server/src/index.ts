@@ -25,19 +25,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Orígenes permitidos: dev local + Capacitor iOS
-const ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
-  'capacitor://localhost',   // origen de la app iOS nativa
-  'ionic://localhost',       // fallback por si acaso
-];
 app.use(cors({
   origin: (origin, callback) => {
-    // Sin origin → curl/Postman/producción SPA → permitir
+    // Sin origin → mismo dominio / curl / Postman → permitir
     if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin) || process.env.NODE_ENV !== 'production') {
+    // Capacitor iOS
+    if (origin === 'capacitor://localhost' || origin === 'ionic://localhost') {
+      return callback(null, true);
+    }
+    // En dev: permitir cualquier localhost
+    if (process.env.NODE_ENV !== 'production' && origin.startsWith('http://localhost')) {
+      return callback(null, true);
+    }
+    // En producción: el frontend está en el mismo dominio (onrender.com)
+    // Las requests del SPA llegan con el origin del propio servidor → permitir
+    if (process.env.NODE_ENV === 'production' && origin.endsWith('.onrender.com')) {
       return callback(null, true);
     }
     callback(new Error('Not allowed by CORS'));
