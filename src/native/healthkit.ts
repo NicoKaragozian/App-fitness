@@ -5,15 +5,14 @@
 import { Capacitor } from '@capacitor/core';
 
 // Importación dinámica para evitar errores en web/Android
-let CapacitorHealthkit: typeof import('@perfood/capacitor-healthkit').CapacitorHealthkit | null = null;
+// IMPORTANTE: nunca retornar el plugin proxy desde una función async —
+// JS trata cualquier objeto con .then como thenable y llama CapacitorHealthkit.then() nativo
+let _hkPlugin: typeof import('@perfood/capacitor-healthkit').CapacitorHealthkit | null = null;
 
-async function getPlugin() {
-  if (!Capacitor.isNativePlatform()) return null;
-  if (!CapacitorHealthkit) {
-    const mod = await import('@perfood/capacitor-healthkit');
-    CapacitorHealthkit = mod.CapacitorHealthkit;
-  }
-  return CapacitorHealthkit;
+async function ensurePlugin(): Promise<void> {
+  if (_hkPlugin || !Capacitor.isNativePlatform()) return;
+  const mod = await import('@perfood/capacitor-healthkit');
+  _hkPlugin = mod.CapacitorHealthkit;
 }
 
 export interface HKWorkout {
@@ -51,27 +50,27 @@ export interface HealthKitData {
   steps: HKQuantity[];
 }
 
+// Keys para requestAuthorization → usa getTypes() del plugin Swift
+// 'activity' cubre workoutType + sleepAnalysis
+const AUTH_READ_TYPES = ['activity', 'steps', 'restingHeartRate'];
+
+// Keys para queryHKitSampleType → usa getSampleType() del plugin Swift
 const SAMPLE_NAMES = {
-  WORKOUT_TYPE: 'HKWorkoutTypeIdentifier',
-  SLEEP_ANALYSIS: 'HKCategoryTypeIdentifierSleepAnalysis',
-  RESTING_HEART_RATE: 'HKQuantityTypeIdentifierRestingHeartRate',
-  STEP_COUNT: 'HKQuantityTypeIdentifierStepCount',
+  WORKOUT_TYPE: 'workoutType',
+  SLEEP_ANALYSIS: 'sleepAnalysis',
+  RESTING_HEART_RATE: 'restingHeartRate',
+  STEP_COUNT: 'stepCount',
 };
 
 /** Pide permisos de HealthKit. Devuelve true si el usuario los concedió. */
 export async function requestHealthKitPermissions(): Promise<boolean> {
-  const plugin = await getPlugin();
-  if (!plugin) return false;
+  await ensurePlugin();
+  if (!_hkPlugin) return false;
 
   try {
-    await plugin.requestAuthorization({
+    await _hkPlugin.requestAuthorization({
       all: [],
-      read: [
-        SAMPLE_NAMES.WORKOUT_TYPE,
-        SAMPLE_NAMES.SLEEP_ANALYSIS,
-        SAMPLE_NAMES.RESTING_HEART_RATE,
-        SAMPLE_NAMES.STEP_COUNT,
-      ],
+      read: AUTH_READ_TYPES,
       write: [],
     });
     return true;
@@ -83,8 +82,8 @@ export async function requestHealthKitPermissions(): Promise<boolean> {
 
 /** Obtiene datos de HealthKit de los últimos N días. */
 export async function fetchHealthKitData(days = 90): Promise<HealthKitData> {
-  const plugin = await getPlugin();
-  if (!plugin) {
+  await ensurePlugin();
+  if (!_hkPlugin) {
     return { workouts: [], sleep: [], restingHR: [], steps: [] };
   }
 
@@ -92,25 +91,25 @@ export async function fetchHealthKitData(days = 90): Promise<HealthKitData> {
   const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   const [workoutRes, sleepRes, hrRes, stepsRes] = await Promise.allSettled([
-    plugin.queryHKitSampleType({
+    _hkPlugin.queryHKitSampleType({
       sampleName: SAMPLE_NAMES.WORKOUT_TYPE,
       startDate,
       endDate,
       limit: 500,
     }),
-    plugin.queryHKitSampleType({
+    _hkPlugin.queryHKitSampleType({
       sampleName: SAMPLE_NAMES.SLEEP_ANALYSIS,
       startDate,
       endDate,
       limit: 2000,
     }),
-    plugin.queryHKitSampleType({
+    _hkPlugin.queryHKitSampleType({
       sampleName: SAMPLE_NAMES.RESTING_HEART_RATE,
       startDate,
       endDate,
       limit: 200,
     }),
-    plugin.queryHKitSampleType({
+    _hkPlugin.queryHKitSampleType({
       sampleName: SAMPLE_NAMES.STEP_COUNT,
       startDate,
       endDate,

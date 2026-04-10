@@ -23,6 +23,7 @@ export function useHealthKitSync() {
   });
 
   useEffect(() => {
+    console.log('[HealthKit] isNative:', Capacitor.isNativePlatform(), 'platform:', Capacitor.getPlatform());
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'ios') {
       setState(s => ({ ...s, status: 'unsupported' }));
       return;
@@ -45,7 +46,9 @@ export function useHealthKitSync() {
   async function syncHealthKit() {
     setState(s => ({ ...s, status: 'syncing', error: null }));
     try {
+        console.log('[HealthKit] Requesting permissions...');
       const granted = await requestHealthKitPermissions();
+      console.log('[HealthKit] Permissions granted:', granted);
       if (!granted) {
         setState({ status: 'error', lastSync: null, error: 'Permisos de HealthKit denegados' });
         return;

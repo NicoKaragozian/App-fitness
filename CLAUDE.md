@@ -160,11 +160,16 @@ Para invitar a otros usuarios: POST `/api/users/invite` (requiere estar autentic
 
 ## Deploy (Render)
 
-- Build: `npm install --legacy-peer-deps && npm run build && cd server && npm install`
-- Start: `cd server && npx tsx src/index.ts`
+- **URL de producción**: `https://app-garmin.onrender.com`
+- **Build**: `npm install --legacy-peer-deps --include=dev && npm run build && cd server && npm install`
+  - ⚠️ El `--include=dev` es crítico — Render tiene `NODE_ENV=production` y sin esa flag no instala vite/tsc
+- **Start**: `cd server && npx tsx src/index.ts`
+- **Instance type**: Starter ($7/mes) — 512 MB RAM, 0.5 CPU, suficiente para uso personal
+- **Disk**: `/data`, 1 GB, $0.25/mes → total ~$7.25/mes
 - DB persistida en `/data/drift.db` via Render Disk
-- Env vars necesarias: `NODE_ENV=production`, `DB_PATH=/data/drift.db`, `GROQ_API_KEY=...`, `LLM_MODEL=llama-3.3-70b-versatile`
-- GitHub repo: privado, nombre `drift`
+- Env vars en Render: `NODE_ENV=production`, `DB_PATH=/data/drift.db`, `GROQ_API_KEY=...`, `LLM_MODEL=llama-3.3-70b-versatile`
+- GitHub repo: privado, nombre `App-garmin` (NicoKaragozian/App-garmin)
+- CORS: permite `*.onrender.com` + `capacitor://localhost` + localhost en dev
 
 ## DB — resumen de tablas
 
@@ -369,7 +374,7 @@ Estos se agregan cuando se configura el proyecto iOS en Xcode (Fase 4).
 
 ```bash
 # 1. Copiar variables de entorno para Capacitor
-cp .env.capacitor .env.local
+cp .env.capacitor .env.local   # apunta a https://app-garmin.onrender.com
 
 # 2. Build frontend
 npm run build
@@ -379,17 +384,67 @@ npx cap sync ios
 
 # 4. Abrir Xcode
 npx cap open ios
-# → Agregar HealthKit capability en Xcode
-# → Build & run en iPhone
+# → Signing & Capabilities: Team = Nicolas Karagozian (Personal Team)
+# → Bundle Identifier: com.driftai.app
+# → HealthKit capability ya agregada
+# → Build & run en iPhone (Cmd+R)
 ```
 
 ### Variables de entorno para Capacitor
 
 ```
-VITE_API_URL=https://drift.onrender.com  # en .env.local
+VITE_API_URL=https://app-garmin.onrender.com  # en .env.local (y .env.capacitor)
 ```
 
 `apiFetch()` usa `(import.meta.env.VITE_API_URL || '') + '/api'` — en web es `/api`, en iOS es la URL absoluta.
+
+### Estado del plugin HealthKit (RESUELTO)
+
+`@perfood/capacitor-healthkit` v1.3.2 **no soporta SPM** — se instala vía CocoaPods. El setup está completo y funcionando.
+
+**Setup actual (ya aplicado):**
+- `ios/App/Podfile` con `pod 'PerfoodCapacitorHealthkit', :path => '../../node_modules/@perfood/capacitor-healthkit'`
+- `ios/App/App.xcworkspace` (usar workspace, no xcodeproj)
+- `ios/App/App/AppDelegate.swift` tiene `import PerfoodCapacitorHealthkit` — **crítico con `use_frameworks!`**
+- `ios/App/App/capacitor.config.json` tiene `"packageClassList": ["CapacitorHealthkitPlugin"]`
+
+**CocoaPods se instala con brew** (`brew install cocoapods`), no con gem. Después: `cd ios/App && pod install`.
+
+### Bug crítico resuelto: "not implemented on ios"
+
+El proxy de Capacitor (`registerPlugin`) NO maneja `.then` de forma especial — devuelve un método proxy que llama al nativo. Cuando JS hace `await funcionAsync()` y esa función retorna el plugin proxy, JS lo trata como thenable, llama `.then()` nativo → "not implemented".
+
+**Regla**: **nunca retornar el plugin proxy desde una función `async`**. En su lugar, usar una función de inicialización que guarde en una variable de módulo, y acceder al plugin sincrónicamente:
+
+```typescript
+// MAL — JS hace await en el proxy y llama CapacitorHealthkit.then() nativo
+async function getPlugin() {
+  const mod = await import('@perfood/capacitor-healthkit');
+  return mod.CapacitorHealthkit; // ← esto rompe
+}
+
+// BIEN — await solo la inicialización, acceder al plugin sincrónicamente
+let _hkPlugin = null;
+async function ensurePlugin() {
+  if (_hkPlugin) return;
+  const mod = await import('@perfood/capacitor-healthkit');
+  _hkPlugin = mod.CapacitorHealthkit;
+}
+// Uso: await ensurePlugin(); _hkPlugin.requestAuthorization(...)
+```
+
+### Express body limit para sync — PENDIENTE DE DEPLOY
+
+El payload de 90 días de HealthKit supera el límite default de Express (100kb) → error 413.
+
+**Fix ya aplicado en código** (`server/src/index.ts`): `express.json({ limit: '10mb' })`.
+**Pendiente**: hacer commit y push a GitHub para que Render lo deploje. Sin eso, la sync falla con 413 en producción.
+
+### UI en iPhone — fixes aplicados
+
+- `index.html`: `maximum-scale=1.0, user-scalable=no` en viewport para evitar zoom
+- `index.css`: `overflow-x: hidden` en html/body/#root para evitar scroll horizontal
+- `contentInset: 'automatic'` en capacitor.config.ts maneja safe areas del notch
 
 ## Motor de Insights (inferencia local)
 
@@ -423,8 +478,8 @@ Plan completo en `MVP_PLAN.md`. Fases:
 | 0: AI → Groq | ✅ Completada | `llm.ts` abstrae Groq. AI Coach y Training Plans funcionan con Groq |
 | 1: Auth multi-user | ✅ Completada | username/password + sessions + invite codes. Sin demo mode |
 | 2: Capacitor + HealthKit | ✅ Completada | `capacitor.config.ts`, `native/healthkit.ts`, `useHealthKitSync`, `routes/healthkit.ts`, CORS para `capacitor://localhost` |
-| 3: Limpiar Garmin | Pendiente | Borrar garmin.ts, sync.ts, get-tokens.ts y deps |
-| 4: Testing en iPhone | Pendiente | Dev signing gratuito, expira cada 7 días |
+| 3: Limpiar Garmin | 🔄 Parcial | Garmin removido de `index.ts` (sync route + garmin import). Faltan: garmin.ts, sync.ts, get-tokens.ts, routes/sync.ts y sus deps |
+| 4: Testing en iPhone | 🔄 En curso | App instalada en iPhone 17 Pro. Login funciona. HealthKit pendiente (CocoaPods) |
 | 5: App Store | Pendiente | Requiere pagar $99/año Apple Developer |
 
 ### Legacy folder
@@ -443,7 +498,10 @@ Plan completo en `MVP_PLAN.md`. Fases:
 5. **Sleep queries**: siempre filtrar `WHERE score IS NOT NULL` — el sync crea la fila del día siguiente con score null
 6. **Groq rate limit**: 30 RPM en free tier. Para uso personal es suficiente.
 7. **No hay demo mode** — fue eliminado en Fase 1. El único acceso es con cuenta registrada.
-8. **CORS en Capacitor**: ya configurado — `capacitor://localhost` está en la lista de orígenes permitidos.
+8. **CORS en Capacitor**: ya configurado — `capacitor://localhost` + `*.onrender.com` están permitidos.
 9. **Build para iOS**: copiar `.env.capacitor` a `.env.local` antes de `npm run build`, luego `npx cap sync ios`.
 10. **HealthKit sync**: automático al abrir la app (hook `useHealthKitSync` en `AuthenticatedLayout`). Re-sincroniza cada 12h máximo. Los últimos 90 días de datos.
 11. **`garmin_id` para HealthKit**: se prefija con `hk_` (`hk_<uuid>`) para evitar conflictos con Garmin IDs en la columna UNIQUE.
+12. **Plugin HealthKit no compila via SPM**: `@perfood/capacitor-healthkit` necesita CocoaPods. Pendiente instalar CocoaPods y crear Podfile en `ios/App/`.
+13. **Bundle Identifier iOS**: `com.driftai.app` (Personal Team — Nicolas Karagozian). Signing gratuito expira cada 7 días.
+14. **Render build command crítico**: usar `--include=dev` en npm install, sino vite/tsc no se instalan en producción.

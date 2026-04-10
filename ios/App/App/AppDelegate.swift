@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import PerfoodCapacitorHealthkit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
