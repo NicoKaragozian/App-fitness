@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useHealthKitSyncState } from '../../context/HealthKitSyncContext';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'PERFORMANCE', subtitle: 'FLOW GENERAL' },
@@ -26,6 +27,7 @@ export const Header: React.FC = () => {
     ?? (pageTitles[location.pathname] ? location.pathname : '/');
   const page = pageTitles[pathKey] || pageTitles['/'];
   const { isAuthenticated, logout } = useAuth();
+  const hkSync = useHealthKitSyncState();
 
   return (
     <header className="flex items-center justify-between px-4 py-3 lg:px-8 lg:py-5 bg-surface-low/80 backdrop-blur-sm sticky top-0 z-40">
@@ -34,6 +36,32 @@ export const Header: React.FC = () => {
         <h2 className="font-display text-headline-md text-on-surface font-bold tracking-tight">{page.title}</h2>
       </div>
       <div className="flex items-center gap-4">
+        {/* HealthKit sync status badge — solo visible en iOS nativo */}
+        {hkSync.status === 'syncing' && (
+          <div className="hidden md:flex items-center gap-1.5 bg-surface-container px-3 py-1.5 rounded-xl">
+            <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-yellow-400"></div>
+            <span className="font-label text-label-sm text-on-surface-variant">SYNC HK</span>
+          </div>
+        )}
+        {hkSync.status === 'error' && (
+          <button
+            onClick={hkSync.retry}
+            className="hidden md:flex items-center gap-1.5 bg-surface-container px-3 py-1.5 rounded-xl hover:bg-surface-container/70 transition-all"
+            title={hkSync.error ?? 'Error sincronizando HealthKit — tap para reintentar'}
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div>
+            <span className="font-label text-label-sm text-red-400">HK ERROR</span>
+          </button>
+        )}
+        {hkSync.status === 'error' && (
+          <button
+            onClick={hkSync.retry}
+            className="flex md:hidden items-center justify-center w-8 h-8 rounded-xl bg-surface-container"
+            title={hkSync.error ?? 'Error sincronizando HealthKit'}
+          >
+            <span className="text-sm">⚠️</span>
+          </button>
+        )}
         {isAuthenticated && (
           <button
             onClick={logout}

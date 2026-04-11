@@ -40,6 +40,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .finally(() => setChecked(true));
   }, []);
 
+  // Escuchar evento de 401 desde apiFetch — hace logout limpio sin recargar la página
+  useEffect(() => {
+    const handler = () => {
+      setIsAuthenticated(false);
+      setUsername(null);
+    };
+    window.addEventListener('drift:unauthorized', handler);
+    return () => window.removeEventListener('drift:unauthorized', handler);
+  }, []);
+
   const login = useCallback(async (user: string, password: string) => {
     const data = await apiFetch<{ username: string }>('/users/login', {
       method: 'POST',

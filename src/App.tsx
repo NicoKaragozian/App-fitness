@@ -13,12 +13,14 @@ import { ActiveWorkout } from './pages/ActiveWorkout';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useHealthKitSync } from './hooks/useHealthKitSync';
+import { HealthKitSyncContext } from './context/HealthKitSyncContext';
 
 function AuthenticatedLayout() {
   // Auto-sync HealthKit al abrir la app (solo iOS nativo, no-op en web)
-  useHealthKitSync();
+  const syncState = useHealthKitSync();
 
   return (
+    <HealthKitSyncContext.Provider value={syncState}>
     <div className="flex min-h-screen bg-surface">
       <Sidebar />
       <div className="flex-1 lg:ml-48 ml-0 flex flex-col min-h-screen pb-16 lg:pb-0">
@@ -39,6 +41,7 @@ function AuthenticatedLayout() {
         </main>
       </div>
     </div>
+    </HealthKitSyncContext.Provider>
   );
 }
 
