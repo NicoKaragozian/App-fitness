@@ -45,7 +45,13 @@ interface SyncBody {
  * Recibe datos de HealthKit y los persiste en la DB.
  */
 router.post('/sync', requireAuth, (req: AuthRequest, res) => {
+  try {
   const { workouts = [], sleep = [], restingHR = [], steps = [] } = req.body as SyncBody;
+
+  if (!Array.isArray(workouts) || !Array.isArray(sleep) || !Array.isArray(restingHR) || !Array.isArray(steps)) {
+    res.status(400).json({ error: 'Body inválido: workouts/sleep/restingHR/steps deben ser arrays' });
+    return;
+  }
 
   let activitiesInserted = 0;
   let sleepInserted = 0;
@@ -165,6 +171,11 @@ router.post('/sync', requireAuth, (req: AuthRequest, res) => {
       dailySummary: summaryInserted,
     },
   });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error desconocido';
+    console.error('[HealthKit] sync error:', e);
+    res.status(500).json({ error: `Error en sync: ${msg}` });
+  }
 });
 
 export default router;

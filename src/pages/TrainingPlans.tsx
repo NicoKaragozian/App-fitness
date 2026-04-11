@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useTrainingPlans } from '../hooks/useTrainingPlans';
 
 const MODELS = [
-  { id: 'gemma3:4b', label: 'G3 · 4B', badge: 'Rápido' },
-  { id: 'gemma3:12b', label: 'G3 · 12B', badge: 'Potente' },
-  { id: 'gemma4:26b', label: 'G4 · 26B', badge: 'Top' },
-  { id: 'gemma4:e2b', label: 'G4 · E2B', badge: 'Mobile' },
+  { id: 'llama-3.3-70b-versatile', label: 'Llama 70B', badge: 'Recomendado' },
+  { id: 'llama-3.1-8b-instant', label: 'Llama 8B', badge: 'Rápido' },
+  { id: 'mixtral-8x7b-32768', label: 'Mixtral', badge: 'Contexto largo' },
 ];
+
+const TRAINING_MODEL_KEY = 'drift_training_model';
 
 const PRESETS = [
   'Plan de fuerza funcional para complementar deportes acuáticos y raqueta',
@@ -28,7 +29,7 @@ export const TrainingPlans: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState(() =>
-    localStorage.getItem('drift_ai_model') ?? 'gemma3:4b'
+    localStorage.getItem(TRAINING_MODEL_KEY) ?? 'llama-3.3-70b-versatile'
   );
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
@@ -114,7 +115,7 @@ export const TrainingPlans: React.FC = () => {
             {MODELS.map(m => (
               <button
                 key={m.id}
-                onClick={() => { setSelectedModel(m.id); localStorage.setItem('drift_ai_model', m.id); }}
+                onClick={() => { setSelectedModel(m.id); localStorage.setItem(TRAINING_MODEL_KEY, m.id); }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label tracking-wide transition-colors ${
                   selectedModel === m.id
                     ? 'bg-primary text-surface'
