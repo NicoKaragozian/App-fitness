@@ -3,7 +3,7 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import db from '../db.js';
-import { claudeVisionStream, claudeChat, isClaudeConfigured } from '../ai/claude.js';
+import { claudeVisionStream, claudeStreamGenerate, isClaudeConfigured } from '../ai/claude.js';
 import { PROMPTS } from '../ai/prompts.js';
 import { buildNutritionPlanContext } from '../ai/nutrition-context.js';
 import { UPLOAD_DIR } from '../lib/upload-dir.js';
@@ -220,106 +220,133 @@ router.delete('/logs/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// POST /api/nutrition/plans/generate — Generar plan nutricional con Claude
+// POST /api/nutrition/plans/generate — Generar plan nutricional con Claude (streaming SSE)
 router.post('/plans/generate', async (req: Request, res: Response) => {
   if (!isClaudeConfigured()) {
     res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
     return;
   }
 
-  const { strategy, linkedTrainingPlanId } = req.body;
+  const { strategy, linkedTrainingPlanId, dietaryPreferences } = req.body;
+
+  // UPSERT de preferencias dietarias — crea fila si no existe, actualiza si existe
+  if (dietaryPreferences && typeof dietaryPreferences === 'object') {
+    db.prepare(`
+      INSERT INTO user_profile (id, dietary_preferences, updated_at)
+      VALUES (1, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        dietary_preferences = excluded.dietary_preferences,
+        updated_at = excluded.updated_at
+    `).run(JSON.stringify(dietaryPreferences), new Date().toISOString());
+  }
+
   const context = buildNutritionPlanContext(strategy);
-
-  let rawResponse: string;
-  try {
-    rawResponse = await claudeChat(
-      PROMPTS.nutrition_plan,
-      `Generá un plan nutricional con estos datos:\n\n${context}`,
-      4096
-    );
-  } catch (err: any) {
-    console.error('[nutrition] plan generation error:', err.message);
-    res.status(err.status || 502).json({ error: err.message });
-    return;
-  }
-
-  // Parsear JSON — intentar extraer de markdown si es necesario
-  let plan: any;
-  try {
-    let jsonStr = rawResponse.trim();
-    if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
-    }
-    plan = JSON.parse(jsonStr);
-  } catch {
-    console.error('[nutrition] plan parse error, raw:', rawResponse.slice(0, 500));
-    res.status(502).json({ error: 'Claude devolvió una respuesta que no pudo ser parseada como JSON. Intentá de nuevo.' });
-    return;
-  }
-
-  // Validar estructura minima
-  if (!plan.meals || !Array.isArray(plan.meals) || plan.meals.length === 0) {
-    res.status(502).json({ error: 'El plan generado no tiene comidas validas. Intentá de nuevo.' });
-    return;
-  }
-
-  // Guardar en DB con transaccion
   const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
-  const insertPlan = db.transaction(() => {
-    const result = db.prepare(`
-      INSERT INTO nutrition_plans
-        (training_plan_id, title, daily_calories, daily_protein_g, daily_carbs_g, daily_fat_g,
-         strategy, rationale, ai_model, raw_ai_response)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      linkedTrainingPlanId || null,
-      plan.title || 'Plan Nutricional',
-      plan.daily_calories || null,
-      plan.daily_protein_g || null,
-      plan.daily_carbs_g || null,
-      plan.daily_fat_g || null,
-      plan.strategy || strategy || 'maintain',
-      plan.rationale || null,
-      CLAUDE_MODEL,
-      rawResponse,
-    );
 
-    const planId = result.lastInsertRowid;
+  // Streaming con beforeDone: parsear + guardar + enviar plan al completar
+  await claudeStreamGenerate(
+    PROMPTS.nutrition_plan,
+    `Generá un plan nutricional flexible con estos datos:\n\n${context}`,
+    res,
+    {
+      maxTokens: 8192,
+      beforeDone: (rawResponse: string) => {
+        // Parsear JSON
+        let plan: any;
+        try {
+          let jsonStr = rawResponse.trim();
+          if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
+          }
+          plan = JSON.parse(jsonStr);
+        } catch {
+          console.error('[nutrition] plan parse error, raw:', rawResponse.slice(0, 500));
+          res.write(`data: ${JSON.stringify({ error: 'No se pudo parsear la respuesta. Intentá de nuevo.' })}\n\n`);
+          return;
+        }
 
-    const insertMeal = db.prepare(`
-      INSERT INTO nutrition_plan_meals (plan_id, slot, name, description, calories, protein_g, carbs_g, fat_g)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+        if (!plan.meals || !Array.isArray(plan.meals) || plan.meals.length === 0) {
+          res.write(`data: ${JSON.stringify({ error: 'El plan generado no tiene comidas válidas. Intentá de nuevo.' })}\n\n`);
+          return;
+        }
 
-    for (const meal of plan.meals) {
-      insertMeal.run(
-        planId,
-        meal.slot || null,
-        meal.name || null,
-        meal.description || null,
-        meal.calories || null,
-        meal.protein_g || null,
-        meal.carbs_g || null,
-        meal.fat_g || null,
-      );
+        // Guardar en DB con transaccion
+        try {
+          const insertPlan = db.transaction(() => {
+            const result = db.prepare(`
+              INSERT INTO nutrition_plans
+                (training_plan_id, title, daily_calories, daily_protein_g, daily_carbs_g, daily_fat_g,
+                 strategy, rationale, ai_model, raw_ai_response)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              linkedTrainingPlanId || null,
+              plan.title || 'Plan Nutricional',
+              plan.daily_calories || null,
+              plan.daily_protein_g || null,
+              plan.daily_carbs_g || null,
+              plan.daily_fat_g || null,
+              plan.strategy || strategy || 'maintain',
+              plan.rationale || null,
+              CLAUDE_MODEL,
+              rawResponse,
+            );
+
+            const planId = result.lastInsertRowid;
+
+            const insertMeal = db.prepare(`
+              INSERT INTO nutrition_plan_meals (plan_id, slot, option_number, name, description, calories, protein_g, carbs_g, fat_g)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            for (const meal of plan.meals) {
+              insertMeal.run(
+                planId,
+                meal.slot || null,
+                meal.option_number || 1,
+                meal.name || null,
+                meal.description || null,
+                meal.calories || null,
+                meal.protein_g || null,
+                meal.carbs_g || null,
+                meal.fat_g || null,
+              );
+            }
+
+            // UPSERT macro targets del perfil con los del plan generado
+            if (plan.daily_calories && plan.daily_protein_g && plan.daily_carbs_g && plan.daily_fat_g) {
+              db.prepare(`
+                INSERT INTO user_profile (id, daily_calorie_target, daily_protein_g, daily_carbs_g, daily_fat_g, updated_at)
+                VALUES (1, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  daily_calorie_target = excluded.daily_calorie_target,
+                  daily_protein_g = excluded.daily_protein_g,
+                  daily_carbs_g = excluded.daily_carbs_g,
+                  daily_fat_g = excluded.daily_fat_g,
+                  updated_at = excluded.updated_at
+              `).run(
+                plan.daily_calories,
+                plan.daily_protein_g,
+                plan.daily_carbs_g,
+                plan.daily_fat_g,
+                new Date().toISOString(),
+              );
+            }
+
+            return planId;
+          });
+
+          const planId = insertPlan();
+          const saved = db.prepare('SELECT * FROM nutrition_plans WHERE id = ?').get(planId) as any;
+          const meals = db.prepare('SELECT * FROM nutrition_plan_meals WHERE plan_id = ? ORDER BY id').all(planId);
+          // Enviar plan guardado como evento final antes del [DONE]
+          res.write(`data: ${JSON.stringify({ plan: { ...saved, meals }, done: true })}\n\n`);
+        } catch (err: any) {
+          console.error('[nutrition] DB insert error:', err.message);
+          res.write(`data: ${JSON.stringify({ error: 'Error guardando el plan en la base de datos.' })}\n\n`);
+        }
+      },
     }
-
-    return planId;
-  });
-
-  let planId: number | bigint;
-  try {
-    planId = insertPlan();
-  } catch (err: any) {
-    console.error('[nutrition] DB insert error:', err.message);
-    res.status(500).json({ error: 'Error guardando el plan en la base de datos' });
-    return;
-  }
-
-  // Retornar plan completo
-  const saved = db.prepare('SELECT * FROM nutrition_plans WHERE id = ?').get(planId) as any;
-  const meals = db.prepare('SELECT * FROM nutrition_plan_meals WHERE plan_id = ? ORDER BY id').all(planId);
-  res.json({ ...saved, meals });
+  );
 });
 
 // GET /api/nutrition/plans — Listar planes

@@ -118,6 +118,17 @@ export async function claudeStreamChat(
   return fullContent;
 }
 
+// Streaming de un solo mensaje — para generación de planes (training, etc.)
+// Variante de claudeStreamChat para un único user message (no array multi-turn).
+export async function claudeStreamGenerate(
+  systemPrompt: string,
+  userMessage: string,
+  res: Response,
+  options: { maxTokens?: number; beforeDone?: (fullContent: string) => void } = {}
+): Promise<string> {
+  return claudeStreamChat(systemPrompt, [{ role: 'user', content: userMessage }], res, options);
+}
+
 // Streaming con vision — para analisis de fotos de comida
 // Emite SSE al res de Express en formato identico al AI Coach:
 //   data: {"image_path":"xxx"}   (primer evento — filename para guardar)

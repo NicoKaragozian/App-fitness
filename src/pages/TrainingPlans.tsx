@@ -15,11 +15,12 @@ function formatDate(iso: string) {
 
 export const TrainingPlans: React.FC = () => {
   const navigate = useNavigate();
-  const { plans, loading, generatePlan, archivePlan, deletePlan } = useTrainingPlans();
+  const { plans, loading, generatePlanStream, stopGeneration, archivePlan, deletePlan } = useTrainingPlans();
   const [showForm, setShowForm] = useState(false);
   const [goal, setGoal] = useState('');
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [thinkingText, setThinkingText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const activePlans = plans.filter(p => p.status === 'active');
@@ -28,12 +29,17 @@ export const TrainingPlans: React.FC = () => {
   const handleGenerate = async () => {
     if (!goal.trim()) return;
     setGenerating(true);
+    setThinkingText('');
     setGenError(null);
     try {
-      const result = await generatePlan(goal.trim());
+      const result = await generatePlanStream(goal.trim(), (text) => {
+        setThinkingText(text);
+      });
       navigate(`/training/${result.plan.id}`);
     } catch (err: any) {
-      setGenError(err.message || 'Error generando el plan');
+      if (err.name !== 'AbortError') {
+        setGenError(err.message || 'Error generando el plan');
+      }
     } finally {
       setGenerating(false);
     }
@@ -99,6 +105,17 @@ export const TrainingPlans: React.FC = () => {
             className="w-full bg-surface-container rounded-lg px-4 py-3 text-on-surface text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder-on-surface-variant"
           />
 
+          {/* Texto de análisis en streaming */}
+          {generating && thinkingText && (
+            <div className="bg-surface-container rounded-lg px-4 py-3 space-y-1.5">
+              <p className="font-label text-[10px] text-primary tracking-widest uppercase">Analizando tus datos...</p>
+              <p className="text-on-surface-variant text-sm whitespace-pre-line leading-relaxed">
+                {thinkingText}
+                <span className="animate-pulse">▍</span>
+              </p>
+            </div>
+          )}
+
           {genError && (
             <p className="text-red-400 text-sm bg-red-950/30 rounded-lg px-4 py-2">{genError}</p>
           )}
@@ -111,14 +128,22 @@ export const TrainingPlans: React.FC = () => {
             >
               {generating ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-surface-lowest/30 border-t-surface-lowest rounded-full animate-spin" />
+                  <span className="w-4 h-4 border-2 border-surface/30 border-t-surface rounded-full animate-spin" />
                   Generando plan…
                 </span>
               ) : 'Generar Plan'}
             </button>
             <button
-              onClick={() => { setShowForm(false); setGoal(''); setGenError(null); }}
-              disabled={generating}
+              onClick={() => {
+                if (generating) {
+                  stopGeneration();
+                } else {
+                  setShowForm(false);
+                  setGoal('');
+                  setGenError(null);
+                  setThinkingText('');
+                }
+              }}
               className="px-4 py-3 rounded-lg bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase hover:bg-surface-high transition-colors"
             >
               Cancelar

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNutrition } from '../hooks/useNutrition';
-import { useNutritionPlan } from '../hooks/useNutritionPlan';
+import { useNutritionPlan, type DietaryPreferences } from '../hooks/useNutritionPlan';
+import { useProfile } from '../hooks/useProfile';
 import { MealLogger } from '../components/MealLogger';
 
 const SLOT_LABELS: Record<string, string> = {
@@ -21,6 +22,32 @@ const STRATEGY_OPTIONS = [
   { value: 'recomp', label: 'Recomposicion' },
   { value: 'endurance', label: 'Resistencia' },
 ];
+
+const DIET_TYPES = [
+  { value: 'omnivore', label: 'Omnivoro' },
+  { value: 'vegetarian', label: 'Vegetariano' },
+  { value: 'vegan', label: 'Vegano' },
+  { value: 'pescatarian', label: 'Pescatariano' },
+  { value: 'keto', label: 'Keto' },
+  { value: 'paleo', label: 'Paleo' },
+];
+
+const ALLERGY_OPTIONS = [
+  { value: 'lactose', label: 'Lactosa' },
+  { value: 'gluten', label: 'Gluten' },
+  { value: 'nuts', label: 'Frutos secos' },
+  { value: 'shellfish', label: 'Mariscos' },
+  { value: 'eggs', label: 'Huevo' },
+  { value: 'soy', label: 'Soja' },
+];
+
+const DEFAULT_DIETARY_PREFS: DietaryPreferences = {
+  diet_type: 'omnivore',
+  allergies: [],
+  excluded_foods: '',
+  preferred_foods: '',
+  meals_per_day: 5,
+};
 
 // Ring circular de progreso
 function MacroRing({
@@ -66,15 +93,31 @@ export const Nutrition: React.FC = () => {
     analyzing, analysisStream, analysisResult, analysisError,
     analyzeMeal, stopAnalysis, clearAnalysis,
     saveMealLog, deleteLog,
+    refetch: refetchNutrition,
   } = useNutrition(today);
 
-  const { activePlan, loading: planLoading, generating, generatePlan, deletePlan } = useNutritionPlan();
+  const { activePlan, loading: planLoading, generating, generationStream, generatePlan, deletePlan } = useNutritionPlan();
+  const { profile } = useProfile();
 
   const [showLogger, setShowLogger] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'plan'>('today');
   const [selectedStrategy, setSelectedStrategy] = useState('maintain');
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [showPlanDetail, setShowPlanDetail] = useState<number | null>(null);
+  const [generationStep, setGenerationStep] = useState<'strategy' | 'preferences'>('strategy');
+  const [dietaryPrefs, setDietaryPrefs] = useState<DietaryPreferences>(DEFAULT_DIETARY_PREFS);
+
+  // Pre-popular preferencias desde el perfil guardado
+  useEffect(() => {
+    if (profile?.dietary_preferences) {
+      try {
+        const parsed = JSON.parse(profile.dietary_preferences);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          setDietaryPrefs({ ...DEFAULT_DIETARY_PREFS, ...parsed });
+        }
+      } catch { /* ignorar */ }
+    }
+  }, [profile]);
 
   const handleSaveMeal = async (data: Parameters<typeof saveMealLog>[0]) => {
     await saveMealLog(data);
@@ -90,10 +133,21 @@ export const Nutrition: React.FC = () => {
   const handleGeneratePlan = async () => {
     setGenerateError(null);
     try {
-      await generatePlan(selectedStrategy);
+      await generatePlan(selectedStrategy, undefined, dietaryPrefs);
+      await refetchNutrition(); // Actualizar rings con los nuevos targets
+      setGenerationStep('strategy'); // Resetear al paso inicial
     } catch (err: any) {
       setGenerateError(err.message);
     }
+  };
+
+  const toggleAllergy = (value: string) => {
+    setDietaryPrefs(prev => ({
+      ...prev,
+      allergies: prev.allergies.includes(value)
+        ? prev.allergies.filter(a => a !== value)
+        : [...prev.allergies, value],
+    }));
   };
 
   if (loading) {
@@ -227,43 +281,174 @@ export const Nutrition: React.FC = () => {
             </div>
           ) : (
             <div className="bg-surface-low rounded-2xl p-5 space-y-4">
-              <div>
-                <p className="font-display text-on-surface font-semibold mb-1">Generar Plan Nutricional</p>
-                <p className="font-body text-sm text-on-surface-variant">Claude analizará tu perfil y actividad física para crear un plan personalizado.</p>
-              </div>
+              {generationStep === 'strategy' ? (
+                <>
+                  <div>
+                    <p className="font-display text-on-surface font-semibold mb-1">Generar Plan Nutricional</p>
+                    <p className="font-body text-sm text-on-surface-variant">Claude analizará tu perfil y actividad física para crear un plan flexible con opciones de ingredientes.</p>
+                  </div>
 
-              <div>
-                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Estrategia</label>
-                <div className="flex flex-wrap gap-2">
-                  {STRATEGY_OPTIONS.map(opt => (
+                  <div>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Estrategia</label>
+                    <div className="flex flex-wrap gap-2">
+                      {STRATEGY_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setSelectedStrategy(opt.value)}
+                          className={`px-3 py-1.5 rounded-lg font-label text-label-sm tracking-wide transition-all ${
+                            selectedStrategy === opt.value
+                              ? 'bg-primary text-surface'
+                              : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setGenerationStep('preferences')}
+                    className="w-full py-3.5 rounded-xl bg-primary text-surface font-label text-sm tracking-widest uppercase font-semibold"
+                  >
+                    Siguiente →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
                     <button
-                      key={opt.value}
-                      onClick={() => setSelectedStrategy(opt.value)}
-                      className={`px-3 py-1.5 rounded-lg font-label text-label-sm tracking-wide transition-all ${
-                        selectedStrategy === opt.value
-                          ? 'bg-primary text-surface'
-                          : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
-                      }`}
+                      onClick={() => setGenerationStep('strategy')}
+                      className="text-on-surface-variant hover:text-on-surface text-sm transition-colors"
                     >
-                      {opt.label}
+                      ←
                     </button>
-                  ))}
-                </div>
-              </div>
+                    <div>
+                      <p className="font-display text-on-surface font-semibold">Preferencias Alimentarias</p>
+                      <p className="font-body text-xs text-on-surface-variant">Estrategia: {STRATEGY_OPTIONS.find(o => o.value === selectedStrategy)?.label}</p>
+                    </div>
+                  </div>
 
-              {generateError && (
-                <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-3">
-                  <p className="font-body text-sm text-red-400">{generateError}</p>
-                </div>
+                  {/* Tipo de dieta */}
+                  <div>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Tipo de dieta</label>
+                    <div className="flex flex-wrap gap-2">
+                      {DIET_TYPES.map(dt => (
+                        <button
+                          key={dt.value}
+                          onClick={() => setDietaryPrefs(p => ({ ...p, diet_type: dt.value }))}
+                          className={`px-3 py-1.5 rounded-lg font-label text-label-sm tracking-wide transition-all ${
+                            dietaryPrefs.diet_type === dt.value
+                              ? 'bg-primary text-surface'
+                              : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
+                          }`}
+                        >
+                          {dt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Alergias */}
+                  <div>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Alergias / Intolerancias</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ALLERGY_OPTIONS.map(al => (
+                        <button
+                          key={al.value}
+                          onClick={() => toggleAllergy(al.value)}
+                          className={`px-3 py-1.5 rounded-lg font-label text-label-sm tracking-wide transition-all ${
+                            dietaryPrefs.allergies.includes(al.value)
+                              ? 'bg-tertiary/20 text-tertiary border border-tertiary/40'
+                              : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
+                          }`}
+                        >
+                          {al.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Alimentos a evitar */}
+                  <div>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Alimentos a evitar</label>
+                    <input
+                      type="text"
+                      value={dietaryPrefs.excluded_foods}
+                      onChange={e => setDietaryPrefs(p => ({ ...p, excluded_foods: e.target.value }))}
+                      placeholder="Ej: higado, brocoli, atun enlatado"
+                      className="w-full bg-surface-container rounded-xl px-3 py-2.5 font-body text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </div>
+
+                  {/* Alimentos preferidos */}
+                  <div>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Alimentos preferidos</label>
+                    <input
+                      type="text"
+                      value={dietaryPrefs.preferred_foods}
+                      onChange={e => setDietaryPrefs(p => ({ ...p, preferred_foods: e.target.value }))}
+                      placeholder="Ej: pollo, arroz integral, banana, avena"
+                      className="w-full bg-surface-container rounded-xl px-3 py-2.5 font-body text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </div>
+
+                  {/* Comidas por dia */}
+                  <div>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Comidas por dia</label>
+                    <div className="flex gap-2">
+                      {[3, 4, 5, 6].map(n => (
+                        <button
+                          key={n}
+                          onClick={() => setDietaryPrefs(p => ({ ...p, meals_per_day: n }))}
+                          className={`px-4 py-1.5 rounded-lg font-label text-label-sm tracking-wide transition-all ${
+                            dietaryPrefs.meals_per_day === n
+                              ? 'bg-primary text-surface'
+                              : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {generateError && (
+                    <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-3">
+                      <p className="font-body text-sm text-red-400">{generateError}</p>
+                    </div>
+                  )}
+
+                  {/* Streaming feedback mientras Claude genera */}
+                  {generating && (
+                    <div className="bg-surface-container rounded-xl p-3 overflow-hidden">
+                      {generationStream ? (
+                        <div className="relative max-h-24 overflow-hidden">
+                          <p className="font-mono text-[0.65rem] text-on-surface-variant leading-relaxed break-all">
+                            {generationStream.slice(-400)}<span className="animate-pulse text-primary">▋</span>
+                          </p>
+                          <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-surface-container to-transparent" />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          {[0, 150, 300].map(delay => (
+                            <div key={delay} className="h-1.5 w-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
+                          ))}
+                          <p className="font-label text-xs text-on-surface-variant tracking-wider">Conectando con Claude...</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleGeneratePlan}
+                    disabled={generating}
+                    className="w-full py-3.5 rounded-xl bg-primary text-surface font-label text-sm tracking-widest uppercase font-semibold disabled:opacity-60"
+                  >
+                    {generating ? 'Generando...' : 'Generar Plan con AI'}
+                  </button>
+                </>
               )}
-
-              <button
-                onClick={handleGeneratePlan}
-                disabled={generating}
-                className="w-full py-3.5 rounded-xl bg-primary text-surface font-label text-sm tracking-widest uppercase font-semibold disabled:opacity-60"
-              >
-                {generating ? 'Generando con Claude AI...' : 'Generar Plan con AI'}
-              </button>
             </div>
           )}
         </div>
@@ -340,6 +525,59 @@ function MealCard({ log, onDelete }: { log: any; onDelete: () => void }) {
   );
 }
 
+// Card de una opcion dentro de un slot
+function PlanMealOption({ meal }: { meal: any }) {
+  return (
+    <div>
+      <p className="font-body text-sm text-on-surface font-medium">{meal.name}</p>
+      {meal.description && (
+        <p className="font-body text-xs text-on-surface-variant mt-1 leading-relaxed">{meal.description}</p>
+      )}
+      <div className="flex gap-3 mt-1.5">
+        {meal.calories != null && <span className="font-label text-[0.6rem] tracking-wider text-primary">{meal.calories}kcal</span>}
+        {meal.protein_g != null && <span className="font-label text-[0.6rem] tracking-wider text-secondary">{meal.protein_g}g prot</span>}
+        {meal.carbs_g != null && <span className="font-label text-[0.6rem] tracking-wider text-tertiary">{meal.carbs_g}g carbs</span>}
+        {meal.fat_g != null && <span className="font-label text-[0.6rem] tracking-wider text-[#22d3a5]">{meal.fat_g}g gras</span>}
+      </div>
+    </div>
+  );
+}
+
+// Slot con tabs para cada opcion
+function PlanSlotOptions({ slot, meals }: { slot: string; meals: any[] }) {
+  const options = [...new Set(meals.map(m => m.option_number || 1))].sort((a, b) => a - b);
+  const [activeOption, setActiveOption] = useState(options[0] || 1);
+  const activeMeal = meals.find(m => (m.option_number || 1) === activeOption);
+
+  return (
+    <div className="bg-surface-low rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
+          {SLOT_LABELS[slot] || slot}
+        </p>
+        {options.length > 1 && (
+          <div className="flex gap-1">
+            {options.map(n => (
+              <button
+                key={n}
+                onClick={() => setActiveOption(n)}
+                className={`px-2 py-0.5 rounded-md font-label text-[0.6rem] tracking-wider transition-all ${
+                  activeOption === n
+                    ? 'bg-primary text-surface'
+                    : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                Op. {n}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {activeMeal && <PlanMealOption meal={activeMeal} />}
+    </div>
+  );
+}
+
 // Detalle de comidas del plan (lazy — carga al expandir)
 function PlanMealsDetail({ planId }: { planId: number }) {
   const [meals, setMeals] = useState<any[] | null>(null);
@@ -360,25 +598,7 @@ function PlanMealsDetail({ planId }: { planId: number }) {
   return (
     <div className="space-y-3">
       {Object.entries(grouped).map(([slot, slotMeals]) => (
-        <div key={slot} className="bg-surface-low rounded-2xl p-4">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2">
-            {SLOT_LABELS[slot] || slot}
-          </p>
-          {slotMeals.map(meal => (
-            <div key={meal.id} className="mb-3 last:mb-0">
-              <p className="font-body text-sm text-on-surface font-medium">{meal.name}</p>
-              {meal.description && (
-                <p className="font-body text-xs text-on-surface-variant mt-0.5">{meal.description}</p>
-              )}
-              <div className="flex gap-3 mt-1">
-                {meal.calories != null && <span className="font-label text-[0.6rem] tracking-wider text-primary">{meal.calories}kcal</span>}
-                {meal.protein_g != null && <span className="font-label text-[0.6rem] tracking-wider text-secondary">{meal.protein_g}g prot</span>}
-                {meal.carbs_g != null && <span className="font-label text-[0.6rem] tracking-wider text-tertiary">{meal.carbs_g}g carbs</span>}
-                {meal.fat_g != null && <span className="font-label text-[0.6rem] tracking-wider text-[#22d3a5]">{meal.fat_g}g gras</span>}
-              </div>
-            </div>
-          ))}
-        </div>
+        <PlanSlotOptions key={slot} slot={slot} meals={slotMeals} />
       ))}
     </div>
   );

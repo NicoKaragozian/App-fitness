@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import db from '../db.js';
 import { buildTrainingContext } from '../ai/context.js';
 import { PROMPTS } from '../ai/prompts.js';
-import { claudeChat, isClaudeConfigured } from '../ai/claude.js';
+import { claudeStreamGenerate, claudeChat, isClaudeConfigured } from '../ai/claude.js';
 
 const router = Router();
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
@@ -37,41 +37,8 @@ function validatePlan(obj: any): AIPlan {
   return obj as AIPlan;
 }
 
-// POST /api/training/generate — Generar plan via AI
-router.post('/generate', async (req: Request, res: Response) => {
-  const { goal } = req.body as { goal: string };
-  if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
-    res.status(400).json({ error: 'Se requiere el campo "goal"' });
-    return;
-  }
-
-  if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
-    return;
-  }
-
-  const context = buildTrainingContext(goal.trim());
-  const systemPrompt = `${PROMPTS.training_plan}\n\nDatos del usuario:\n${context}`;
-  const userMessage = `Generá mi plan de entrenamiento personalizado. Objetivo: ${goal.trim()}`;
-
-  let rawContent: string;
-  let plan: AIPlan;
-  try {
-    rawContent = await claudeChat(systemPrompt, userMessage, 4096);
-    // Strip markdown fences si Claude los incluye
-    let jsonStr = rawContent.trim();
-    if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
-    }
-    const parsed = JSON.parse(jsonStr);
-    plan = validatePlan(parsed);
-  } catch (err: any) {
-    console.error('[training] Error parseando respuesta de Claude:', err.message);
-    res.status(502).json({ error: `Claude no devolvió un JSON válido: ${err.message}` });
-    return;
-  }
-
-  // Guardar en DB dentro de una transacción
+// Guarda un AIPlan en la DB y retorna el ID insertado
+function savePlanToDB(plan: AIPlan, rawContent: string): number {
   const insertPlan = db.prepare(
     'INSERT INTO training_plans (title, objective, frequency, ai_model, raw_ai_response) VALUES (?,?,?,?,?)'
   );
@@ -82,7 +49,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     'INSERT INTO training_exercises (session_id, name, category, target_sets, target_reps, notes, sort_order) VALUES (?,?,?,?,?,?,?)'
   );
 
-  let savedPlanId: number;
+  let savedPlanId!: number;
   const save = db.transaction(() => {
     const planResult = insertPlan.run(
       plan.title,
@@ -112,12 +79,60 @@ router.post('/generate', async (req: Request, res: Response) => {
       });
     });
   });
-
   save();
+  return savedPlanId;
+}
 
-  // Devolver plan completo con IDs
-  const fullPlan = getPlanById(savedPlanId!);
-  res.json({ plan: fullPlan, recommendations: plan.recommendations ?? null });
+// POST /api/training/generate — Generar plan via AI con streaming SSE
+// Emite tokens de "análisis" para feedback al usuario, luego JSON del plan al final.
+// Protocolo SSE:
+//   data: {"token":"..."}                         — texto de análisis (visible al usuario)
+//   data: {"plan":{...},"recommendations":"..."}  — plan guardado, antes de [DONE]
+//   data: {"error":"..."}                         — si falla el parseo del JSON
+//   data: [DONE]                                  — fin del stream
+router.post('/generate', async (req: Request, res: Response) => {
+  const { goal } = req.body as { goal: string };
+  if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
+    res.status(400).json({ error: 'Se requiere el campo "goal"' });
+    return;
+  }
+
+  if (!isClaudeConfigured()) {
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
+    return;
+  }
+
+  const context = buildTrainingContext(goal.trim());
+  const systemPrompt = `${PROMPTS.training_plan}\n\nDatos del usuario:\n${context}`;
+  const userMessage = `Generá mi plan de entrenamiento personalizado. Objetivo: ${goal.trim()}`;
+
+  await claudeStreamGenerate(systemPrompt, userMessage, res, {
+    maxTokens: 4096,
+    beforeDone: (fullContent) => {
+      // Extraer la parte JSON usando el delimitador ---PLAN_JSON---
+      const DELIMITER = '---PLAN_JSON---';
+      const delimIdx = fullContent.indexOf(DELIMITER);
+      let jsonStr = delimIdx >= 0
+        ? fullContent.slice(delimIdx + DELIMITER.length).trim()
+        : fullContent.trim(); // fallback: intentar parsear todo
+
+      // Strip markdown fences (defensivo)
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
+      }
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const plan = validatePlan(parsed);
+        const savedPlanId = savePlanToDB(plan, fullContent);
+        const fullPlan = getPlanById(savedPlanId);
+        res.write(`data: ${JSON.stringify({ plan: fullPlan, recommendations: plan.recommendations ?? null })}\n\n`);
+      } catch (err: any) {
+        console.error('[training] Error parseando respuesta de Claude:', err.message);
+        res.write(`data: ${JSON.stringify({ error: `Claude no devolvió un JSON válido: ${err.message}` })}\n\n`);
+      }
+    },
+  });
 });
 
 // Helpers para leer plan completo

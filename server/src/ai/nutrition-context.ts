@@ -9,8 +9,25 @@ export function buildNutritionPlanContext(strategy?: string): string {
   // Perfil del usuario
   const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() as any;
   if (profile) {
-    const dietPrefs = JSON.parse(profile.dietary_preferences || '[]');
     const sports = JSON.parse(profile.sports || '[]');
+
+    // Parsear preferencias: soporte para formato objeto (nuevo) y array (viejo)
+    let dietPrefsText = 'ninguna';
+    try {
+      const raw = JSON.parse(profile.dietary_preferences || 'null');
+      if (Array.isArray(raw)) {
+        dietPrefsText = raw.length > 0 ? raw.join(', ') : 'ninguna';
+      } else if (raw && typeof raw === 'object') {
+        const lines: string[] = [];
+        if (raw.diet_type) lines.push(`Tipo de dieta: ${raw.diet_type}`);
+        if (raw.allergies?.length > 0) lines.push(`Alergias/intolerancias: ${raw.allergies.join(', ')}`);
+        if (raw.excluded_foods) lines.push(`Alimentos excluidos: ${raw.excluded_foods}`);
+        if (raw.preferred_foods) lines.push(`Alimentos preferidos: ${raw.preferred_foods}`);
+        if (raw.meals_per_day) lines.push(`Comidas por día: ${raw.meals_per_day}`);
+        dietPrefsText = lines.length > 0 ? '\n' + lines.map(l => `  - ${l}`).join('\n') : 'ninguna';
+      }
+    } catch { /* formato invalido, ignorar */ }
+
     sections.push(`## Perfil del usuario
 Nombre: ${profile.name || 'N/A'}
 Edad: ${profile.age || '-'} años | Sexo: ${profile.sex || '-'} | Altura: ${profile.height_cm || '-'}cm | Peso: ${profile.weight_kg || '-'}kg
@@ -18,7 +35,7 @@ Nivel de experiencia: ${profile.experience_level || '-'}
 Objetivo principal: ${profile.primary_goal || '-'}
 Deportes: ${sports.join(', ') || 'no especificado'}
 Días de entrenamiento por semana: ${profile.training_days_per_week || '-'}
-Preferencias dietarias: ${dietPrefs.length > 0 ? dietPrefs.join(', ') : 'ninguna'}
+Preferencias dietarias: ${dietPrefsText}
 Lesiones: ${profile.injuries || 'ninguna'}
 Targets actuales: ${profile.daily_calorie_target || '-'}kcal | Prot: ${profile.daily_protein_g || '-'}g | Carbs: ${profile.daily_carbs_g || '-'}g | Grasa: ${profile.daily_fat_g || '-'}g`);
   } else {

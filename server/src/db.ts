@@ -236,6 +236,11 @@ try {
   db.exec('ALTER TABLE weekly_plan ADD COLUMN session_id INTEGER');
 } catch { /* ya existe */ }
 
+// Migration: agregar option_number a nutrition_plan_meals (para multiples opciones por slot)
+try {
+  db.exec('ALTER TABLE nutrition_plan_meals ADD COLUMN option_number INTEGER DEFAULT 1');
+} catch { /* ya existe */ }
+
 // Seed default sport groups if table is empty
 const groupCount = (db.prepare('SELECT COUNT(*) as c FROM sport_groups').get() as { c: number }).c;
 if (groupCount === 0) {
