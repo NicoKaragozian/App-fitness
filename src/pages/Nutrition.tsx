@@ -3,6 +3,7 @@ import { useNutrition } from '../hooks/useNutrition';
 import { useNutritionPlan, type DietaryPreferences } from '../hooks/useNutritionPlan';
 import { useProfile } from '../hooks/useProfile';
 import { MealLogger } from '../components/MealLogger';
+import { STTButton } from '../components/ui/STTButton';
 
 const SLOT_LABELS: Record<string, string> = {
   breakfast: 'Desayuno',
@@ -372,25 +373,39 @@ export const Nutrition: React.FC = () => {
                   {/* Alimentos a evitar */}
                   <div>
                     <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Alimentos a evitar</label>
-                    <input
-                      type="text"
-                      value={dietaryPrefs.excluded_foods}
-                      onChange={e => setDietaryPrefs(p => ({ ...p, excluded_foods: e.target.value }))}
-                      placeholder="Ej: higado, brocoli, atun enlatado"
-                      className="w-full bg-surface-container rounded-xl px-3 py-2.5 font-body text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-1 focus:ring-primary/50"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={dietaryPrefs.excluded_foods}
+                        onChange={e => setDietaryPrefs(p => ({ ...p, excluded_foods: e.target.value }))}
+                        placeholder="Ej: higado, brocoli, atun enlatado"
+                        className="w-full bg-surface-container rounded-xl px-3 py-2.5 pr-9 font-body text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                      <STTButton
+                        onTranscript={text => setDietaryPrefs(p => ({ ...p, excluded_foods: p.excluded_foods ? p.excluded_foods + ', ' + text : text }))}
+                        size="sm"
+                        className="absolute right-2 top-1/2 -translate-y-1/2"
+                      />
+                    </div>
                   </div>
 
                   {/* Alimentos preferidos */}
                   <div>
                     <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Alimentos preferidos</label>
-                    <input
-                      type="text"
-                      value={dietaryPrefs.preferred_foods}
-                      onChange={e => setDietaryPrefs(p => ({ ...p, preferred_foods: e.target.value }))}
-                      placeholder="Ej: pollo, arroz integral, banana, avena"
-                      className="w-full bg-surface-container rounded-xl px-3 py-2.5 font-body text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-1 focus:ring-primary/50"
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={dietaryPrefs.preferred_foods}
+                        onChange={e => setDietaryPrefs(p => ({ ...p, preferred_foods: e.target.value }))}
+                        placeholder="Ej: pollo, arroz integral, banana, avena"
+                        className="w-full bg-surface-container rounded-xl px-3 py-2.5 pr-9 font-body text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                      <STTButton
+                        onTranscript={text => setDietaryPrefs(p => ({ ...p, preferred_foods: p.preferred_foods ? p.preferred_foods + ', ' + text : text }))}
+                        size="sm"
+                        className="absolute right-2 top-1/2 -translate-y-1/2"
+                      />
+                    </div>
                   </div>
 
                   {/* Comidas por dia */}

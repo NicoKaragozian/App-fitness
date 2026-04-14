@@ -12,6 +12,7 @@ App de fitness personal conectada a Garmin Connect. Dashboard de datos biométri
 /server/uploads/        → Fotos de comidas subidas (gitignored)
 /server/.env            → Variables de entorno (ANTHROPIC_API_KEY, OLLAMA_MODEL, etc.)
 /render.yaml            → Deploy config para Render
+/docs/                  → Documentación interna: guías de verificación, notas de AI. La IA puede dejar archivos acá cuando haga falta (ej: guías de test manual, decisiones de arquitectura).
 ```
 
 ## Arquitectura
