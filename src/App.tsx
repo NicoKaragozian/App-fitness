@@ -22,12 +22,13 @@ function AuthenticatedLayout() {
         <Header />
         <main className="flex-1 overflow-auto flex flex-col min-h-0">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<AICoach />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/sports" element={<Sports />} />
             <Route path="/sports/:category" element={<SportDetail />} />
-            <Route path="/sleep" element={<Navigate to="/" replace />} />
-            <Route path="/wellness" element={<Navigate to="/" replace />} />
-            <Route path="/coach" element={<AICoach />} />
+            <Route path="/sleep" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/wellness" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/coach" element={<Navigate to="/" replace />} />
             <Route path="/goals" element={<Navigate to="/training?tab=goals" replace />} />
             <Route path="/goals/:id" element={<GoalDetail />} />
             <Route path="/training" element={<TrainingPlans />} />

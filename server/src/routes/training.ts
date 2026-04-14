@@ -8,7 +8,7 @@ import { claudeStreamGenerate, claudeChat, isClaudeConfigured } from '../ai/clau
 const router = Router();
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 
-interface AIExercise {
+export interface AIExercise {
   name: string;
   category?: string;
   sets?: number;
@@ -16,13 +16,13 @@ interface AIExercise {
   notes?: string;
 }
 
-interface AISession {
+export interface AISession {
   name: string;
   notes?: string;
   exercises?: AIExercise[];
 }
 
-interface AIPlan {
+export interface AIPlan {
   title: string;
   objective?: string;
   frequency?: string;
@@ -30,7 +30,7 @@ interface AIPlan {
   sessions?: AISession[];
 }
 
-function validatePlan(obj: any): AIPlan {
+export function validatePlan(obj: any): AIPlan {
   if (typeof obj !== 'object' || obj === null) throw new Error('Respuesta no es un objeto JSON');
   if (!obj.title) throw new Error('Falta el campo "title"');
   if (!Array.isArray(obj.sessions) || obj.sessions.length === 0) throw new Error('Falta el array "sessions"');
@@ -38,7 +38,7 @@ function validatePlan(obj: any): AIPlan {
 }
 
 // Guarda un AIPlan en la DB y retorna el ID insertado
-function savePlanToDB(plan: AIPlan, rawContent: string): number {
+export function savePlanToDB(plan: AIPlan, rawContent: string): number {
   const insertPlan = db.prepare(
     'INSERT INTO training_plans (title, objective, frequency, ai_model, raw_ai_response) VALUES (?,?,?,?,?)'
   );
@@ -136,7 +136,7 @@ router.post('/generate', async (req: Request, res: Response) => {
 });
 
 // Helpers para leer plan completo
-function getPlanById(id: number) {
+export function getPlanById(id: number) {
   const plan = db.prepare('SELECT * FROM training_plans WHERE id = ?').get(id) as any;
   if (!plan) return null;
 

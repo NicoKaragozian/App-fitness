@@ -256,7 +256,7 @@ function buildMonthlyContext(payload: AnalyzePayload): string {
 }
 
 // --- Daily briefing context (uses computeInsights) ---
-function buildDailyContext(): string {
+export function buildDailyContext(): string {
   const { stats, recommendations } = computeInsights();
   const sections: string[] = [];
 

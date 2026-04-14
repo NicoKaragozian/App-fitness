@@ -1,10 +1,42 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import fs from 'fs';
+import sharp from 'sharp';
 import db from '../db.js';
 import { handleAnalyze } from '../ai/index.js';
 import { claudeStreamChat, isClaudeConfigured } from '../ai/claude.js';
 import { getAssessmentContext } from '../ai/context.js';
+import { claudeStreamAgent } from '../ai/agent.js';
+import { PROMPTS } from '../ai/prompts.js';
+import { UPLOAD_DIR } from '../lib/upload-dir.js';
 
 const router = Router();
+
+// Multer for agent image uploads
+const agentUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOAD_DIR,
+    filename: (_req, file, cb) => {
+      const sanitized = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      cb(null, `${Date.now()}-${sanitized}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, file.mimetype.startsWith('image/'));
+  },
+});
+
+const CLAUDE_SUPPORTED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+async function toClaudeBase64(filePath: string, mimetype: string) {
+  if (CLAUDE_SUPPORTED.has(mimetype)) {
+    const base64 = fs.readFileSync(filePath).toString('base64');
+    return { base64, mediaType: mimetype as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' };
+  }
+  const jpegBuffer = await sharp(filePath).jpeg({ quality: 90 }).toBuffer();
+  return { base64: jpegBuffer.toString('base64'), mediaType: 'image/jpeg' as const };
+}
 
 // Keywords para detectar qué contexto cargar
 const ACTIVITY_KW = ['actividad', 'actividades', 'entreno', 'entrenamiento', 'deporte', 'tenis', 'tennis', 'surf', 'kite', 'wingfoil', 'windsurf', 'gym', 'carrera', 'running', 'caminata', 'ejercicio', 'sesión', 'sesiones', 'rendimiento', 'velocidad', 'distancia', 'caloría', 'frecuencia cardíaca', 'fc prom', 'bpm', 'sport', 'activity', 'cycling', 'ciclismo', 'natación', 'swimming', 'hiking'];
@@ -221,5 +253,120 @@ ${context ? `Datos del usuario:\n${context}` : 'Aún no hay datos disponibles en
 
 // POST /api/ai/analyze — Unified contextual analysis endpoint
 router.post('/analyze', handleAnalyze);
+
+// POST /api/ai/agent — Agentic chat with tool_use
+// Accepts JSON body or multipart/form-data with optional image
+router.post('/agent', agentUpload.single('image'), async (req: Request, res: Response) => {
+  // Parse messages from JSON body or from multipart form field
+  let messages: { role: string; content: string }[];
+  if (req.file) {
+    // Multipart: messages come as JSON string in 'messages' field
+    try {
+      messages = JSON.parse(req.body.messages);
+    } catch {
+      res.status(400).json({ error: 'messages inválido' });
+      return;
+    }
+  } else {
+    messages = req.body.messages;
+  }
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    res.status(400).json({ error: 'messages requerido' });
+    return;
+  }
+
+  if (!isClaudeConfigured()) {
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
+    return;
+  }
+
+  // Build slim always-on context: user profile + active training plan
+  const sections: string[] = [];
+
+  const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() as any;
+  if (profile) {
+    const sports = JSON.parse(profile.sports || '[]').join(', ') || '-';
+    const equipment = JSON.parse(profile.equipment || '[]').join(', ') || '-';
+    sections.push(`## Perfil del usuario
+- Nombre: ${profile.name || '[vacío]'} | Edad: ${profile.age || '[vacío]'} | Sexo: ${profile.sex || '[vacío]'}
+- Físico: ${profile.height_cm || '[vacío]'}cm / ${profile.weight_kg || '[vacío]'}kg
+- Experiencia: ${profile.experience_level || '[vacío]'} | Objetivo: ${profile.primary_goal || '[vacío]'}
+- Deportes: ${sports || '[vacío]'}
+- Entrenamiento: ${profile.training_days_per_week || '[vacío]'} días/semana, ~${profile.session_duration_min || '[vacío]'}min/sesión
+- Equipamiento: ${equipment || '[vacío]'}
+- Lesiones: ${profile.injuries || 'ninguna'}
+- Targets: ${profile.daily_calorie_target || '-'}kcal | prot:${profile.daily_protein_g || '-'}g | carbs:${profile.daily_carbs_g || '-'}g | grasa:${profile.daily_fat_g || '-'}g`);
+  } else {
+    sections.push('## Perfil del usuario\nNo hay perfil configurado. Todos los campos están vacíos — iniciá el onboarding.');
+  }
+
+  const activePlan = db.prepare(
+    'SELECT id, title, objective, frequency FROM training_plans WHERE status = ? ORDER BY id DESC LIMIT 1'
+  ).get('active') as any;
+  if (activePlan) {
+    const sessionRows = db.prepare(
+      'SELECT name FROM training_sessions WHERE plan_id = ? ORDER BY sort_order'
+    ).all(activePlan.id) as any[];
+    const sessionNames = sessionRows.map((s: any) => s.name).join(', ');
+    sections.push(`## Plan de entrenamiento activo
+- "${activePlan.title}" | ${activePlan.frequency || '-'}
+- Objetivo: ${activePlan.objective || '-'}
+- Sesiones: ${sessionNames || '-'}`);
+  }
+
+  const assessmentCtx = getAssessmentContext();
+  if (assessmentCtx) sections.push(assessmentCtx);
+
+  // Always include today's nutrition logs
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayLogs = db.prepare(
+    'SELECT meal_slot, meal_name, calories, protein_g, carbs_g, fat_g, logged_at FROM nutrition_logs WHERE date = ? ORDER BY logged_at'
+  ).all(todayStr) as any[];
+  if (todayLogs.length > 0) {
+    const logLines = todayLogs.map((l: any) => {
+      const slot = l.meal_slot || '-';
+      return `- ${slot}: ${l.meal_name || '-'} | ${l.calories || 0}kcal | prot:${l.protein_g || 0}g | carbs:${l.carbs_g || 0}g | grasa:${l.fat_g || 0}g`;
+    });
+    const totals = todayLogs.reduce((acc: any, l: any) => ({
+      cals: acc.cals + (l.calories || 0),
+      prot: acc.prot + (l.protein_g || 0),
+      carbs: acc.carbs + (l.carbs_g || 0),
+      fat: acc.fat + (l.fat_g || 0),
+    }), { cals: 0, prot: 0, carbs: 0, fat: 0 });
+    sections.push(`## Nutrición de hoy (${todayLogs.length} comidas registradas)
+${logLines.join('\n')}
+**Total del día:** ${totals.cals}kcal | prot:${totals.prot}g | carbs:${totals.carbs}g | grasa:${totals.fat}g`);
+  } else {
+    sections.push('## Nutrición de hoy\nNo hay comidas registradas todavía.');
+  }
+
+  const context = sections.join('\n\n');
+  const systemPrompt = `${PROMPTS.agent}\n\nDatos actuales del usuario:\n${context}`;
+
+  // Build Claude messages — handle image in last user message if present
+  const claudeMessages: any[] = messages
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+  if (req.file) {
+    try {
+      const { base64, mediaType } = await toClaudeBase64(req.file.path, req.file.mimetype);
+      const imagePath = req.file.filename;
+      // Replace last user message content with multipart (image + text)
+      const lastIdx = claudeMessages.length - 1;
+      const lastText = claudeMessages[lastIdx].content || 'Analizá esta imagen de comida y registrala.';
+      claudeMessages[lastIdx].content = [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+        { type: 'text', text: `${lastText}\n\n[Imagen subida: /uploads/${imagePath}]` },
+      ];
+    } catch (err: any) {
+      console.error('[agent] Image processing error:', err.message);
+      // Continue without image if processing fails
+    }
+  }
+
+  await claudeStreamAgent(systemPrompt, claudeMessages, res);
+});
 
 export default router;

@@ -28,6 +28,55 @@ export function MarkdownText({ text }: { text: string }) {
   while (i < lines.length) {
     const line = lines[i];
 
+    // Table: detect lines containing | (consume full block)
+    if (line.includes('|') && line.trim().startsWith('|')) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      // Parse: first line = header, second = separator (skip), rest = rows
+      const parseCells = (row: string) =>
+        row.split('|').map(c => c.trim()).filter(c => c.length > 0);
+
+      const isSeparator = (row: string) => /^\|[\s\-:|]+\|$/.test(row.trim());
+
+      const headerLine = tableLines[0];
+      const headers = parseCells(headerLine);
+      const dataLines = tableLines.filter((l, idx) => idx !== 0 && !isSeparator(l));
+
+      elements.push(
+        <div key={`table-${i}`} className="my-2 overflow-x-auto">
+          <table className="w-full text-xs font-body border-collapse">
+            <thead>
+              <tr>
+                {headers.map((h, hi) => (
+                  <th key={hi} className="text-left px-2 py-1.5 font-label text-[0.6rem] text-on-surface-variant tracking-widest uppercase border-b border-outline-variant/30">
+                    {renderInline(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dataLines.map((row, ri) => {
+                const cells = parseCells(row);
+                return (
+                  <tr key={ri} className="border-b border-outline-variant/10">
+                    {cells.map((cell, ci) => (
+                      <td key={ci} className="px-2 py-1.5 text-on-surface">
+                        {renderInline(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue; // i already advanced past the table block
+    }
+
     // Headings
     if (line.startsWith('#### ')) {
       elements.push(<p key={i} className="font-label text-[0.65rem] text-on-surface-variant tracking-widest uppercase mt-2 mb-0.5">{line.slice(5)}</p>);
