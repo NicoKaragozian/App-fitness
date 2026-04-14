@@ -42,11 +42,11 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/training', trainingRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/nutrition', nutritionRoutes);
+app.use('/api/goals', goalsRoutes);
+app.use('/api/assessment', assessmentRoutes);
 
 // Uploads estaticos (fotos de comidas)
 app.use('/uploads', express.static(UPLOAD_DIR));
-app.use('/api/goals', goalsRoutes);
-app.use('/api/assessment', assessmentRoutes);
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {
