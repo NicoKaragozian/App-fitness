@@ -102,3 +102,109 @@ Calorias: ${avgCals}kcal | Proteina: ${avgProt}g | Carbs: ${avgCarbs}g | Grasa: 
 
   return sections.join('\n\n');
 }
+
+// Context builder para el chat de nutricion — contexto del dia seleccionado
+export function buildNutritionChatContext(date: string): string {
+  const sections: string[] = [];
+
+  sections.push(`## Fecha consultada\n${date}`);
+
+  // Perfil y targets
+  const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() as any;
+  const targets = {
+    daily_calorie_target: profile?.daily_calorie_target || 2000,
+    daily_protein_g: profile?.daily_protein_g || 150,
+    daily_carbs_g: profile?.daily_carbs_g || 250,
+    daily_fat_g: profile?.daily_fat_g || 65,
+  };
+
+  if (profile) {
+    let dietPrefsText = 'ninguna';
+    try {
+      const raw = JSON.parse(profile.dietary_preferences || 'null');
+      if (Array.isArray(raw)) {
+        dietPrefsText = raw.length > 0 ? raw.join(', ') : 'ninguna';
+      } else if (raw && typeof raw === 'object') {
+        const lines: string[] = [];
+        if (raw.diet_type) lines.push(`Tipo de dieta: ${raw.diet_type}`);
+        if (raw.allergies?.length > 0) lines.push(`Alergias/intolerancias: ${raw.allergies.join(', ')}`);
+        if (raw.excluded_foods) lines.push(`Alimentos excluidos: ${raw.excluded_foods}`);
+        if (raw.preferred_foods) lines.push(`Alimentos preferidos: ${raw.preferred_foods}`);
+        if (raw.meals_per_day) lines.push(`Comidas por día: ${raw.meals_per_day}`);
+        dietPrefsText = lines.length > 0 ? lines.join(' | ') : 'ninguna';
+      }
+    } catch { /* ignorar */ }
+
+    sections.push(`## Perfil del usuario
+Peso: ${profile.weight_kg || '-'}kg | Objetivo: ${profile.primary_goal || '-'}
+Preferencias: ${dietPrefsText}`);
+  }
+
+  // Comidas registradas en el dia
+  const logs = db.prepare(
+    'SELECT meal_slot, meal_name, calories, protein_g, carbs_g, fat_g, logged_at FROM nutrition_logs WHERE date = ? ORDER BY logged_at'
+  ).all(date) as any[];
+
+  if (logs.length > 0) {
+    const totalCals = logs.reduce((s: number, l: any) => s + (l.calories || 0), 0);
+    const totalProt = logs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0);
+    const totalCarbs = logs.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0);
+    const totalFat = logs.reduce((s: number, l: any) => s + (l.fat_g || 0), 0);
+
+    const SLOT_ES: Record<string, string> = {
+      breakfast: 'Desayuno', lunch: 'Almuerzo', snack: 'Snack',
+      dinner: 'Cena', pre_workout: 'Pre-entreno', post_workout: 'Post-entreno',
+    };
+
+    const logLines = logs.map((l: any, i: number) => {
+      const time = l.logged_at ? new Date(l.logged_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const slot = SLOT_ES[l.meal_slot] || l.meal_slot || '';
+      return `${i + 1}. ${slot}${time ? ' (' + time + ')' : ''}: ${l.meal_name || 'Sin nombre'} — ${l.calories || 0}kcal | ${l.protein_g || 0}g prot | ${l.carbs_g || 0}g carbs | ${l.fat_g || 0}g grasa`;
+    });
+
+    const remCals = Math.max(0, targets.daily_calorie_target - totalCals);
+    const remProt = Math.max(0, targets.daily_protein_g - totalProt);
+    const remCarbs = Math.max(0, targets.daily_carbs_g - totalCarbs);
+    const remFat = Math.max(0, targets.daily_fat_g - totalFat);
+
+    sections.push(`## Comidas registradas hoy (${logs.length} comidas)
+${logLines.join('\n')}
+Total consumido: ${totalCals}kcal | ${totalProt}g prot | ${totalCarbs}g carbs | ${totalFat}g grasa`);
+
+    sections.push(`## Objetivos diarios y macros restantes
+Objetivo: ${targets.daily_calorie_target}kcal | ${targets.daily_protein_g}g prot | ${targets.daily_carbs_g}g carbs | ${targets.daily_fat_g}g grasa
+Restante: ${remCals}kcal | ${remProt}g prot | ${remCarbs}g carbs | ${remFat}g grasa
+Progreso: ${Math.round(totalCals / targets.daily_calorie_target * 100)}% cal | ${Math.round(totalProt / targets.daily_protein_g * 100)}% prot | ${Math.round(totalCarbs / targets.daily_carbs_g * 100)}% carbs | ${Math.round(totalFat / targets.daily_fat_g * 100)}% grasa`);
+  } else {
+    sections.push(`## Comidas registradas hoy\nNinguna comida registrada aún.`);
+    sections.push(`## Objetivos diarios
+${targets.daily_calorie_target}kcal | ${targets.daily_protein_g}g prot | ${targets.daily_carbs_g}g carbs | ${targets.daily_fat_g}g grasa`);
+  }
+
+  // Plan nutricional activo con sus comidas
+  const activePlan = db.prepare(
+    "SELECT id, title, strategy, daily_calories, daily_protein_g, daily_carbs_g, daily_fat_g FROM nutrition_plans ORDER BY id DESC LIMIT 1"
+  ).get() as any;
+
+  if (activePlan) {
+    const meals = db.prepare(
+      'SELECT slot, option_number, name, calories, protein_g, carbs_g, fat_g FROM nutrition_plan_meals WHERE plan_id = ? ORDER BY slot, option_number'
+    ).all(activePlan.id) as any[];
+
+    const SLOT_ES: Record<string, string> = {
+      breakfast: 'Desayuno', lunch: 'Almuerzo', snack: 'Snack',
+      dinner: 'Cena', pre_workout: 'Pre-entreno', post_workout: 'Post-entreno',
+    };
+
+    const mealLines = meals.map((m: any) =>
+      `  - ${SLOT_ES[m.slot] || m.slot} Op.${m.option_number}: ${m.name} (${m.calories}kcal | ${m.protein_g}g P | ${m.carbs_g}g C | ${m.fat_g}g G)`
+    );
+
+    sections.push(`## Plan nutricional activo: "${activePlan.title}" (${activePlan.strategy})
+Objetivo del plan: ${activePlan.daily_calories}kcal | ${activePlan.daily_protein_g}g prot | ${activePlan.daily_carbs_g}g carbs | ${activePlan.daily_fat_g}g grasa
+Opciones disponibles:
+${mealLines.join('\n')}`);
+  }
+
+  return sections.join('\n\n');
+}

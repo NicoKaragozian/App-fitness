@@ -4,9 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import db from '../db.js';
-import { claudeVisionStream, claudeStreamGenerate, isClaudeConfigured } from '../ai/claude.js';
+import { claudeVisionStream, claudeStreamGenerate, claudeStreamChat, isClaudeConfigured } from '../ai/claude.js';
 import { PROMPTS } from '../ai/prompts.js';
-import { buildNutritionPlanContext } from '../ai/nutrition-context.js';
+import { buildNutritionPlanContext, buildNutritionChatContext } from '../ai/nutrition-context.js';
 import { UPLOAD_DIR } from '../lib/upload-dir.js';
 
 const router = Router();
@@ -375,6 +375,29 @@ router.get('/plans/:id', (req: Request, res: Response) => {
 router.delete('/plans/:id', (req: Request, res: Response) => {
   db.prepare('DELETE FROM nutrition_plans WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// POST /api/nutrition/chat — Chat contextual de nutricion (streaming SSE)
+router.post('/chat', async (req: Request, res: Response) => {
+  const { messages, date } = req.body;
+  if (!Array.isArray(messages) || messages.length === 0) {
+    res.status(400).json({ error: 'messages requerido' });
+    return;
+  }
+  if (!isClaudeConfigured()) {
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado' });
+    return;
+  }
+
+  const targetDate = date || new Date().toISOString().slice(0, 10);
+  const context = buildNutritionChatContext(targetDate);
+  const systemPrompt = `${PROMPTS.nutrition_chat}\n\nDatos del usuario:\n${context}`;
+
+  const claudeMessages = (messages as any[])
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+  await claudeStreamChat(systemPrompt, claudeMessages, res);
 });
 
 export default router;

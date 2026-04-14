@@ -3,6 +3,7 @@ import { useNutrition } from '../hooks/useNutrition';
 import { useNutritionPlan, type DietaryPreferences } from '../hooks/useNutritionPlan';
 import { useProfile } from '../hooks/useProfile';
 import { MealLogger } from '../components/MealLogger';
+import { NutritionChat } from '../components/NutritionChat';
 import { STTButton } from '../components/ui/STTButton';
 import { useAIProgress } from '../hooks/useAIProgress';
 import AIProgressIndicator from '../components/ui/AIProgressIndicator';
@@ -91,14 +92,30 @@ function MacroRing({
 }
 
 export const Nutrition: React.FC = () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const isToday = selectedDate === todayStr;
+
+  const goToPreviousDay = () => {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(d.toISOString().slice(0, 10));
+  };
+
+  const goToNextDay = () => {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    const next = d.toISOString().slice(0, 10);
+    if (next <= todayStr) setSelectedDate(next);
+  };
+
   const {
     logs, totals, targets, hasProfile, loading,
     analyzing, analysisResult, analysisError,
     analyzeMeal, stopAnalysis, clearAnalysis,
     saveMealLog, deleteLog,
     refetch: refetchNutrition,
-  } = useNutrition(today);
+  } = useNutrition(selectedDate);
 
   const { activePlan, loading: planLoading, generating, generatePlan, deletePlan } = useNutritionPlan();
   const { profile } = useProfile();
@@ -106,7 +123,7 @@ export const Nutrition: React.FC = () => {
   const photoProgress = useAIProgress();
 
   const [showLogger, setShowLogger] = useState(false);
-  const [activeTab, setActiveTab] = useState<'today' | 'plan'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'plan' | 'chat'>('today');
   const [selectedStrategy, setSelectedStrategy] = useState('maintain');
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [showPlanDetail, setShowPlanDetail] = useState<number | null>(null);
@@ -180,24 +197,46 @@ export const Nutrition: React.FC = () => {
     );
   }
 
-  const formattedDate = new Date(today + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const formattedDate = new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-5 pb-24 lg:pb-6">
       {/* Header — macros del dia */}
       <div className="bg-surface-low rounded-2xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">HOY</p>
+          <button
+            onClick={goToPreviousDay}
+            className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <button
+            onClick={isToday ? undefined : () => setSelectedDate(todayStr)}
+            className={`text-center ${!isToday ? 'cursor-pointer' : 'cursor-default'}`}
+          >
+            {isToday
+              ? <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">HOY</p>
+              : <p className="font-label text-label-sm text-primary tracking-widest uppercase">← Volver a hoy</p>
+            }
             <p className="font-body text-sm text-on-surface capitalize">{formattedDate}</p>
-          </div>
-          {!hasProfile && (
-            <div className="text-right">
-              <p className="font-label text-[0.6rem] text-on-surface-variant tracking-wider">Targets por defecto</p>
-              <p className="font-label text-[0.6rem] text-primary tracking-wider">Completá tu perfil</p>
-            </div>
-          )}
+          </button>
+          <button
+            onClick={goToNextDay}
+            disabled={isToday}
+            className="p-2 rounded-xl text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all disabled:opacity-30 disabled:cursor-default"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
         </div>
+        {!hasProfile && (
+          <div className="text-center mb-3">
+            <p className="font-label text-[0.6rem] text-on-surface-variant tracking-wider">Targets por defecto · <span className="text-primary">Completá tu perfil</span></p>
+          </div>
+        )}
         <div className="flex justify-around">
           <MacroRing value={totals.calories} target={targets.daily_calorie_target} label="Calorías" unit="kcal" color="#f3ffca" />
           <MacroRing value={totals.protein_g} target={targets.daily_protein_g} label="Proteína" unit="g" color="#6a9cff" />
@@ -217,7 +256,7 @@ export const Nutrition: React.FC = () => {
 
       {/* Tabs */}
       <div className="flex gap-2">
-        {(['today', 'plan'] as const).map(tab => (
+        {(['today', 'plan', 'chat'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -227,7 +266,7 @@ export const Nutrition: React.FC = () => {
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            {tab === 'today' ? 'Hoy' : 'Plan'}
+            {tab === 'today' ? 'Hoy' : tab === 'plan' ? 'Plan' : 'Chat AI'}
           </button>
         ))}
       </div>
@@ -238,8 +277,8 @@ export const Nutrition: React.FC = () => {
           {logs.length === 0 ? (
             <div className="bg-surface-low rounded-2xl p-8 text-center">
               <p className="text-3xl mb-3">🥗</p>
-              <p className="font-body text-on-surface-variant">No registraste comidas hoy.</p>
-              <p className="font-body text-sm text-on-surface-variant mt-1">Usá el botón de arriba para agregar tu primera comida.</p>
+              <p className="font-body text-on-surface-variant">No hay comidas registradas {isToday ? 'hoy' : 'este día'}.</p>
+              {isToday && <p className="font-body text-sm text-on-surface-variant mt-1">Usá el botón de arriba para agregar tu primera comida.</p>}
             </div>
           ) : (
             logs.map(log => (
@@ -474,10 +513,20 @@ export const Nutrition: React.FC = () => {
         </div>
       )}
 
+      {/* Tab: Chat nutricional */}
+      {activeTab === 'chat' && (
+        <NutritionChat
+          date={selectedDate}
+          totals={totals}
+          targets={targets}
+          logs={logs}
+        />
+      )}
+
       {/* Modal MealLogger */}
       {showLogger && (
         <MealLogger
-          date={today}
+          date={selectedDate}
           analyzing={analyzing}
           analysisProgress={photoProgress.progress}
           analysisPhase={photoProgress.phase}
