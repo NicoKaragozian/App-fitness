@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import activitiesRoutes from './routes/activities.js';
@@ -13,7 +14,13 @@ import insightsRoutes from './routes/insights.js';
 import sportGroupsRoutes from './routes/sport-groups.js';
 import aiRoutes from './routes/ai.js';
 import trainingRoutes from './routes/training.js';
+import profileRoutes from './routes/profile.js';
+import nutritionRoutes from './routes/nutrition.js';
 import { startPeriodicSync, syncInitial } from './sync.js';
+
+// Directorio de uploads de imagenes de comida
+export const UPLOAD_DIR = process.env.UPLOAD_PATH || path.join(process.cwd(), 'server/uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +42,11 @@ app.use('/api/insights', insightsRoutes);
 app.use('/api/sport-groups', sportGroupsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/training', trainingRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/nutrition', nutritionRoutes);
+
+// Uploads estaticos (fotos de comidas)
+app.use('/uploads', express.static(UPLOAD_DIR));
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

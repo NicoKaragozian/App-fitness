@@ -10,24 +10,28 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const ACTIVITY_KW = ['actividad', 'actividades', 'entreno', 'entrenamiento', 'deporte', 'tenis', 'tennis', 'surf', 'kite', 'wingfoil', 'windsurf', 'gym', 'carrera', 'running', 'caminata', 'ejercicio', 'sesión', 'sesiones', 'rendimiento', 'velocidad', 'distancia', 'caloría', 'frecuencia cardíaca', 'fc prom', 'bpm', 'sport', 'activity', 'cycling', 'ciclismo', 'natación', 'swimming', 'hiking'];
 const SLEEP_KW = ['sueño', 'dormir', 'dormí', 'descanso', 'sleep', 'horas de sueño', 'profundo', 'rem', 'score sueño', 'calidad del sueño', 'desperté', 'hora de dormir'];
 const WELLNESS_KW = ['estrés', 'estres', 'stress', 'hrv', 'variabilidad', 'bienestar', 'wellness', 'pasos', 'steps', 'recuperación', 'readiness', 'fc reposo', 'frecuencia en reposo'];
+const NUTRITION_KW = ['comida', 'comí', 'como', 'almuerzo', 'cena', 'desayuno', 'merienda', 'snack', 'dieta', 'nutrición', 'nutricion', 'proteína', 'proteina', 'calorías', 'calorias', 'macros', 'carbohidratos', 'carbos', 'grasa', 'fibra', 'peso corporal', 'bajar de peso', 'subir de peso', 'plan nutricional', 'meal', 'food', 'nutrition'];
 
-function detectNeeds(message: string): { activities: boolean; sleep: boolean; wellness: boolean } {
+function detectNeeds(message: string): { activities: boolean; sleep: boolean; wellness: boolean; nutrition: boolean } {
   const lower = message.toLowerCase();
   const needsActivities = ACTIVITY_KW.some(kw => lower.includes(kw));
   const needsSleep = SLEEP_KW.some(kw => lower.includes(kw));
   const needsWellness = WELLNESS_KW.some(kw => lower.includes(kw));
+  const needsNutrition = NUTRITION_KW.some(kw => lower.includes(kw));
   // Si no se detectó nada específico, traer todo (primera pregunta genérica)
-  const anyDetected = needsActivities || needsSleep || needsWellness;
+  const anyDetected = needsActivities || needsSleep || needsWellness || needsNutrition;
   return {
     activities: !anyDetected || needsActivities,
     sleep: !anyDetected || needsSleep,
     wellness: !anyDetected || needsWellness,
+    nutrition: !anyDetected || needsNutrition,
   };
 }
 
 function buildContext(needs: ReturnType<typeof detectNeeds>): string {
   const sections: string[] = [];
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const cutoff7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   if (needs.activities) {
     const rows = (db.prepare(`
@@ -89,6 +93,29 @@ function buildContext(needs: ReturnType<typeof detectNeeds>): string {
     if (summary.length > 0) {
       const lines = summary.map(s => `${s.date} | pasos:${s.steps} | FC.reposo:${s.resting_hr ?? '-'}bpm`);
       sections.push(`## Actividad diaria\n${lines.join('\n')}`);
+    }
+  }
+
+  if (needs.nutrition) {
+    const nutritionRows = (db.prepare(`
+      SELECT date,
+        SUM(calories) as cals, SUM(protein_g) as prot, SUM(carbs_g) as carbs, SUM(fat_g) as fat,
+        COUNT(*) as meals
+      FROM nutrition_logs WHERE date >= ?
+      GROUP BY date ORDER BY date DESC LIMIT 7
+    `).all(cutoff7d) as any[]);
+
+    if (nutritionRows.length > 0) {
+      const lines = nutritionRows.map(r =>
+        `${r.date} | ${r.meals} comidas | ${r.cals || 0}kcal | prot:${r.prot || 0}g | carbs:${r.carbs || 0}g | grasa:${r.fat || 0}g`
+      );
+      sections.push(`## Nutrición (últimos 7 días)\nFecha | Comidas | Calorías | Proteína | Carbos | Grasa\n${lines.join('\n')}`);
+    }
+
+    // Targets del perfil si existen
+    const profile = db.prepare('SELECT daily_calorie_target, daily_protein_g, daily_carbs_g, daily_fat_g, weight_kg, primary_goal FROM user_profile WHERE id = 1').get() as any;
+    if (profile?.daily_calorie_target) {
+      sections.push(`## Targets nutricionales del usuario\n${profile.daily_calorie_target}kcal | prot:${profile.daily_protein_g}g | carbs:${profile.daily_carbs_g}g | grasa:${profile.daily_fat_g}g\nPeso: ${profile.weight_kg || '-'}kg | Objetivo: ${profile.primary_goal || '-'}`);
     }
   }
 

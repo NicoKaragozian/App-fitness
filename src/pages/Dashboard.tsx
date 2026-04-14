@@ -9,6 +9,7 @@ import { useHrv } from '../hooks/useHrv';
 import { useStress } from '../hooks/useStress';
 import { InsightsCard } from '../components/InsightsCard';
 import { AIInsightPanel } from '../components/AIInsightPanel';
+import { NutritionTodayCard } from '../components/NutritionTodayCard';
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { ActivityRing } from '../components/ui/ActivityRing';
 import { apiFetch } from '../api/client';
@@ -362,6 +363,9 @@ export const Dashboard: React.FC = () => {
         title="BRIEFING DEL DÍA"
         chatContext="Dame un resumen de cómo estoy hoy"
       />
+
+      {/* Nutricion de hoy */}
+      <NutritionTodayCard />
 
       {/* Últimas Sesiones — horizontal scroll */}
       {recentSessions.length > 0 && (

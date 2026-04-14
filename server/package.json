@@ -9,11 +9,14 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.88.0",
     "@gooin/garmin-connect": "^1.7.6",
+    "@types/multer": "^2.1.0",
     "better-sqlite3": "^11.6.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.0",
+    "multer": "^2.1.1",
     "node-cron": "^3.0.3",
     "oauth-1.0a": "^2.2.6",
     "playwright": "^1.59.1"
