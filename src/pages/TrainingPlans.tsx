@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTrainingPlans } from '../hooks/useTrainingPlans';
 import { useAssessment } from '../hooks/useAssessment';
 import { Goals } from './Goals';
+import { STTButton } from '../components/ui/STTButton';
 
 const PRESETS = [
   'Plan de fuerza funcional para complementar deportes acuáticos y raqueta',
@@ -162,13 +163,20 @@ export const TrainingPlans: React.FC = () => {
               </div>
 
               {/* Goal input */}
-              <textarea
-                value={goal}
-                onChange={e => setGoal(e.target.value)}
-                placeholder="Describí tu objetivo (ej: plan de fuerza para complementar surf y tenis, 3 días por semana)..."
-                rows={3}
-                className="w-full bg-surface-container rounded-lg px-4 py-3 text-on-surface text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder-on-surface-variant"
-              />
+              <div className="relative">
+                <textarea
+                  value={goal}
+                  onChange={e => setGoal(e.target.value)}
+                  placeholder="Describí tu objetivo (ej: plan de fuerza para complementar surf y tenis, 3 días por semana)..."
+                  rows={3}
+                  className="w-full bg-surface-container rounded-lg px-4 py-3 pr-10 text-on-surface text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder-on-surface-variant"
+                />
+                <STTButton
+                  onTranscript={text => setGoal(prev => prev ? prev + ' ' + text : text)}
+                  size="sm"
+                  className="absolute bottom-2 right-2"
+                />
+              </div>
               {/* Texto de análisis en streaming */}
               {generating && thinkingText && (
                 <div className="bg-surface-container rounded-lg px-4 py-3 space-y-1.5">

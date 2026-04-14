@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MarkdownText } from '../components/ui/MarkdownText';
 import { TTSButton } from '../components/ui/TTSButton';
+import { STTButton } from '../components/ui/STTButton';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -264,6 +265,13 @@ export const AICoach: React.FC = () => {
     }
   }, [messages, isStreaming, persistMessages]);
 
+  const resizeTextarea = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 128) + 'px';
+  }, []);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -274,6 +282,11 @@ export const AICoach: React.FC = () => {
   const handleStop = () => {
     abortRef.current?.abort();
   };
+
+  const handleSTTTranscript = useCallback((text: string) => {
+    setInput(prev => prev ? prev + ' ' + text : text);
+    setTimeout(resizeTextarea, 0);
+  }, [resizeTextarea]);
 
   const isEmpty = messages.length === 0;
 
@@ -476,8 +489,7 @@ export const AICoach: React.FC = () => {
                 value={input}
                 onChange={e => {
                   setInput(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px';
+                  resizeTextarea();
                 }}
                 onKeyDown={handleKeyDown}
                 placeholder="Preguntame sobre tus datos..."
@@ -495,18 +507,24 @@ export const AICoach: React.FC = () => {
                   <span className="w-2.5 h-2.5 rounded-sm bg-red-400 block" />
                 </button>
               ) : (
-                <button
-                  onClick={() => sendMessage(input)}
-                  disabled={!input.trim()}
-                  className="shrink-0 w-8 h-8 rounded-xl bg-primary/20 hover:bg-primary/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
-                  title="Enviar (Enter)"
-                >
-                  <span className="text-primary text-base leading-none">↑</span>
-                </button>
+                <>
+                  <STTButton
+                    onTranscript={handleSTTTranscript}
+                    size="md"
+                  />
+                  <button
+                    onClick={() => sendMessage(input)}
+                    disabled={!input.trim()}
+                    className="shrink-0 w-8 h-8 rounded-xl bg-primary/20 hover:bg-primary/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+                    title="Enviar (Enter)"
+                  >
+                    <span className="text-primary text-base leading-none">↑</span>
+                  </button>
+                </>
               )}
             </div>
             <p className="text-center font-label text-[0.6rem] text-on-surface-variant/40 tracking-wider uppercase mt-2">
-              Enter para enviar · Shift+Enter para nueva línea
+              Enter para enviar · Shift+Enter para nueva línea · Micrófono para dictar
             </p>
           </div>
         </div>

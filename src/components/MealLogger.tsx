@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import type { FoodAnalysis } from '../hooks/useNutrition';
+import { STTButton } from './ui/STTButton';
 
 const MEAL_SLOTS = [
   { value: 'breakfast', label: 'Desayuno' },
@@ -268,23 +269,37 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
             <>
               <div>
                 <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">Nombre</label>
-                <input
-                  value={mealName}
-                  onChange={e => setMealName(e.target.value)}
-                  placeholder="Ej: Pollo con ensalada"
-                  className="w-full bg-surface-container text-on-surface font-body text-sm px-3 py-2.5 rounded-xl outline-none border border-transparent focus:border-primary/40 placeholder:text-on-surface-variant"
-                />
+                <div className="relative">
+                  <input
+                    value={mealName}
+                    onChange={e => setMealName(e.target.value)}
+                    placeholder="Ej: Pollo con ensalada"
+                    className="w-full bg-surface-container text-on-surface font-body text-sm px-3 py-2.5 pr-9 rounded-xl outline-none border border-transparent focus:border-primary/40 placeholder:text-on-surface-variant"
+                  />
+                  <STTButton
+                    onTranscript={text => setMealName(prev => prev ? prev + ' ' + text : text)}
+                    size="sm"
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">Descripción</label>
-                <textarea
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  placeholder="Descripción opcional..."
-                  rows={2}
-                  className="w-full bg-surface-container text-on-surface font-body text-sm px-3 py-2.5 rounded-xl outline-none border border-transparent focus:border-primary/40 placeholder:text-on-surface-variant resize-none"
-                />
+                <div className="relative">
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="Descripción opcional..."
+                    rows={2}
+                    className="w-full bg-surface-container text-on-surface font-body text-sm px-3 py-2.5 pr-9 rounded-xl outline-none border border-transparent focus:border-primary/40 placeholder:text-on-surface-variant resize-none"
+                  />
+                  <STTButton
+                    onTranscript={text => setDescription(prev => prev ? prev + ' ' + text : text)}
+                    size="sm"
+                    className="absolute bottom-2 right-2"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
