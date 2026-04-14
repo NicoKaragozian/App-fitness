@@ -33,8 +33,8 @@ export function useTrainingPlans() {
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
-  // Genera un plan con streaming SSE. Llama onToken() cada vez que llega un token.
-  // Resuelve con { plan, recommendations } cuando el plan está guardado en DB.
+  // Generate a plan with streaming SSE. Calls onToken() each time a token arrives.
+  // Resolves with { plan, recommendations } when the plan is saved in DB.
   const generatePlanStream = useCallback(async (
     goal: string,
     onToken: () => void,
@@ -49,7 +49,7 @@ export function useTrainingPlans() {
     });
 
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({ error: 'Error desconocido' }));
+      const errData = await response.json().catch(() => ({ error: 'Unknown error' }));
       throw new Error(errData.error || `Error ${response.status}`);
     }
 
@@ -75,7 +75,7 @@ export function useTrainingPlans() {
           try {
             json = JSON.parse(data);
           } catch {
-            continue; // línea SSE no es JSON válido, ignorar
+            continue; // SSE line is not valid JSON, skip
           }
 
           if (json.token !== undefined) {
@@ -99,7 +99,7 @@ export function useTrainingPlans() {
       reader.releaseLock();
     }
 
-    if (!result) throw new Error('No se recibió el plan del servidor');
+    if (!result) throw new Error('Plan not received from server');
     await fetchPlans();
     return result;
   }, [fetchPlans]);

@@ -23,10 +23,10 @@ router.put('/', (req, res) => {
   const body = req.body as Record<string, any>;
 
   if (!body.name?.toString().trim()) {
-    return res.status(400).json({ error: 'El nombre es requerido' });
+    return res.status(400).json({ error: 'Name is required' });
   }
   if (!body.age || isNaN(Number(body.age))) {
-    return res.status(400).json({ error: 'La edad es requerida' });
+    return res.status(400).json({ error: 'Age is required' });
   }
 
   const values = ALL_FIELDS.map(f => {

@@ -4,17 +4,17 @@ import { useAuth } from '../../context/AuthContext';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'DASHBOARD', subtitle: 'DRIFT OVERVIEW' },
-  '/sports': { title: 'ANÁLISIS DE DEPORTES', subtitle: 'BIOMETRIC PERFORMANCE OVERVIEW' },
-  '/training/profile': { title: 'MI PERFIL', subtitle: 'ASSESSMENT' },
-  '/training': { title: 'TRAINING PLANS', subtitle: 'PLANES PERSONALIZADOS' },
-  '/nutrition': { title: 'NUTRICIÓN', subtitle: 'TRACKING DIARIO' },
+  '/sports': { title: 'SPORTS ANALYSIS', subtitle: 'BIOMETRIC PERFORMANCE OVERVIEW' },
+  '/training/profile': { title: 'MY PROFILE', subtitle: 'ASSESSMENT' },
+  '/training': { title: 'TRAINING PLANS', subtitle: 'PERSONALIZED PLANS' },
+  '/nutrition': { title: 'NUTRITION', subtitle: 'DAILY TRACKING' },
   '/coach': { title: 'AI COACH', subtitle: 'DRIFT AI' },
 };
 
 const formatDate = () => {
   const d = new Date();
-  const days = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
-  const months = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
   return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
 };
 
@@ -39,7 +39,7 @@ export const Header: React.FC = () => {
           <button
             onClick={logout}
             className="hidden md:flex items-center gap-2 bg-surface-container px-3 py-1.5 rounded-xl hover:bg-surface-container/70 transition-all cursor-pointer"
-            title="Cerrar sesión"
+            title="Log out"
           >
             <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isDemoMode ? 'bg-yellow-400' : 'bg-primary'}`}></div>
             <span className="font-label text-label-sm text-on-surface-variant">{isDemoMode ? 'DEMO MODE' : 'GARMIN CONNECTED'}</span>
@@ -51,7 +51,7 @@ export const Header: React.FC = () => {
           <button
             onClick={logout}
             className="flex md:hidden items-center justify-center w-8 h-8 rounded-xl bg-surface-container text-on-surface-variant hover:text-on-surface transition-all"
-            title="Cerrar sesión"
+            title="Log out"
           >
             <span className="text-base">⏏</span>
           </button>

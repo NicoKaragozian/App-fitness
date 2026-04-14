@@ -69,7 +69,7 @@ export const ActiveWorkout: React.FC = () => {
   const [finishing, setFinishing] = useState(false);
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
 
-  // Inicializar sets basándonos en target_sets
+  // Initialize sets based on target_sets
   useEffect(() => {
     if (!session) return;
     const initial: Record<number, SetState[]> = {};
@@ -85,7 +85,7 @@ export const ActiveWorkout: React.FC = () => {
     setSets(initial);
   }, [session]);
 
-  // Auto-fill pesos del último workout
+  // Auto-fill weights from last workout
   useEffect(() => {
     if (Object.keys(lastWeights).length === 0) return;
     setSets(prev => {
@@ -131,9 +131,9 @@ export const ActiveWorkout: React.FC = () => {
       const next = allExercises[idx + 1];
       if (next) {
         const target = next.target_sets && next.target_reps
-          ? `. ${next.target_sets} series de ${next.target_reps}`
+          ? `. ${next.target_sets} sets of ${next.target_reps}`
           : '';
-        speak(`Siguiente: ${next.name}${target}`);
+        speak(`Next: ${next.name}${target}`);
       }
     }
 
@@ -141,7 +141,7 @@ export const ActiveWorkout: React.FC = () => {
       if (set.savedId != null) {
         await updateSet(set.savedId, reps, weight, !toggling);
       } else if (!toggling) {
-        // solo loguear si estamos marcando (no desmarcar algo que no está guardado)
+        // only log if we're marking (don't unmark something that isn't saved)
         const savedId = await logSet(workoutId, exId, setIdx + 1, reps, weight);
         setSets(prev => ({
           ...prev,
@@ -183,8 +183,8 @@ export const ActiveWorkout: React.FC = () => {
   if (!session) {
     return (
       <div className="p-6 text-center text-on-surface-variant">
-        Datos de sesión no disponibles.{' '}
-        <button onClick={() => navigate('/training')} className="text-primary underline">Volver</button>
+        Session data not available.{' '}
+        <button onClick={() => navigate('/training')} className="text-primary underline">Go back</button>
       </div>
     );
   }
@@ -193,7 +193,7 @@ export const ActiveWorkout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-surface pb-28">
-      {/* Header fijo */}
+      {/* Fixed header */}
       <div className="sticky top-0 z-10 bg-surface border-b border-outline-variant/20 px-4 py-3">
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           <div>
@@ -202,7 +202,7 @@ export const ActiveWorkout: React.FC = () => {
           </div>
           <div className="text-right">
             <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-              {completedSets}/{totalSets} series
+              {completedSets}/{totalSets} sets
             </p>
             <div className="w-24 h-1.5 bg-surface-container rounded-full mt-1 overflow-hidden">
               <div
@@ -214,7 +214,7 @@ export const ActiveWorkout: React.FC = () => {
         </div>
       </div>
 
-      {/* Contenido */}
+      {/* Content */}
       <div className="flex-1 p-4 space-y-4 max-w-2xl mx-auto w-full">
         {groups.map(({ category, exercises }) => (
           <div key={category} className="space-y-3">
@@ -237,7 +237,7 @@ export const ActiveWorkout: React.FC = () => {
                       </p>
                       {(ex.target_sets || ex.target_reps) && (
                         <p className="text-xs text-on-surface-variant mt-0.5">
-                          Objetivo: {ex.target_sets ? `${ex.target_sets}×` : ''}{ex.target_reps ?? ''}
+                          Target: {ex.target_sets ? `${ex.target_sets}×` : ''}{ex.target_reps ?? ''}
                           {ex.notes ? ` · ${ex.notes}` : ''}
                         </p>
                       )}
@@ -273,7 +273,7 @@ export const ActiveWorkout: React.FC = () => {
         ))}
       </div>
 
-      {/* Bottom bar fijo */}
+      {/* Fixed bottom bar */}
       <div className="fixed bottom-14 lg:bottom-0 left-0 right-0 bg-surface border-t border-outline-variant/20 p-4 z-10">
         <div className="max-w-2xl mx-auto flex gap-3">
           <button
@@ -287,36 +287,36 @@ export const ActiveWorkout: React.FC = () => {
             disabled={finishing}
             className="flex-1 bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity"
           >
-            {finishing ? 'Guardando…' : `Finalizar Workout · ${completedSets} series`}
+            {finishing ? 'Saving...' : `Finish Workout · ${completedSets} sets`}
           </button>
         </div>
       </div>
 
-      {/* Confirmar salir */}
+      {/* Confirm leave */}
       {showConfirmLeave && (
         <div className="fixed inset-0 bg-black/60 flex items-end lg:items-center justify-center z-50 p-4">
           <div className="bg-surface-low rounded-t-2xl lg:rounded-2xl w-full max-w-sm p-6 space-y-4">
-            <p className="font-display text-on-surface text-lg">¿Salir del workout?</p>
-            <p className="text-on-surface-variant text-sm">Las series ya completadas se guardaron. Las pendientes se perderán.</p>
+            <p className="font-display text-on-surface text-lg">Leave workout?</p>
+            <p className="text-on-surface-variant text-sm">Completed sets have been saved. Pending sets will be lost.</p>
             <div className="flex gap-3">
               <button
                 onClick={handleFinish}
                 className="flex-1 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2.5 rounded-xl"
               >
-                Finalizar y guardar
+                Finish and save
               </button>
               <button
                 onClick={() => { navigate(planId ? `/training/${planId}` : '/training'); }}
                 className="flex-1 bg-red-600/20 text-red-400 font-label text-label-sm tracking-widest uppercase px-4 py-2.5 rounded-xl"
               >
-                Salir sin guardar
+                Leave without saving
               </button>
             </div>
             <button
               onClick={() => setShowConfirmLeave(false)}
               className="w-full text-on-surface-variant text-sm py-1"
             >
-              Cancelar
+              Cancel
             </button>
           </div>
         </div>
@@ -344,7 +344,7 @@ function SetRow({ setIndex, set, onChangeReps, onChangeWeight, onComplete }: Set
             ? 'bg-primary border-primary text-surface'
             : 'border-outline-variant bg-transparent hover:border-primary/60'
         }`}
-        title={set.completed ? 'Desmarcar serie' : 'Marcar serie como completada'}
+        title={set.completed ? 'Unmark set' : 'Mark set as completed'}
       >
         {set.completed && (
           <svg viewBox="0 0 12 10" className="w-3 h-3 fill-none stroke-current stroke-2">

@@ -7,11 +7,11 @@ import AIProgressIndicator from '../components/ui/AIProgressIndicator';
 import { GOAL_PROGRESS } from '../utils/aiProgressConfigs';
 
 const SUGGESTIONS = [
-  'Lograr mi primer muscle-up',
-  'Hacer 10 dominadas seguidas',
-  'Correr 10km en menos de 50 minutos',
-  'Mejorar flexibilidad con yoga 3 veces por semana',
-  'Aumentar velocidad máxima en kitesurf a 40 km/h',
+  'Achieve my first muscle-up',
+  'Do 10 pull-ups in a row',
+  'Run 10km in under 50 minutes',
+  'Improve flexibility with yoga 3 times a week',
+  'Increase max speed in kitesurfing to 40 km/h',
 ];
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -21,22 +21,22 @@ function formatCountdown(targetDate: string): { label: string; urgent: boolean }
   const now = new Date();
   const diffDays = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (diffDays < 0) return { label: 'Vencido', urgent: true };
-  if (diffDays === 0) return { label: '¡Hoy!', urgent: true };
-  if (diffDays === 1) return { label: 'Mañana', urgent: false };
-  if (diffDays < 14) return { label: `${diffDays} días`, urgent: diffDays < 7 };
+  if (diffDays < 0) return { label: 'Overdue', urgent: true };
+  if (diffDays === 0) return { label: 'Today!', urgent: true };
+  if (diffDays === 1) return { label: 'Tomorrow', urgent: false };
+  if (diffDays < 14) return { label: `${diffDays} days`, urgent: diffDays < 7 };
   const weeks = Math.ceil(diffDays / 7);
-  return { label: `${weeks} semanas`, urgent: false };
+  return { label: `${weeks} weeks`, urgent: false };
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  active: 'ACTIVO',
-  completed: 'COMPLETADO',
-  abandoned: 'ABANDONADO',
+  active: 'ACTIVE',
+  completed: 'COMPLETED',
+  abandoned: 'ABANDONED',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -79,7 +79,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       }, 400);
     } catch (err: any) {
       aiProgress.reset();
-      setGenError(err.message || 'Error generando la guía');
+      setGenError(err.message || 'Error generating guide');
     } finally {
       setGenerating(false);
     }
@@ -105,25 +105,25 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
         <div className="flex items-center justify-between">
           <div>
             <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Fitness</p>
-            <h1 className="font-display text-2xl text-on-surface">Mis Objetivos</h1>
+            <h1 className="font-display text-2xl text-on-surface">My Goals</h1>
           </div>
           <button
             onClick={e => { e.stopPropagation(); setShowForm(f => !f); setGenError(null); }}
             className="bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2 rounded-xl hover:opacity-90 transition-opacity"
           >
-            {showForm ? 'Cancelar' : 'Nuevo Objetivo'}
+            {showForm ? 'Cancel' : 'New Goal'}
           </button>
         </div>
       )}
 
-      {/* New Objetivo button when embedded */}
+      {/* New Goal button when embedded */}
       {isEmbedded && (
         <div className="flex justify-end">
           <button
             onClick={e => { e.stopPropagation(); setShowForm(f => !f); setGenError(null); }}
             className="bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2 rounded-xl hover:opacity-90 transition-opacity"
           >
-            {showForm ? 'Cancelar' : 'Nuevo Objetivo'}
+            {showForm ? 'Cancel' : 'New Goal'}
           </button>
         </div>
       )}
@@ -132,10 +132,10 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {showForm && (
         <div className="bg-surface-low rounded-xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
           <div>
-            <p className="font-label text-label-sm text-primary tracking-widest uppercase">Nuevo objetivo</p>
+            <p className="font-label text-label-sm text-primary tracking-widest uppercase">New goal</p>
             <p className="text-xs text-on-surface-variant mt-1">
-              Los objetivos son guías de progresión: qué trabajar, en qué orden y cómo avanzar.
-              Si querés un plan de entrenamiento con series y repeticiones, usá la sección <span className="text-primary">Planes de Entrenamiento</span>.
+              Goals are progression guides: what to work on, in what order, and how to advance.
+              If you want a training plan with sets and reps, use the <span className="text-primary">Training Plans</span> section.
             </p>
           </div>
 
@@ -159,13 +159,13 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
           {/* Objective textarea */}
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1.5 block">
-              ¿Qué objetivo querés lograr?
+              What goal do you want to achieve?
             </label>
             <textarea
               value={objective}
               onChange={e => setObjective(e.target.value)}
               rows={3}
-              placeholder="Describí tu objetivo en detalle. Por ejemplo: quiero lograr mi primer muscle-up en la barra."
+              placeholder="Describe your goal in detail. For example: I want to achieve my first muscle-up on the bar."
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-on-surface-variant/40"
             />
           </div>
@@ -173,7 +173,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
           {/* Target date (optional) */}
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1.5 block">
-              Fecha objetivo <span className="normal-case text-on-surface-variant/60">(opcional)</span>
+              Target date <span className="normal-case text-on-surface-variant/60">(optional)</span>
             </label>
             <input
               type="date"
@@ -191,7 +191,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
             </div>
           )}
 
-          {/* Progreso de generacion */}
+          {/* Generation progress */}
           {aiProgress.isActive && (
             <div className="bg-surface-container rounded-xl px-4 py-3">
               <AIProgressIndicator progress={aiProgress.progress} phase={aiProgress.phase} />
@@ -203,7 +203,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
             disabled={generating || !objective.trim()}
             className="w-full bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
           >
-            {generating ? 'Generando guía…' : 'Generar Guía'}
+            {generating ? 'Generating guide...' : 'Generate Guide'}
           </button>
         </div>
       )}
@@ -212,8 +212,8 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {activeGoals.length === 0 && !showForm && (
         <div className="bg-surface-low rounded-xl p-10 text-center space-y-3">
           <div className="text-4xl opacity-30">◎</div>
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Sin objetivos activos</p>
-          <p className="text-sm text-on-surface-variant">Creá tu primer objetivo y la AI va a generar una guía de progresión con fases, ejercicios clave y tips para lograrlo.</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">No active goals</p>
+          <p className="text-sm text-on-surface-variant">Create your first goal and AI will generate a progression guide with phases, key exercises, and tips to achieve it.</p>
         </div>
       )}
 
@@ -237,7 +237,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {/* Archived goals */}
       {archivedGoals.length > 0 && (
         <div className="space-y-2">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase px-1">Anteriores</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase px-1">Previous</p>
           {archivedGoals.map(goal => (
             <GoalCard
               key={goal.id}
@@ -258,20 +258,20 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {confirmDelete !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="bg-surface-low rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-xl">
-            <p className="font-display text-lg text-on-surface">¿Eliminar objetivo?</p>
-            <p className="text-sm text-on-surface-variant">Se borrará el objetivo y todas sus fases. Esta acción no se puede deshacer.</p>
+            <p className="font-display text-lg text-on-surface">Delete goal?</p>
+            <p className="text-sm text-on-surface-variant">The goal and all its phases will be deleted. This action cannot be undone.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
                 className="flex-1 bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:opacity-80"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 onClick={async () => { await deleteGoal(confirmDelete); setConfirmDelete(null); }}
                 className="flex-1 bg-red-500/20 text-red-400 font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:bg-red-500/30"
               >
-                Eliminar
+                Delete
               </button>
             </div>
           </div>
@@ -324,7 +324,7 @@ function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon,
               />
             </div>
             <span className="font-label text-[10px] text-on-surface-variant tracking-widest shrink-0">
-              {goal.completed_count}/{goal.milestone_count} fases
+              {goal.completed_count}/{goal.milestone_count} phases
             </span>
           </div>
 
@@ -352,7 +352,7 @@ function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon,
           <button
             onClick={onMenuToggle}
             className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors text-base leading-none"
-            title="Opciones"
+            title="Options"
           >
             ⋯
           </button>
@@ -362,21 +362,21 @@ function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon,
                 onClick={onComplete}
                 className="w-full text-left px-4 py-2.5 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors font-body"
               >
-                {goal.status === 'active' ? '✓ Marcar completado' : '↺ Reactivar'}
+                {goal.status === 'active' ? '✓ Mark completed' : '↺ Reactivate'}
               </button>
               {goal.status === 'active' && (
                 <button
                   onClick={onAbandon}
                   className="w-full text-left px-4 py-2.5 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors font-body"
                 >
-                  Abandonar
+                  Abandon
                 </button>
               )}
               <button
                 onClick={onDelete}
                 className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors font-body"
               >
-                Eliminar
+                Delete
               </button>
             </div>
           )}

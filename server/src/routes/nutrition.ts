@@ -11,7 +11,7 @@ import { UPLOAD_DIR } from '../lib/upload-dir.js';
 
 const router = Router();
 
-// Defaults de macros si no hay user_profile
+// Default macros if no user_profile exists
 const DEFAULT_TARGETS = {
   daily_calorie_target: 2000,
   daily_protein_g: 150,
@@ -32,7 +32,7 @@ function getMacroTargets(): typeof DEFAULT_TARGETS {
   return DEFAULT_TARGETS;
 }
 
-// Configuracion de multer
+// Multer configuration
 const storage = multer.diskStorage({
   destination: UPLOAD_DIR,
   filename: (_req, file, cb) => {
@@ -48,7 +48,7 @@ const upload = multer({
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Solo se aceptan imágenes'));
+      cb(new Error('Only images are accepted'));
     }
   },
 });
@@ -60,21 +60,21 @@ async function toClaudeCompatible(filePath: string, mimetype: string): Promise<{
     const base64 = fs.readFileSync(filePath).toString('base64');
     return { base64, mediaType: mimetype as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' };
   }
-  // Convertir formatos no soportados (AVIF, HEIC, BMP, TIFF, etc.) a JPEG
+  // Convert unsupported formats (AVIF, HEIC, BMP, TIFF, etc.) to JPEG
   const jpegBuffer = await sharp(filePath).jpeg({ quality: 90 }).toBuffer();
   return { base64: jpegBuffer.toString('base64'), mediaType: 'image/jpeg' };
 }
 
-// POST /api/nutrition/analyze — Analisis de foto con Claude Vision (streaming SSE)
+// POST /api/nutrition/analyze — Photo analysis with Claude Vision (streaming SSE)
 router.post('/analyze', upload.single('image'), async (req: Request, res: Response) => {
   if (!req.file) {
-    res.status(400).json({ error: 'No se recibió ninguna imagen' });
+    res.status(400).json({ error: 'No image received' });
     return;
   }
 
   if (!isClaudeConfigured()) {
     fs.unlink(req.file.path, () => {});
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
     return;
   }
 
@@ -84,7 +84,7 @@ router.post('/analyze', upload.single('image'), async (req: Request, res: Respon
 
     await claudeVisionStream(
       PROMPTS.food_vision,
-      'Analizá esta imagen de comida y devolvé el JSON con los macronutrientes estimados.',
+      'Analyze this food image and return the JSON with estimated macronutrients.',
       imageBase64,
       mediaType,
       imagePath,
@@ -98,7 +98,7 @@ router.post('/analyze', upload.single('image'), async (req: Request, res: Respon
   }
 });
 
-// POST /api/nutrition/logs — Guardar log de comida
+// POST /api/nutrition/logs — Save meal log
 router.post('/logs', (req: Request, res: Response) => {
   const {
     date, meal_slot, meal_name, description,
@@ -107,7 +107,7 @@ router.post('/logs', (req: Request, res: Response) => {
   } = req.body;
 
   if (!date) {
-    res.status(400).json({ error: 'date es requerido' });
+    res.status(400).json({ error: 'date is required' });
     return;
   }
 
@@ -136,7 +136,7 @@ router.post('/logs', (req: Request, res: Response) => {
   res.json({ id: result.lastInsertRowid });
 });
 
-// GET /api/nutrition/logs — Logs del dia + totales + targets
+// GET /api/nutrition/logs — Day's logs + totals + targets
 router.get('/logs', (req: Request, res: Response) => {
   const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
 
@@ -162,11 +162,11 @@ router.get('/logs', (req: Request, res: Response) => {
   res.json({ logs, totals, targets, hasProfile });
 });
 
-// GET /api/nutrition/logs/range — Logs por rango de fechas
+// GET /api/nutrition/logs/range — Logs by date range
 router.get('/logs/range', (req: Request, res: Response) => {
   const { from, to } = req.query as { from: string; to: string };
   if (!from || !to) {
-    res.status(400).json({ error: 'from y to son requeridos' });
+    res.status(400).json({ error: 'from and to are required' });
     return;
   }
 
@@ -183,7 +183,7 @@ router.get('/logs/range', (req: Request, res: Response) => {
   res.json({ days: rows });
 });
 
-// PUT /api/nutrition/logs/:id — Editar log
+// PUT /api/nutrition/logs/:id — Edit log
 router.put('/logs/:id', (req: Request, res: Response) => {
   const { id } = req.params;
   const fields = ['meal_slot', 'meal_name', 'description', 'calories', 'protein_g', 'carbs_g', 'fat_g', 'fiber_g'];
@@ -198,7 +198,7 @@ router.put('/logs/:id', (req: Request, res: Response) => {
   }
 
   if (updates.length === 0) {
-    res.status(400).json({ error: 'No hay campos para actualizar' });
+    res.status(400).json({ error: 'No fields to update' });
     return;
   }
 
@@ -207,29 +207,29 @@ router.put('/logs/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// DELETE /api/nutrition/logs/:id — Borrar log + imagen asociada
+// DELETE /api/nutrition/logs/:id — Delete log + associated image
 router.delete('/logs/:id', (req: Request, res: Response) => {
   const row = db.prepare('SELECT image_path FROM nutrition_logs WHERE id = ?').get(req.params.id) as any;
   db.prepare('DELETE FROM nutrition_logs WHERE id = ?').run(req.params.id);
 
   if (row?.image_path) {
     const fullPath = path.join(UPLOAD_DIR, row.image_path);
-    fs.unlink(fullPath, () => {}); // No-blocking, ignorar errores
+    fs.unlink(fullPath, () => {}); // Non-blocking, ignore errors
   }
 
   res.json({ ok: true });
 });
 
-// POST /api/nutrition/plans/generate — Generar plan nutricional con Claude (streaming SSE)
+// POST /api/nutrition/plans/generate — Generate nutrition plan with Claude (streaming SSE)
 router.post('/plans/generate', async (req: Request, res: Response) => {
   if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
     return;
   }
 
   const { strategy, linkedTrainingPlanId, dietaryPreferences } = req.body;
 
-  // UPSERT de preferencias dietarias — crea fila si no existe, actualiza si existe
+  // UPSERT dietary preferences — creates row if it doesn't exist, updates if it does
   if (dietaryPreferences && typeof dietaryPreferences === 'object') {
     db.prepare(`
       INSERT INTO user_profile (id, dietary_preferences, updated_at)
@@ -243,15 +243,15 @@ router.post('/plans/generate', async (req: Request, res: Response) => {
   const context = buildNutritionPlanContext(strategy);
   const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 
-  // Streaming con beforeDone: parsear + guardar + enviar plan al completar
+  // Streaming with beforeDone: parse + save + send plan on completion
   await claudeStreamGenerate(
     PROMPTS.nutrition_plan,
-    `Generá un plan nutricional flexible con estos datos:\n\n${context}`,
+    `Generate a flexible nutrition plan with this data:\n\n${context}`,
     res,
     {
       maxTokens: 8192,
       beforeDone: (rawResponse: string) => {
-        // Parsear JSON
+        // Parse JSON
         let plan: any;
         try {
           let jsonStr = rawResponse.trim();
@@ -261,16 +261,16 @@ router.post('/plans/generate', async (req: Request, res: Response) => {
           plan = JSON.parse(jsonStr);
         } catch {
           console.error('[nutrition] plan parse error, raw:', rawResponse.slice(0, 500));
-          res.write(`data: ${JSON.stringify({ error: 'No se pudo parsear la respuesta. Intentá de nuevo.' })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: 'Could not parse response. Try again.' })}\n\n`);
           return;
         }
 
         if (!plan.meals || !Array.isArray(plan.meals) || plan.meals.length === 0) {
-          res.write(`data: ${JSON.stringify({ error: 'El plan generado no tiene comidas válidas. Intentá de nuevo.' })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: 'Generated plan has no valid meals. Try again.' })}\n\n`);
           return;
         }
 
-        // Guardar en DB con transaccion
+        // Save to DB with transaction
         try {
           const insertPlan = db.transaction(() => {
             const result = db.prepare(`
@@ -280,7 +280,7 @@ router.post('/plans/generate', async (req: Request, res: Response) => {
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
               linkedTrainingPlanId || null,
-              plan.title || 'Plan Nutricional',
+              plan.title || 'Nutrition Plan',
               plan.daily_calories || null,
               plan.daily_protein_g || null,
               plan.daily_carbs_g || null,
@@ -312,7 +312,7 @@ router.post('/plans/generate', async (req: Request, res: Response) => {
               );
             }
 
-            // UPSERT macro targets del perfil con los del plan generado
+            // UPSERT macro targets from the generated plan into user profile
             if (plan.daily_calories && plan.daily_protein_g && plan.daily_carbs_g && plan.daily_fat_g) {
               db.prepare(`
                 INSERT INTO user_profile (id, daily_calorie_target, daily_protein_g, daily_carbs_g, daily_fat_g, updated_at)
@@ -342,14 +342,14 @@ router.post('/plans/generate', async (req: Request, res: Response) => {
           res.write(`data: ${JSON.stringify({ plan: { ...saved, meals }, done: true })}\n\n`);
         } catch (err: any) {
           console.error('[nutrition] DB insert error:', err.message);
-          res.write(`data: ${JSON.stringify({ error: 'Error guardando el plan en la base de datos.' })}\n\n`);
+          res.write(`data: ${JSON.stringify({ error: 'Error saving plan to database.' })}\n\n`);
         }
       },
     }
   );
 });
 
-// GET /api/nutrition/plans — Listar planes
+// GET /api/nutrition/plans — List plans
 router.get('/plans', (_req: Request, res: Response) => {
   const plans = db.prepare(`
     SELECT np.*, COUNT(npm.id) as meal_count
@@ -360,38 +360,38 @@ router.get('/plans', (_req: Request, res: Response) => {
   res.json(plans);
 });
 
-// GET /api/nutrition/plans/:id — Plan completo con comidas
+// GET /api/nutrition/plans/:id — Full plan with meals
 router.get('/plans/:id', (req: Request, res: Response) => {
   const plan = db.prepare('SELECT * FROM nutrition_plans WHERE id = ?').get(req.params.id);
   if (!plan) {
-    res.status(404).json({ error: 'Plan no encontrado' });
+    res.status(404).json({ error: 'Plan not found' });
     return;
   }
   const meals = db.prepare('SELECT * FROM nutrition_plan_meals WHERE plan_id = ? ORDER BY id').all(req.params.id);
   res.json({ ...(plan as object), meals });
 });
 
-// DELETE /api/nutrition/plans/:id — Borrar plan (CASCADE a meals)
+// DELETE /api/nutrition/plans/:id — Delete plan (CASCADE to meals)
 router.delete('/plans/:id', (req: Request, res: Response) => {
   db.prepare('DELETE FROM nutrition_plans WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
 
-// POST /api/nutrition/chat — Chat contextual de nutricion (streaming SSE)
+// POST /api/nutrition/chat — Contextual nutrition chat (streaming SSE)
 router.post('/chat', async (req: Request, res: Response) => {
   const { messages, date } = req.body;
   if (!Array.isArray(messages) || messages.length === 0) {
-    res.status(400).json({ error: 'messages requerido' });
+    res.status(400).json({ error: 'messages required' });
     return;
   }
   if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado' });
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
     return;
   }
 
   const targetDate = date || new Date().toISOString().slice(0, 10);
   const context = buildNutritionChatContext(targetDate);
-  const systemPrompt = `${PROMPTS.nutrition_chat}\n\nDatos del usuario:\n${context}`;
+  const systemPrompt = `${PROMPTS.nutrition_chat}\n\nUser data:\n${context}`;
 
   const claudeMessages = (messages as any[])
     .filter(m => m.role === 'user' || m.role === 'assistant')

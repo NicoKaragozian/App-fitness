@@ -43,7 +43,7 @@ export const NutritionTodayCard: React.FC = () => {
         setTargets(data.targets);
         setLogCount(data.logs.length);
       })
-      .catch(() => {}) // silencioso — el modulo puede no estar activo
+      .catch(() => {}) // silent — module may not be active
       .finally(() => setLoading(false));
   }, [today]);
 
@@ -57,7 +57,7 @@ export const NutritionTodayCard: React.FC = () => {
     { label: 'KCAL', value: totals.calories, target: targets.daily_calorie_target, color: '#f3ffca' },
     { label: 'PROT', value: totals.protein_g, target: targets.daily_protein_g, color: '#6a9cff' },
     { label: 'CARBS', value: totals.carbs_g, target: targets.daily_carbs_g, color: '#ff7439' },
-    { label: 'GRASA', value: totals.fat_g, target: targets.daily_fat_g, color: '#22d3a5' },
+    { label: 'FAT', value: totals.fat_g, target: targets.daily_fat_g, color: '#22d3a5' },
   ];
 
   return (
@@ -68,17 +68,17 @@ export const NutritionTodayCard: React.FC = () => {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-base">◈</span>
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Nutrición hoy</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Nutrition today</p>
         </div>
         {logCount === 0 ? (
-          <span className="font-label text-label-sm text-primary tracking-wider">+ Registrar</span>
+          <span className="font-label text-label-sm text-primary tracking-wider">+ Log meal</span>
         ) : (
-          <span className="font-label text-label-sm text-on-surface-variant tracking-wider">{logCount} comida{logCount !== 1 ? 's' : ''}</span>
+          <span className="font-label text-label-sm text-on-surface-variant tracking-wider">{logCount} meal{logCount !== 1 ? 's' : ''}</span>
         )}
       </div>
 
       {logCount === 0 ? (
-        <p className="font-body text-sm text-on-surface-variant">Sin comidas registradas</p>
+        <p className="font-body text-sm text-on-surface-variant">No meals logged</p>
       ) : (
         <div className="grid grid-cols-4 gap-3">
           {macros.map(({ label, value, target, color }) => (

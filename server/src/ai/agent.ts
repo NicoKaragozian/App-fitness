@@ -12,10 +12,10 @@ function getClient(): Anthropic {
 }
 
 function handleAnthropicError(err: any): { status: number; message: string } {
-  if (err?.status === 401) return { status: 401, message: 'API key de Claude invalida.' };
-  if (err?.status === 429) return { status: 429, message: 'Rate limit de Claude alcanzado. Esperá unos segundos.' };
-  if (err?.status === 529) return { status: 503, message: 'Claude API sobrecargada.' };
-  return { status: 502, message: `Error de Claude: ${err?.message || 'desconocido'}` };
+  if (err?.status === 401) return { status: 401, message: 'Invalid Claude API key.' };
+  if (err?.status === 429) return { status: 429, message: 'Claude rate limit reached. Wait a few seconds.' };
+  if (err?.status === 529) return { status: 503, message: 'Claude API overloaded.' };
+  return { status: 502, message: `Claude error: ${err?.message || 'unknown'}` };
 }
 
 /**

@@ -6,8 +6,8 @@ export const Login: React.FC = () => {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
 
-  // El auto-detect via polling en AuthContext se encarga de la conexión automática.
-  // Este botón es un fallback manual por si el usuario quiere forzar la detección.
+  // Auto-detect via polling in AuthContext handles the automatic connection.
+  // This button is a manual fallback in case the user wants to force detection.
   const handleManualConnect = async () => {
     setError('');
     setConnecting(true);
@@ -17,9 +17,9 @@ export const Login: React.FC = () => {
         const body = await res.json().catch(() => ({}));
         setError(body.error || `Error ${res.status}`);
       }
-      // Si ok, el polling de AuthContext detectará authenticated: true automáticamente
+      // If ok, AuthContext polling will detect authenticated: true automatically
     } catch {
-      setError('No se pudo conectar al servidor');
+      setError('Could not connect to server');
     } finally {
       setConnecting(false);
     }
@@ -33,22 +33,22 @@ export const Login: React.FC = () => {
           <h1 className="font-display text-4xl font-bold text-primary tracking-tight">DRIFT</h1>
         </div>
 
-        {/* Instrucciones */}
+        {/* Instructions */}
         <div className="bg-surface-container border border-outline-variant/30 rounded-xl p-5 mb-5 space-y-3">
           <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-            Conectar Garmin
+            Connect Garmin
           </p>
           <ol className="space-y-2">
             <li className="flex gap-3">
               <span className="font-display font-bold text-primary text-sm w-5 shrink-0">1</span>
               <p className="font-body text-sm text-on-surface-variant">
-                Abrí una terminal en la raíz del proyecto
+                Open a terminal in the project root
               </p>
             </li>
             <li className="flex gap-3">
               <span className="font-display font-bold text-primary text-sm w-5 shrink-0">2</span>
               <p className="font-body text-sm text-on-surface-variant">
-                Corré:{' '}
+                Run:{' '}
                 <code className="text-primary bg-surface px-1.5 py-0.5 rounded text-xs">
                   npx tsx server/src/get-tokens.ts
                 </code>
@@ -57,21 +57,21 @@ export const Login: React.FC = () => {
             <li className="flex gap-3">
               <span className="font-display font-bold text-primary text-sm w-5 shrink-0">3</span>
               <p className="font-body text-sm text-on-surface-variant">
-                Logueate en el browser que se abre — el dashboard carga solo
+                Log in on the browser that opens — the dashboard loads automatically
               </p>
             </li>
           </ol>
         </div>
 
-        {/* Indicador de espera */}
+        {/* Waiting indicator */}
         <div className="flex items-center gap-3 mb-5 px-1">
           <span className="w-2 h-2 rounded-full bg-primary/50 animate-pulse shrink-0" />
           <p className="font-label text-label-sm text-on-surface-variant/60">
-            Esperando tokens...
+            Waiting for tokens...
           </p>
         </div>
 
-        {/* Botón manual de fallback */}
+        {/* Manual fallback button */}
         <button
           onClick={handleManualConnect}
           disabled={connecting}
@@ -80,10 +80,10 @@ export const Login: React.FC = () => {
           {connecting ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              CONECTANDO...
+              CONNECTING...
             </span>
           ) : (
-            'YA CORRÍ EL SCRIPT'
+            'I ALREADY RAN THE SCRIPT'
           )}
         </button>
 
@@ -95,7 +95,7 @@ export const Login: React.FC = () => {
 
         <div className="flex items-center gap-3 mb-4 mt-2">
           <div className="flex-1 h-px bg-outline-variant/30" />
-          <span className="font-label text-label-sm text-on-surface-variant/50">O</span>
+          <span className="font-label text-label-sm text-on-surface-variant/50">OR</span>
           <div className="flex-1 h-px bg-outline-variant/30" />
         </div>
 
@@ -106,7 +106,7 @@ export const Login: React.FC = () => {
           DEMO MODE
         </button>
         <p className="font-label text-label-sm text-on-surface-variant/40 mt-2 text-center">
-          Datos de ejemplo sin conexión a Garmin
+          Demo data without Garmin connection
         </p>
       </div>
     </div>

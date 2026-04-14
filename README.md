@@ -1,73 +1,217 @@
-# React + TypeScript + Vite
+# DRIFT — AI-Powered Fitness Intelligence Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Your AI sports coach that actually knows your body.**
 
-Currently, two official plugins are available:
+DRIFT connects to your Garmin watch, ingests real biometric data (sleep, HRV, stress, heart rate, activities), and uses **Claude** as the intelligence layer for personalized coaching, training plan generation, nutrition tracking with photo analysis, and goal-setting — all grounded in sports science principles.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+> Built with [Claude](https://anthropic.com) by Anthropic — `claude-sonnet-4-6` powers every AI feature.
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Why DRIFT?
 
-## Expanding the ESLint configuration
+Most fitness apps either show you raw numbers or give generic advice. DRIFT is different: it **interprets** your real biometric data through the lens of sports science and gives you actionable, personalized recommendations. It doesn't just tell you that you slept 6 hours — it tells you what that means for today's training, considering your HRV trend, stress levels, and upcoming plan.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+The AI isn't a bolt-on feature. Claude is the core of the product — it generates training plans, analyzes meals from photos, builds nutrition strategies, creates goal progression roadmaps, and acts as an agentic coach that can take real actions in the app.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Built with Claude
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+DRIFT uses Claude extensively across **6 distinct integration patterns**, showcasing the depth and versatility of the Anthropic API:
+
+| Pattern | Claude Feature | Use Case |
+|---------|---------------|----------|
+| **Vision API** | `claude-sonnet-4-6` with image input | Food photo analysis — estimates portions, identifies ingredients, calculates macronutrients |
+| **Streaming SSE** | `claudeStreamGenerate` | Real-time training plan and nutrition plan generation with live progress indicators |
+| **Tool Use (Agentic)** | `tool_use` with 5 tools | AI Coach autonomously updates profiles, generates plans, logs meals, fetches briefings, navigates the app |
+| **Multi-turn Chat** | `claudeStreamChat` | Context-aware coaching conversations with keyword-driven data injection |
+| **Structured Output** | JSON generation with delimiter parsing | Training plans, nutrition plans, and goal roadmaps as structured JSON |
+| **Single-shot** | `claudeChat` | Exercise descriptions, goal generation |
+
+### Claude-Powered Features
+
+- **AI Sports Coach** — An agentic assistant with access to 5 tools (`update_profile`, `generate_training_plan`, `log_meal`, `get_daily_briefing`, `navigate_to`). It can onboard new users conversationally, interpret biometric data, and take real actions.
+- **Training Plan Generator** — Generates personalized gym plans based on the user's assessment, recent activities, sleep/HRV/stress data, and sport profile. Uses a two-phase prompt (analysis text + `---PLAN_JSON---` delimiter + structured JSON).
+- **Nutrition Photo Analysis** — Snap a photo of your meal, and Claude Vision estimates portions based on plate size and utensil reference, identifies ingredients, and calculates macros with confidence ratings.
+- **Nutrition Plan Generator** — Creates flexible, personalized meal plans with 2-3 interchangeable options per meal slot, respecting dietary preferences, allergies, and training goals.
+- **Goal Progression System** — Generates phase-based roadmaps (3-5 phases) with prerequisites, key exercises, success criteria, and common mistakes to avoid.
+- **Biometric Insights Engine** — 8 rule-based alerts (recovery declining, ready to train, accumulated fatigue, optimal state, etc.) that interpret sleep, HRV, stress, and training load data.
+
+---
+
+## Features
+
+### Real Garmin Connect Integration
+- OAuth 1.0a + OAuth 2.0 authentication via browser-based login
+- 30-day historical sync on first connection
+- Automatic sync every 15 minutes
+- Activities, sleep (with stages), HRV, stress, steps, heart rate
+
+### Biometric Dashboard
+- Composite readiness score (Sleep 40% + Inverse Stress 30% + HRV 30%)
+- Weekly training plan with drag-and-drop
+- AI-powered daily briefing
+- Activity rings for readiness and battery
+
+### Sports Analytics
+- Customizable sport groups with configurable metrics
+- Personal records tracking
+- Performance trends (speed, HR, duration, distance)
+- Per-sport and cross-sport analysis
+
+### Training Plans
+- AI-generated gym plans tailored to your sports and biometrics
+- Session-by-session workout tracking with progressive overload
+- Exercise descriptions generated by Claude
+- Workout logging with sets, reps, and weight
+
+### Nutrition
+- Photo-based meal logging with Claude Vision
+- AI-generated flexible nutrition plans (cut/bulk/recomp/maintain/endurance)
+- Daily macro tracking with targets
+- Contextual nutrition chat for meal suggestions
+
+### Goals
+- Phase-based progression roadmaps
+- Prerequisites and success criteria per phase
+- Timeline estimation based on current fitness level
+
+### Assessment
+- Comprehensive athlete profiling (experience, goals, equipment, injuries, preferences)
+- Drives personalization across all AI features
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Frontend                       │
+│         React 19 + TypeScript + Vite             │
+│              Tailwind CSS                        │
+│                                                  │
+│  Pages: Dashboard, Sports, Sleep, Wellness,      │
+│         AI Coach, Training, Nutrition, Goals,    │
+│         Assessment, Login                        │
+└──────────────────────┬──────────────────────────┘
+                       │ REST API + SSE
+┌──────────────────────┴──────────────────────────┐
+│                   Backend                        │
+│            Express + TypeScript                  │
+│                                                  │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────┐│
+│  │  AI Engine   │  │  Garmin Sync │  │ Insights││
+│  │             │  │              │  │  Engine  ││
+│  │ Claude API  │  │ OAuth + REST │  │ 8 Rules  ││
+│  │ 6 patterns  │  │ 30-day sync  │  │ Stats    ││
+│  └─────────────┘  └──────────────┘  └─────────┘│
+│                                                  │
+│  ┌──────────────────────────────────────────────┐│
+│  │              SQLite (better-sqlite3)          ││
+│  │  20+ tables: activities, sleep, HRV, stress, ││
+│  │  training_plans, nutrition_logs, goals, etc.  ││
+│  └──────────────────────────────────────────────┘│
+└──────────────────────────────────────────────────┘
+
+External:
+  ├── Anthropic API (claude-sonnet-4-6)
+  └── Garmin Connect (OAuth 1.0a + 2.0)
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Tech Stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, TypeScript, Vite 8, Tailwind CSS 3, Recharts |
+| Backend | Express, TypeScript (tsx), better-sqlite3 |
+| AI | Anthropic SDK (`claude-sonnet-4-6`) — Vision, Streaming, Tool Use |
+| Data | Garmin Connect via `@gooin/garmin-connect` (OAuth) |
+| Speech | Web Speech API (STT + TTS, browser-native) |
+| Deploy | Render (Node.js) |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- Garmin Connect account (optional — demo mode available)
+- Anthropic API key (`ANTHROPIC_API_KEY`)
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/NicoKaragozian/drift.git
+cd drift
+
+# Install frontend dependencies
+npm install
+
+# Install backend dependencies
+cd server && npm install && cd ..
+
+# Configure environment
+cp server/.env.example server/.env
+# Add your ANTHROPIC_API_KEY to server/.env
+
+# Start backend (port 3001)
+npx tsx server/src/index.ts
+
+# Start frontend (port 5175) — in a separate terminal
+npm run dev
 ```
+
+### Garmin Authentication
+
+Garmin requires browser-based login (Cloudflare WAF blocks programmatic SSO):
+
+```bash
+npx tsx server/src/get-tokens.ts
+# Opens Chrome → log in manually → tokens are captured automatically
+# Tokens last ~90 days
+```
+
+### Demo Mode
+
+No Garmin watch? No problem. Click **"Demo Mode"** on the login page to explore DRIFT with realistic sample data. All AI features work in demo mode with your Anthropic API key.
+
+---
+
+## Technical Highlights
+
+- **No mocked AI** — Every AI interaction is a real Claude API call with real biometric data as context
+- **Real wearable data** — 30-day historical sync from Garmin Connect, not simulated numbers
+- **Sports science foundations** — Periodization, ACWR (Acute:Chronic Workload Ratio), polarized training (80/20), progressive overload, HR zone distribution
+- **Composite readiness score** — Weighted formula (Sleep 40% + Inverse Stress 30% + HRV 30%) with automatic weight redistribution when metrics are unavailable
+- **Agentic AI** — Claude doesn't just advise; it takes real actions through tool_use (updates profiles, generates plans, logs meals, navigates)
+- **Context-aware conversations** — The AI Coach uses keyword detection to dynamically load relevant data (activities, sleep, wellness, nutrition) before responding
+- **Streaming with progress** — All generative features show real-time progress indicators synced to Claude's token stream
+- **6 Claude integration patterns** — Vision, streaming, tool use, multi-turn chat, structured output, and single-shot — in one application
+
+---
+
+## Environment Variables
+
+```env
+# Required
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Optional
+CLAUDE_MODEL=claude-sonnet-4-6      # Default model
+UPLOAD_PATH=/data/uploads            # Meal photo storage
+DB_PATH=/data/drift.db               # SQLite database path
+NODE_ENV=production                  # Serves built frontend
+```
+
+---
+
+## License
+
+MIT
+
+---
+
+*Built for the Anthropic Hackathon 2025. DRIFT demonstrates that Claude isn't just a chatbot — it's an intelligence layer that can power an entire product experience, from computer vision to agentic workflows to real-time coaching.*

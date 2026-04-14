@@ -33,17 +33,17 @@ router.get('/', (_req, res) => {
 router.post('/', (req, res) => {
   const { name, subtitle = '', color = '#6a9cff', icon = '◎', sportTypes, metrics, chartMetrics = [] } = req.body;
 
-  if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name es requerido' });
-  if (!Array.isArray(sportTypes) || sportTypes.length === 0) return res.status(400).json({ error: 'sportTypes debe ser un array no vacío' });
-  if (!Array.isArray(metrics) || metrics.length === 0) return res.status(400).json({ error: 'metrics debe ser un array no vacío' });
-  if (metrics.some((m: string) => !VALID_METRICS.has(m))) return res.status(400).json({ error: 'metrics contiene valores inválidos' });
+  if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name is required' });
+  if (!Array.isArray(sportTypes) || sportTypes.length === 0) return res.status(400).json({ error: 'sportTypes must be a non-empty array' });
+  if (!Array.isArray(metrics) || metrics.length === 0) return res.status(400).json({ error: 'metrics must be a non-empty array' });
+  if (metrics.some((m: string) => !VALID_METRICS.has(m))) return res.status(400).json({ error: 'metrics contains invalid values' });
 
   // Check for sport_type conflicts
   const allGroups = db.prepare('SELECT id, name, sport_types FROM sport_groups').all() as any[];
   for (const g of allGroups) {
     const existing: string[] = JSON.parse(g.sport_types);
     const conflict = (sportTypes as string[]).find((st) => existing.includes(st));
-    if (conflict) return res.status(409).json({ error: `El deporte "${conflict}" ya pertenece al grupo "${g.name}"` });
+    if (conflict) return res.status(409).json({ error: `Sport "${conflict}" already belongs to group "${g.name}"` });
   }
 
   // Generate unique slug
@@ -63,10 +63,10 @@ router.post('/', (req, res) => {
   res.status(201).json(parseGroup(created));
 });
 
-// PUT /api/sport-groups/reorder — debe ir ANTES de /:id
+// PUT /api/sport-groups/reorder — must go BEFORE /:id
 router.put('/reorder', (req, res) => {
   const { order } = req.body;
-  if (!Array.isArray(order)) return res.status(400).json({ error: 'order debe ser un array de ids' });
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array of ids' });
 
   const update = db.prepare('UPDATE sport_groups SET sort_order = ? WHERE id = ?');
   const tx = db.transaction(() => {
@@ -80,12 +80,12 @@ router.put('/reorder', (req, res) => {
 router.put('/:id', (req, res) => {
   const { id } = req.params;
   const existing = db.prepare('SELECT * FROM sport_groups WHERE id = ?').get(id) as any;
-  if (!existing) return res.status(404).json({ error: 'Grupo no encontrado' });
+  if (!existing) return res.status(404).json({ error: 'Group not found' });
 
   const { name, subtitle, color, icon, sportTypes, metrics, chartMetrics } = req.body;
 
   if (metrics && metrics.some((m: string) => !VALID_METRICS.has(m))) {
-    return res.status(400).json({ error: 'metrics contiene valores inválidos' });
+    return res.status(400).json({ error: 'metrics contains invalid values' });
   }
 
   const newSportTypes: string[] = sportTypes ?? JSON.parse(existing.sport_types);
@@ -95,7 +95,7 @@ router.put('/:id', (req, res) => {
   for (const g of otherGroups) {
     const existingTypes: string[] = JSON.parse(g.sport_types);
     const conflict = newSportTypes.find((st) => existingTypes.includes(st));
-    if (conflict) return res.status(409).json({ error: `El deporte "${conflict}" ya pertenece al grupo "${g.name}"` });
+    if (conflict) return res.status(409).json({ error: `Sport "${conflict}" already belongs to group "${g.name}"` });
   }
 
   db.prepare(
@@ -119,7 +119,7 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   const { id } = req.params;
   const existing = db.prepare('SELECT id FROM sport_groups WHERE id = ?').get(id);
-  if (!existing) return res.status(404).json({ error: 'Grupo no encontrado' });
+  if (!existing) return res.status(404).json({ error: 'Group not found' });
 
   db.prepare('DELETE FROM sport_groups WHERE id = ?').run(id);
   res.json({ ok: true });

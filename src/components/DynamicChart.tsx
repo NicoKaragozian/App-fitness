@@ -9,8 +9,8 @@ type Period = 'daily' | 'weekly' | 'monthly' | 'total';
 
 const axisStyle = { fill: '#adaaaa', fontSize: 11, fontFamily: 'Lexend' };
 
-const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-const DAY_NAMES   = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY_NAMES   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const AGG: Record<string, 'sum' | 'max' | 'avg'> = {
   distance: 'sum',
@@ -67,7 +67,7 @@ function buildTimeline(
 
   if (period === 'daily') {
     const sessions = rawData.filter(s => dateOf(s) === todayStr);
-    return [aggregateBucket(sessions, keys, 'Hoy')];
+    return [aggregateBucket(sessions, keys, 'Today')];
   }
 
   if (period === 'weekly') {
@@ -76,7 +76,7 @@ function buildTimeline(
       const d = new Date(today);
       d.setDate(d.getDate() - i);
       const key = getLocalDateString(d);
-      const label = i === 0 ? 'Hoy' : DAY_NAMES[d.getDay()];
+      const label = i === 0 ? 'Today' : DAY_NAMES[d.getDay()];
       const sessions = rawData.filter(s => dateOf(s) === key);
       result.push(aggregateBucket(sessions, keys, label));
     }
@@ -90,7 +90,7 @@ function buildTimeline(
       const d = new Date(today);
       d.setDate(d.getDate() - i);
       const key = getLocalDateString(d);
-      const label = i === 0 ? 'Hoy' : `${d.getDate()}/${d.getMonth() + 1}`;
+      const label = i === 0 ? 'Today' : `${d.getDate()}/${d.getMonth() + 1}`;
       const sessions = rawData.filter(s => dateOf(s) === key);
       result.push(aggregateBucket(sessions, keys, label));
     }
@@ -118,10 +118,10 @@ function buildTimeline(
 }
 
 const PERIOD_SUBTITLE: Record<Period, string> = {
-  daily:   'HOY',
-  weekly:  'ÚLTIMOS 7 DÍAS',
-  monthly: 'ÚLTIMAS 4 SEMANAS',
-  total:   'HISTÓRICO POR MES',
+  daily:   'TODAY',
+  weekly:  'LAST 7 DAYS',
+  monthly: 'LAST 4 WEEKS',
+  total:   'MONTHLY HISTORY',
 };
 
 const CustomTooltip = ({ active, payload, label }: {

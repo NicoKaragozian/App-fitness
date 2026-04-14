@@ -3,19 +3,19 @@ import { useSessionDetail } from '../hooks/useSessionDetail';
 import { AIInsightPanel } from './AIInsightPanel';
 
 const HR_ZONE_COLORS = ['#4ade80', '#a3e635', '#facc15', '#fb923c', '#f87171'];
-const HR_ZONE_LABELS = ['Z1 Recuperación', 'Z2 Base aeróbica', 'Z3 Aeróbico', 'Z4 Umbral', 'Z5 Máximo'];
+const HR_ZONE_LABELS = ['Z1 Recovery', 'Z2 Aerobic base', 'Z3 Aerobic', 'Z4 Threshold', 'Z5 Maximum'];
 
 const TRAINING_EFFECT_LABELS: Record<string, string> = {
-  RECOVERY: 'Recuperación',
+  RECOVERY: 'Recovery',
   BASE: 'Base',
   TEMPO: 'Tempo',
-  THRESHOLD: 'Umbral',
-  SPEED: 'Velocidad',
-  ANAEROBIC: 'Anaeróbico',
-  VO2MAX: 'VO₂ Máx',
-  MAINTAINING_AEROBIC_FITNESS: 'Mantiene fitness aeróbico',
-  IMPROVING_AEROBIC_FITNESS: 'Mejora fitness aeróbico',
-  IMPROVING_ANAEROBIC_CAPACITY_AND_SPEED: 'Mejora capacidad anaeróbica',
+  THRESHOLD: 'Threshold',
+  SPEED: 'Speed',
+  ANAEROBIC: 'Anaerobic',
+  VO2MAX: 'VO₂ Max',
+  MAINTAINING_AEROBIC_FITNESS: 'Maintains aerobic fitness',
+  IMPROVING_AEROBIC_FITNESS: 'Improves aerobic fitness',
+  IMPROVING_ANAEROBIC_CAPACITY_AND_SPEED: 'Improves anaerobic capacity',
 };
 
 function fmtDuration(mins: number): string {
@@ -99,7 +99,7 @@ export const SessionModal: React.FC<SessionModalProps> = ({ activityId, groupCol
         </div>
 
         {loading && (
-          <div className="p-8 text-center text-on-surface-variant font-label text-label-sm">Cargando...</div>
+          <div className="p-8 text-center text-on-surface-variant font-label text-label-sm">Loading...</div>
         )}
 
         {data && !loading && (
@@ -118,7 +118,7 @@ export const SessionModal: React.FC<SessionModalProps> = ({ activityId, groupCol
                 {data.lapCount != null && data.lapCount > 1 && (
                   <>
                     <span className="text-on-surface-variant opacity-40">·</span>
-                    <span className="font-label text-label-sm text-on-surface-variant">{data.lapCount} vueltas</span>
+                    <span className="font-label text-label-sm text-on-surface-variant">{data.lapCount} laps</span>
                   </>
                 )}
               </div>
@@ -126,22 +126,22 @@ export const SessionModal: React.FC<SessionModalProps> = ({ activityId, groupCol
 
             {/* Performance metrics */}
             <div>
-              <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">RENDIMIENTO</p>
+              <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">PERFORMANCE</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <Metric label="DURACIÓN" value={fmtDuration(data.duration)} color={groupColor} />
-                {data.distance > 0 && <Metric label="DISTANCIA" value={data.distance} unit="KM" />}
-                {data.avgSpeed != null && <Metric label="VEL. PROM." value={data.avgSpeed} unit="KM/H" />}
-                {data.maxSpeed != null && <Metric label="VEL. MÁX." value={data.maxSpeed} unit="KM/H" />}
-                {data.avgHr != null && <Metric label="FC PROM." value={data.avgHr} unit="BPM" />}
-                {data.maxHr != null && <Metric label="FC MÁX." value={data.maxHr} unit="BPM" />}
-                {data.calories != null && data.calories > 0 && <Metric label="CALORÍAS" value={data.calories} unit="KCAL" />}
+                <Metric label="DURATION" value={fmtDuration(data.duration)} color={groupColor} />
+                {data.distance > 0 && <Metric label="DISTANCE" value={data.distance} unit="KM" />}
+                {data.avgSpeed != null && <Metric label="AVG SPEED" value={data.avgSpeed} unit="KM/H" />}
+                {data.maxSpeed != null && <Metric label="MAX SPEED" value={data.maxSpeed} unit="KM/H" />}
+                {data.avgHr != null && <Metric label="AVG HR" value={data.avgHr} unit="BPM" />}
+                {data.maxHr != null && <Metric label="MAX HR" value={data.maxHr} unit="BPM" />}
+                {data.calories != null && data.calories > 0 && <Metric label="CALORIES" value={data.calories} unit="KCAL" />}
               </div>
             </div>
 
             {/* HR Zones */}
             {hasHrZones && (
               <div>
-                <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">ZONAS DE FC</p>
+                <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">HR ZONES</p>
                 <div className="space-y-2">
                   {data.hrZones.map((z, i) => (
                     <div key={z.zone} className="flex items-center gap-3">
@@ -171,20 +171,20 @@ export const SessionModal: React.FC<SessionModalProps> = ({ activityId, groupCol
             {/* Training effect */}
             {(data.aerobicEffect != null || data.trainingLoad != null) && (
               <div>
-                <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">EFECTO DE ENTRENAMIENTO</p>
+                <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">TRAINING EFFECT</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {data.aerobicEffect != null && (
-                    <Metric label="AERÓBICO" value={data.aerobicEffect} />
+                    <Metric label="AEROBIC" value={data.aerobicEffect} />
                   )}
                   {data.anaerobicEffect != null && (
-                    <Metric label="ANAERÓBICO" value={data.anaerobicEffect} />
+                    <Metric label="ANAEROBIC" value={data.anaerobicEffect} />
                   )}
                   {data.trainingLoad != null && (
-                    <Metric label="CARGA" value={data.trainingLoad} />
+                    <Metric label="LOAD" value={data.trainingLoad} />
                   )}
                   {data.differenceBodyBattery != null && (
                     <Metric
-                      label="BATERÍA"
+                      label="BATTERY"
                       value={`${data.differenceBodyBattery > 0 ? '+' : ''}${data.differenceBodyBattery}`}
                       color={data.differenceBodyBattery >= 0 ? '#4ade80' : '#fb923c'}
                     />
@@ -202,8 +202,8 @@ export const SessionModal: React.FC<SessionModalProps> = ({ activityId, groupCol
             <AIInsightPanel
               mode="session"
               payload={{ activityId }}
-              title="ANÁLISIS DE SESIÓN"
-              chatContext={`Analizá mi sesión de ${data.sportType?.replace(/_/g, ' ')} del ${data.date}`}
+              title="SESSION ANALYSIS"
+              chatContext={`Analyze my ${data.sportType?.replace(/_/g, ' ')} session from ${data.date}`}
             />
 
             {/* Links */}
@@ -214,7 +214,7 @@ export const SessionModal: React.FC<SessionModalProps> = ({ activityId, groupCol
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface text-on-surface-variant hover:text-on-surface font-label text-label-sm tracking-widest uppercase transition-colors"
               >
-                Ver en Garmin Connect ↗
+                View on Garmin Connect ↗
               </a>
               {data.mapUrl && (
                 <a
@@ -223,7 +223,7 @@ export const SessionModal: React.FC<SessionModalProps> = ({ activityId, groupCol
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface text-on-surface-variant hover:text-on-surface font-label text-label-sm tracking-widest uppercase transition-colors"
                 >
-                  Ver ubicación ↗
+                  View location ↗
                 </a>
               )}
             </div>

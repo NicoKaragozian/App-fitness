@@ -3,7 +3,7 @@ import db from '../db.js';
 
 const router = Router();
 
-const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
+const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 router.get('/sleep', (req, res) => {
   const period = (req.query.period as string) || 'weekly';
@@ -15,7 +15,7 @@ router.get('/sleep', (req, res) => {
     ).get() as any;
     if (!row) { res.json([]); return; }
     res.json([{
-      day: 'HOY',
+      day: 'TODAY',
       hours: row.duration_seconds ? Math.round((row.duration_seconds / 3600) * 10) / 10 : 0,
       score: row.score ?? 0,
       hrv: row.nightly_avg ? Math.round(row.nightly_avg) : 0,

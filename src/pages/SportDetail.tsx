@@ -13,16 +13,16 @@ type Period = 'total' | 'daily' | 'weekly' | 'monthly';
 
 const PERIOD_LABELS: Record<Period, string> = {
   total: 'TOTAL',
-  daily: 'DIARIO',
-  weekly: 'SEMANAL',
-  monthly: 'MENSUAL',
+  daily: 'DAILY',
+  weekly: 'WEEKLY',
+  monthly: 'MONTHLY',
 };
 
 const STATS_LABEL: Record<Period, string> = {
-  total: 'RESUMEN TOTAL',
-  daily: 'ÚLTIMO DÍA',
-  weekly: 'ÚLTIMA SEMANA',
-  monthly: 'ÚLTIMO MES',
+  total: 'TOTAL SUMMARY',
+  daily: 'LAST DAY',
+  weekly: 'LAST WEEK',
+  monthly: 'LAST MONTH',
 };
 
 function StatCard({ label, value, unit }: { label: string; value: string | number; unit: string }) {
@@ -50,12 +50,12 @@ function BestCard({ label, value, unit, date, color }: { label: string; value: n
 
 const FALLBACK_CONFIG: GroupConfig = {
   id: 'unknown',
-  name: 'DEPORTE',
+  name: 'SPORT',
   subtitle: '',
   color: '#6a9cff',
   icon: '◎',
   metrics: ['sessions', 'duration', 'calories'],
-  chartMetrics: [{ dataKey: 'duration', name: 'DURACIÓN MIN', type: 'bar' }],
+  chartMetrics: [{ dataKey: 'duration', name: 'DURATION MIN', type: 'bar' }],
 };
 
 export const SportDetail: React.FC = () => {
@@ -73,9 +73,9 @@ export const SportDetail: React.FC = () => {
   if (!data) return (
     <div className="p-8">
       <Link to="/sports" className="text-on-surface-variant hover:text-on-surface font-label text-label-sm tracking-widest uppercase">
-        ← VOLVER
+        ← BACK
       </Link>
-      <p className="text-on-surface-variant mt-8">Sin datos disponibles.</p>
+      <p className="text-on-surface-variant mt-8">No data available.</p>
     </div>
   );
 
@@ -98,7 +98,7 @@ export const SportDetail: React.FC = () => {
       {/* Back + Header */}
       <div>
         <Link to="/sports" className="inline-flex items-center gap-1 text-on-surface-variant hover:text-on-surface font-label text-label-sm tracking-widest uppercase transition-colors mb-4">
-          ← DEPORTES
+          ← SPORTS
         </Link>
         <div className="flex items-center gap-3">
           <span className="text-3xl" style={{ color: config.color }}>{config.icon}</span>
@@ -130,18 +130,18 @@ export const SportDetail: React.FC = () => {
       <div>
         <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">{STATS_LABEL[period]}</p>
         {stats.totalSessions === 0 && period !== 'total' ? (
-          <p className="text-on-surface-variant font-label text-label-sm">Sin actividades en este período.</p>
+          <p className="text-on-surface-variant font-label text-label-sm">No activities in this period.</p>
         ) : (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="SESIONES" value={stats.totalSessions} unit="" />
-            <StatCard label="DURACIÓN TOTAL" value={stats.totalDuration} unit="MIN" />
+            <StatCard label="SESSIONS" value={stats.totalSessions} unit="" />
+            <StatCard label="TOTAL DURATION" value={stats.totalDuration} unit="MIN" />
             {stats.totalDistance !== undefined && (
-              <StatCard label="DISTANCIA TOTAL" value={stats.totalDistance} unit="KM" />
+              <StatCard label="TOTAL DISTANCE" value={stats.totalDistance} unit="KM" />
             )}
-            <StatCard label="CALORÍAS TOTAL" value={stats.totalCalories} unit="KCAL" />
-            <StatCard label="DURACIÓN PROM." value={stats.avgDuration} unit="MIN" />
+            <StatCard label="TOTAL CALORIES" value={stats.totalCalories} unit="KCAL" />
+            <StatCard label="AVG DURATION" value={stats.avgDuration} unit="MIN" />
             {stats.avgHr != null && (
-              <StatCard label="FC PROMEDIO" value={stats.avgHr} unit="BPM" />
+              <StatCard label="AVG HR" value={stats.avgHr} unit="BPM" />
             )}
           </div>
         )}
@@ -152,16 +152,16 @@ export const SportDetail: React.FC = () => {
         <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">PERSONAL BESTS</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {personalBests.longestSession && (
-            <BestCard label="SESIÓN MÁS LARGA" {...personalBests.longestSession} color={config.color} />
+            <BestCard label="LONGEST SESSION" {...personalBests.longestSession} color={config.color} />
           )}
           {personalBests.longestDistance && (
-            <BestCard label="MAYOR DISTANCIA" {...personalBests.longestDistance} color={config.color} />
+            <BestCard label="LONGEST DISTANCE" {...personalBests.longestDistance} color={config.color} />
           )}
           {personalBests.highestSpeed && (
-            <BestCard label="VELOCIDAD MÁX" {...personalBests.highestSpeed} color={config.color} />
+            <BestCard label="MAX SPEED" {...personalBests.highestSpeed} color={config.color} />
           )}
           {personalBests.mostCalories && (
-            <BestCard label="MÁS CALORÍAS" {...personalBests.mostCalories} color={config.color} />
+            <BestCard label="MOST CALORIES" {...personalBests.mostCalories} color={config.color} />
           )}
         </div>
       </div>
@@ -170,8 +170,8 @@ export const SportDetail: React.FC = () => {
       <AIInsightPanel
         mode="sport"
         payload={{ groupId: cat, period }}
-        title={`ANÁLISIS ${config.name}`}
-        chatContext={`Analizá mi progreso en ${config.name}`}
+        title={`${config.name} ANALYSIS`}
+        chatContext={`Analyze my progress in ${config.name}`}
       />
 
       {/* Session History Chart */}
@@ -188,7 +188,7 @@ export const SportDetail: React.FC = () => {
 
       {/* Activity List */}
       <div>
-        <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">ACTIVIDADES INDIVIDUALES</p>
+        <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">INDIVIDUAL ACTIVITIES</p>
         <div className="space-y-2">
           {activities.map((a) => (
             <div

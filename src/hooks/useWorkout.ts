@@ -72,7 +72,7 @@ export function useWorkout() {
   return { startWorkout, finishWorkout, logSet, updateSet, getWorkoutHistory, getWorkoutDetail };
 }
 
-// Hook para obtener el último peso usado por ejercicio en un session
+// Hook to get the last weight used per exercise in a session
 export function useLastWeights(sessionId: number | null) {
   const [lastWeights, setLastWeights] = useState<Record<number, number>>({});
 
@@ -81,7 +81,7 @@ export function useLastWeights(sessionId: number | null) {
     apiFetch<WorkoutLog[]>(`/training/workouts?sessionId=${sessionId}`)
       .then(logs => {
         if (logs.length === 0) return;
-        // Tomar el workout más reciente completado
+        // Take the most recent completed workout
         const completed = logs.filter(l => l.completed_at).sort((a, b) =>
           new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime()
         );

@@ -1,4 +1,4 @@
-// rules.ts — Motor de reglas de recomendación
+// rules.ts — Recommendation rules engine
 
 export type RecommendationType = 'recovery' | 'training' | 'sleep' | 'plan';
 export type Priority = 'high' | 'medium' | 'low';
@@ -13,7 +13,7 @@ export interface Recommendation {
 
 export interface InsightStats {
   sleep: {
-    current: number | null;       // score de hoy
+    current: number | null;       // today's score
     avg7d: number | null;
     baseline: number | null;      // media 30d
     stddev: number | null;
@@ -55,7 +55,7 @@ export interface InsightStats {
 
 type Rule = (stats: InsightStats) => Recommendation | null;
 
-// Regla 1: Recuperación en declive (sueño bajando + HRV bajo baseline)
+// Rule 1: Recovery declining (sleep dropping + HRV below baseline)
 const ruleDecliningRecovery: Rule = (stats) => {
   if (stats.sleep.values.length < 5 || stats.hrv.values.length < 5) return null;
   if (stats.sleep.trend !== 'declining') return null;
@@ -63,8 +63,8 @@ const ruleDecliningRecovery: Rule = (stats) => {
 
   return {
     type: 'recovery',
-    title: 'Recuperación en declive',
-    description: `Tu sueño viene bajando en los últimos días y tu HRV está por debajo de tu baseline. Priorizá descanso activo hoy.`,
+    title: 'Recovery declining',
+    description: `Your sleep has been dropping over the last few days and your HRV is below your baseline. Prioritize active recovery today.`,
     priority: 'high',
     dataPoints: {
       sleepTrend: stats.sleep.trend,
@@ -74,18 +74,18 @@ const ruleDecliningRecovery: Rule = (stats) => {
   };
 };
 
-// Regla 2: Buen día para entrenar fuerte
+// Rule 2: Good day for intense training
 const ruleGoodTrainingDay: Rule = (stats) => {
   if (stats.sleep.current === null || stats.hrv.current === null) return null;
-  if (stats.training.daysSinceLast < 1) return null; // entrenó hoy
+  if (stats.training.daysSinceLast < 1) return null; // trained today
   if (stats.sleep.current < 75) return null;
   if (stats.hrv.zScore === null || stats.hrv.zScore < 0) return null;
   if (stats.stress.current !== null && stats.stress.current > 60) return null;
 
   return {
     type: 'training',
-    title: 'Listo para entrenar',
-    description: `Dormiste bien (score ${stats.sleep.current}), tu HRV está sobre tu baseline y el estrés es bajo. Buen día para una sesión intensa.`,
+    title: 'Ready to train',
+    description: `You slept well (score ${stats.sleep.current}), your HRV is above your baseline and stress is low. Good day for an intense session.`,
     priority: 'high',
     dataPoints: {
       sleepScore: stats.sleep.current,
@@ -95,7 +95,7 @@ const ruleGoodTrainingDay: Rule = (stats) => {
   };
 };
 
-// Regla 3: Fatiga acumulada por entrenos consecutivos
+// Rule 3: Accumulated fatigue from consecutive training days
 const ruleAccumulatedFatigue: Rule = (stats) => {
   if (stats.training.consecutiveDays < 3) return null;
   const stressElevated = stats.stress.current !== null && stats.stress.avg7d !== null
@@ -106,8 +106,8 @@ const ruleAccumulatedFatigue: Rule = (stats) => {
 
   return {
     type: 'recovery',
-    title: 'Fatiga acumulada',
-    description: `Llevas ${stats.training.consecutiveDays} días consecutivos entrenando. Tu cuerpo podría necesitar un descanso para consolidar las adaptaciones.`,
+    title: 'Accumulated fatigue',
+    description: `You've been training for ${stats.training.consecutiveDays} consecutive days. Your body may need a rest day to consolidate adaptations.`,
     priority: 'high',
     dataPoints: {
       consecutiveDays: stats.training.consecutiveDays,
@@ -117,7 +117,7 @@ const ruleAccumulatedFatigue: Rule = (stats) => {
   };
 };
 
-// Regla 4: Bien recuperado, momento de volver a entrenar
+// Rule 4: Well recovered, time to get back to training
 const ruleWellRested: Rule = (stats) => {
   if (stats.training.daysSinceLast < 2) return null;
   if (stats.sleep.current === null || stats.sleep.current < 70) return null;
@@ -126,8 +126,8 @@ const ruleWellRested: Rule = (stats) => {
 
   return {
     type: 'training',
-    title: 'Bien recuperado',
-    description: `Llevas ${stats.training.daysSinceLast} días sin entrenar y tus métricas de recuperación están en buen nivel. Buen momento para retomar.`,
+    title: 'Well recovered',
+    description: `You haven't trained for ${stats.training.daysSinceLast} days and your recovery metrics are at a good level. Good time to get back to it.`,
     priority: 'medium',
     dataPoints: {
       daysSinceLast: stats.training.daysSinceLast,
@@ -137,15 +137,15 @@ const ruleWellRested: Rule = (stats) => {
   };
 };
 
-// Regla 5: Mal sueño hoy
+// Rule 5: Poor sleep today
 const rulePoorSleepToday: Rule = (stats) => {
   if (stats.sleep.current === null || stats.sleep.current >= 65) return null;
 
-  const hours = ''; // duración manejada por el score
+  const hours = ''; // duration handled by the score
   return {
     type: 'sleep',
-    title: 'Noche complicada',
-    description: `Tu score de sueño fue ${stats.sleep.current}/100 anoche. Considerá evitar sesiones de alta intensidad hoy y priorizá recuperación.`,
+    title: 'Rough night',
+    description: `Your sleep score was ${stats.sleep.current}/100 last night. Consider avoiding high-intensity sessions today and prioritize recovery.`,
     priority: 'high',
     dataPoints: {
       sleepScore: stats.sleep.current,
@@ -154,7 +154,7 @@ const rulePoorSleepToday: Rule = (stats) => {
   };
 };
 
-// Regla 6: Estado óptimo (todo verde)
+// Rule 6: Optimal state (all green)
 const ruleOptimalState: Rule = (stats) => {
   if (stats.sleep.current === null || stats.hrv.current === null) return null;
   if (stats.sleep.current < 82) return null;
@@ -164,8 +164,8 @@ const ruleOptimalState: Rule = (stats) => {
 
   return {
     type: 'training',
-    title: 'Estado óptimo',
-    description: `Sueño excelente, HRV sobre el baseline y estrés bajo. Condiciones ideales para máxima intensidad.`,
+    title: 'Optimal state',
+    description: `Excellent sleep, HRV above baseline and low stress. Ideal conditions for maximum intensity.`,
     priority: 'high',
     dataPoints: {
       sleepScore: stats.sleep.current,
@@ -175,26 +175,26 @@ const ruleOptimalState: Rule = (stats) => {
   };
 };
 
-// Regla 7: FC reposo subiendo (fatiga crónica)
+// Rule 7: Resting HR rising (chronic fatigue)
 const ruleRestingHRTrending: Rule = (stats) => {
   if (stats.restingHR.values.length < 5) return null;
-  if (stats.restingHR.trend !== 'declining') return null; // declining en HR = malo (sube el número)
-  // Nota: para HR, "declining" en el array de valores = bueno. "improving" en el array = malo.
-  // Revertimos la lógica: la pendiente positiva en HR = mala señal
-  return null; // se maneja en el orquestador con lógica invertida
+  if (stats.restingHR.trend !== 'declining') return null; // declining in HR = bad (number goes up)
+  // Note: for HR, "declining" in value array = good. "improving" in array = bad.
+  // We invert the logic: positive slope in HR = bad sign
+  return null; // handled in the orchestrator with inverted logic
 };
 
-// Regla 7 (corrección): Resting HR con pendiente positiva = señal de fatiga
+// Rule 7 (fix): Resting HR with positive slope = fatigue signal
 const ruleRisingRestingHR: Rule = (stats) => {
   if (stats.restingHR.values.length < 5) return null;
-  if (stats.restingHR.trend !== 'improving') return null; // "improving" aquí = valores subiendo = malo para HR
+  if (stats.restingHR.trend !== 'improving') return null; // "improving" here = values rising = bad for HR
   if (stats.restingHR.current === null || stats.restingHR.avg7d === null) return null;
-  if (stats.restingHR.current <= stats.restingHR.avg7d + 3) return null; // solo si es notable
+  if (stats.restingHR.current <= stats.restingHR.avg7d + 3) return null; // only if notable
 
   return {
     type: 'recovery',
-    title: 'FC reposo elevada',
-    description: `Tu frecuencia cardíaca en reposo viene subiendo esta semana (${stats.restingHR.current} bpm vs ${stats.restingHR.avg7d?.toFixed(0)} bpm promedio). Posible señal de fatiga acumulada.`,
+    title: 'Elevated resting HR',
+    description: `Your resting heart rate has been rising this week (${stats.restingHR.current} bpm vs ${stats.restingHR.avg7d?.toFixed(0)} bpm average). Possible sign of accumulated fatigue.`,
     priority: 'medium',
     dataPoints: {
       restingHRCurrent: stats.restingHR.current,
@@ -203,7 +203,7 @@ const ruleRisingRestingHR: Rule = (stats) => {
   };
 };
 
-// Regla 8: Hay plan para hoy y las métricas están bien
+// Rule 8: There's a plan for today and metrics look good
 const rulePlanToday: Rule = (stats) => {
   if (!stats.todayPlan) return null;
   if (stats.sleep.current === null || stats.sleep.current < 60) return null;
@@ -217,8 +217,8 @@ const rulePlanToday: Rule = (stats) => {
     type: 'plan',
     title: `Plan: ${stats.todayPlan.sport}`,
     description: stats.todayPlan.detail
-      ? `Tenés ${stats.todayPlan.sport} planeado hoy${stats.todayPlan.detail ? ` — ${stats.todayPlan.detail}` : ''}. Tus métricas de recuperación están bien.`
-      : `Tenés ${stats.todayPlan.sport} planeado hoy y tus métricas de recuperación están bien.`,
+      ? `You have ${stats.todayPlan.sport} planned today${stats.todayPlan.detail ? ` — ${stats.todayPlan.detail}` : ''}. Your recovery metrics look good.`
+      : `You have ${stats.todayPlan.sport} planned today and your recovery metrics look good.`,
     priority: 'medium',
     dataPoints: {
       sport: stats.todayPlan.sport,
@@ -227,7 +227,7 @@ const rulePlanToday: Rule = (stats) => {
   };
 };
 
-// Todas las reglas en orden de evaluación
+// All rules in evaluation order
 export const RULES: Rule[] = [
   rulePoorSleepToday,
   ruleDecliningRecovery,
@@ -246,10 +246,10 @@ export function evaluateRules(stats: InsightStats): Recommendation[] {
     if (rec) results.push(rec);
   }
 
-  // Ordenar: high primero, luego medium, luego low
+  // Sort: high first, then medium, then low
   const priorityOrder = { high: 0, medium: 1, low: 2 };
   results.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 
-  // Devolver máx 3 recomendaciones
+  // Return max 3 recommendations
   return results.slice(0, 3);
 }

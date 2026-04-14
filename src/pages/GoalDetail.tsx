@@ -5,7 +5,7 @@ import { TTSButton } from '../components/ui/TTSButton';
 import type { GoalMilestone } from '../hooks/useGoal';
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 function formatCountdown(targetDate: string): { label: string; urgent: boolean } {
@@ -13,18 +13,18 @@ function formatCountdown(targetDate: string): { label: string; urgent: boolean }
   const now = new Date();
   const diffDays = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (diffDays < 0) return { label: 'Vencido', urgent: true };
-  if (diffDays === 0) return { label: '¡Hoy!', urgent: true };
-  if (diffDays === 1) return { label: 'Mañana', urgent: false };
-  if (diffDays < 14) return { label: `${diffDays} días`, urgent: diffDays < 7 };
+  if (diffDays < 0) return { label: 'Overdue', urgent: true };
+  if (diffDays === 0) return { label: 'Today!', urgent: true };
+  if (diffDays === 1) return { label: 'Tomorrow', urgent: false };
+  if (diffDays < 14) return { label: `${diffDays} days`, urgent: diffDays < 7 };
   const weeks = Math.ceil(diffDays / 7);
-  return { label: `${weeks} semanas`, urgent: false };
+  return { label: `${weeks} weeks`, urgent: false };
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  active: 'ACTIVO',
-  completed: 'COMPLETADO',
-  abandoned: 'ABANDONADO',
+  active: 'ACTIVE',
+  completed: 'COMPLETED',
+  abandoned: 'ABANDONED',
 };
 
 export const GoalDetail: React.FC = () => {
@@ -55,20 +55,20 @@ export const GoalDetail: React.FC = () => {
     if (!goal) return '';
     const lines: string[] = [goal.title];
     if (goal.description) lines.push(goal.description);
-    if (goal.estimated_timeline) lines.push(`Tiempo estimado: ${goal.estimated_timeline}.`);
-    if (prerequisites.length > 0) lines.push(`Prerequisitos: ${prerequisites.join('. ')}.`);
+    if (goal.estimated_timeline) lines.push(`Estimated time: ${goal.estimated_timeline}.`);
+    if (prerequisites.length > 0) lines.push(`Prerequisites: ${prerequisites.join('. ')}.`);
     for (const m of goal.milestones) {
       const keyExercises: string[] = JSON.parse(m.workouts || '[]');
       const tips: string[] = JSON.parse(m.tips || '[]');
       lines.push(
-        `Fase ${m.week_number}: ${m.title}.` +
+        `Phase ${m.week_number}: ${m.title}.` +
         (m.description ? ` ${m.description}` : '') +
-        (m.target ? ` Criterio de avance: ${m.target}.` : '') +
-        (keyExercises.length > 0 ? ` Ejercicios clave: ${keyExercises.join(', ')}.` : '') +
+        (m.target ? ` Advancement criteria: ${m.target}.` : '') +
+        (keyExercises.length > 0 ? ` Key exercises: ${keyExercises.join(', ')}.` : '') +
         (tips.length > 0 ? ` Tips: ${tips.join('. ')}.` : '')
       );
     }
-    if (commonMistakes.length > 0) lines.push(`Errores comunes: ${commonMistakes.join('. ')}.`);
+    if (commonMistakes.length > 0) lines.push(`Common mistakes: ${commonMistakes.join('. ')}.`);
     return lines.join('\n');
   }, [goal, prerequisites, commonMistakes]);
 
@@ -84,8 +84,8 @@ export const GoalDetail: React.FC = () => {
   if (!goal) {
     return (
       <div className="p-6 text-center text-on-surface-variant">
-        Objetivo no encontrado.{' '}
-        <button onClick={() => navigate('/training?tab=goals')} className="text-primary underline">Volver</button>
+        Goal not found.{' '}
+        <button onClick={() => navigate('/training?tab=goals')} className="text-primary underline">Go back</button>
       </div>
     );
   }
@@ -98,7 +98,7 @@ export const GoalDetail: React.FC = () => {
         onClick={() => navigate('/training?tab=goals')}
         className="flex items-center gap-1 text-on-surface-variant text-sm hover:text-on-surface transition-colors"
       >
-        ← Objetivos
+        ← Goals
       </button>
 
       {/* Goal header */}
@@ -106,7 +106,7 @@ export const GoalDetail: React.FC = () => {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="font-label text-label-sm text-primary tracking-widest uppercase">Guía de Progresión</span>
+              <span className="font-label text-label-sm text-primary tracking-widest uppercase">Progression Guide</span>
               {goal.status !== 'active' && (
                 <span className={`font-label text-[10px] tracking-widest uppercase px-2 py-0.5 rounded ${
                   goal.status === 'completed' ? 'text-green-400 bg-green-400/10' : 'text-on-surface-variant bg-surface-container'
@@ -138,7 +138,7 @@ export const GoalDetail: React.FC = () => {
           )}
           {hasTargetDate && (
             <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
-              Fecha límite: {formatDate(goal.target_date)}
+              Deadline: {formatDate(goal.target_date)}
             </span>
           )}
         </div>
@@ -147,7 +147,7 @@ export const GoalDetail: React.FC = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
-              {completedCount}/{totalCount} fases completadas
+              {completedCount}/{totalCount} phases completed
             </span>
           </div>
           <div className="w-full h-2 bg-surface-container rounded-full overflow-hidden">
@@ -164,7 +164,7 @@ export const GoalDetail: React.FC = () => {
             onClick={() => updateStatus('completed')}
             className="w-full bg-green-400/15 text-green-400 font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:bg-green-400/25 transition-colors"
           >
-            ✓ Marcar objetivo como completado
+            ✓ Mark goal as completed
           </button>
         )}
         {goal.status === 'active' && (
@@ -172,7 +172,7 @@ export const GoalDetail: React.FC = () => {
             onClick={() => updateStatus('abandoned')}
             className="w-full bg-surface-container text-on-surface-variant font-label text-[10px] tracking-widest uppercase py-2 rounded-lg hover:opacity-70 transition-opacity"
           >
-            Abandonar objetivo
+            Abandon goal
           </button>
         )}
         {goal.status !== 'active' && (
@@ -180,7 +180,7 @@ export const GoalDetail: React.FC = () => {
             onClick={() => updateStatus('active')}
             className="w-full bg-primary/15 text-primary font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:bg-primary/25 transition-colors"
           >
-            Reactivar objetivo
+            Reactivate goal
           </button>
         )}
       </div>
@@ -188,7 +188,7 @@ export const GoalDetail: React.FC = () => {
       {/* Prerequisites */}
       {prerequisites.length > 0 && (
         <div className="bg-surface-low rounded-xl p-4 space-y-2">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Antes de empezar</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Before you start</p>
           <ul className="space-y-1.5">
             {prerequisites.map((p, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-on-surface-variant">
@@ -203,7 +203,7 @@ export const GoalDetail: React.FC = () => {
       {/* Phases */}
       <div className="space-y-3">
         <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase px-1">
-          Fases de progresión
+          Progression phases
         </p>
         {goal.milestones.map(milestone => (
           <PhaseCard
@@ -218,7 +218,7 @@ export const GoalDetail: React.FC = () => {
       {/* Common Mistakes */}
       {commonMistakes.length > 0 && (
         <div className="bg-surface-low rounded-xl p-4 space-y-2 border border-yellow-400/10">
-          <p className="font-label text-label-sm text-yellow-400/80 tracking-widest uppercase">Errores comunes</p>
+          <p className="font-label text-label-sm text-yellow-400/80 tracking-widest uppercase">Common mistakes</p>
           <ul className="space-y-1.5">
             {commonMistakes.map((m, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-on-surface-variant">
@@ -233,16 +233,16 @@ export const GoalDetail: React.FC = () => {
       {/* CTA: Create Training Plan */}
       <div className="bg-surface-low rounded-xl p-5 space-y-3 border border-primary/20">
         <div>
-          <p className="font-label text-label-sm text-primary tracking-widest uppercase">¿Querés entrenar para este objetivo?</p>
+          <p className="font-label text-label-sm text-primary tracking-widest uppercase">Want to train for this goal?</p>
           <p className="text-sm text-on-surface-variant mt-1">
-            Esta guía te muestra el camino. Si querés un plan de entrenamiento estructurado con sesiones, series y repeticiones, generalo en Planes de Entrenamiento.
+            This guide shows you the path. If you want a structured training plan with sessions, sets, and reps, generate one in Training Plans.
           </p>
         </div>
         <button
           onClick={() => navigate('/training', { state: { prefillGoal: `${goal.title}: ${goal.description ?? goal.title}` } })}
           className="w-full bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl hover:opacity-90 transition-opacity"
         >
-          Crear Plan de Entrenamiento
+          Create Training Plan
         </button>
       </div>
     </div>
@@ -294,7 +294,7 @@ function PhaseCard({ milestone, onToggle, disabled }: PhaseCardProps) {
               {/* Key exercises */}
               {keyExercises.length > 0 && (
                 <div className="mb-2">
-                  <p className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1">Ejercicios clave</p>
+                  <p className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1">Key exercises</p>
                   <ul className="space-y-1">
                     {keyExercises.map((ex, i) => (
                       <li key={i} className="flex items-start gap-1.5 text-xs text-on-surface-variant">
@@ -334,7 +334,7 @@ function PhaseCard({ milestone, onToggle, disabled }: PhaseCardProps) {
             <button
               onClick={() => !disabled && onToggle(!completed)}
               disabled={disabled}
-              title={completed ? 'Marcar como pendiente' : 'Marcar como completada'}
+              title={completed ? 'Mark as pending' : 'Mark as completed'}
               className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all active:scale-90 ${
                 completed
                   ? 'bg-primary border-primary text-surface'
@@ -351,7 +351,7 @@ function PhaseCard({ milestone, onToggle, disabled }: PhaseCardProps) {
 
           {completed && milestone.completed_at && (
             <p className="font-label text-[10px] text-primary/60 tracking-widest uppercase mt-2">
-              Completada el {new Date(milestone.completed_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+              Completed on {new Date(milestone.completed_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
             </p>
           )}
         </div>

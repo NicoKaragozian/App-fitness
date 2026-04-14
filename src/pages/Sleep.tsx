@@ -18,10 +18,10 @@ const getRecoveryStatus = (score: number, hrvStatus: string) => {
   if (hrvStatus === 'UNBALANCED' || hrvStatus === 'LOW') penalty = 15;
   const adjScore = score - penalty;
 
-  if (adjScore >= 85) return { title: 'PEAK RECOVERY', subtitle: 'LISTO PARA ALTO RENDIMIENTO' };
-  if (adjScore >= 70) return { title: 'OPTIMAL RECOVERY', subtitle: 'SISTEMA EQUILIBRADO' };
-  if (adjScore >= 50) return { title: 'MODERATE STRAIN', subtitle: 'FATIGA RESIDUAL - ENTRENAMIENTO MODERADO' };
-  return { title: 'HIGH STRAIN', subtitle: 'SISTEMA NERVIOSO ESTRESADO - PRIORIZA DESCANSO' };
+  if (adjScore >= 85) return { title: 'PEAK RECOVERY', subtitle: 'READY FOR HIGH PERFORMANCE' };
+  if (adjScore >= 70) return { title: 'OPTIMAL RECOVERY', subtitle: 'BALANCED SYSTEM' };
+  if (adjScore >= 50) return { title: 'MODERATE STRAIN', subtitle: 'RESIDUAL FATIGUE - MODERATE TRAINING' };
+  return { title: 'HIGH STRAIN', subtitle: 'NERVOUS SYSTEM STRESSED - PRIORITIZE REST' };
 };
 
 const formatHours = (h: number) => `${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`;
@@ -33,7 +33,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
       <p className="font-label text-label-sm text-on-surface-variant mb-1">{label}</p>
       {payload.map((p) => (
         <p key={p.name} className="font-body text-sm font-medium" style={{ color: p.color }}>
-          {p.name}: {p.name === 'HORAS' ? formatHours(p.value) : typeof p.value === 'number' ? p.value.toFixed(0) : p.value}
+          {p.name}: {p.name === 'HOURS' ? formatHours(p.value) : typeof p.value === 'number' ? p.value.toFixed(0) : p.value}
         </p>
       ))}
     </div>
@@ -42,7 +42,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 const ConsistencyMatrix: React.FC<{ data: SleepDataPoint[] }> = ({ data }) => {
   const [selectedDay, setSelectedDay] = useState<{ dateStr: string; score: number } | null>(null);
-  const days = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+  const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
   const weeks = 4;
 
   const mapDate = new Map(data.filter(d => d.date).map(d => [d.date, d]));
@@ -108,7 +108,7 @@ const ConsistencyMatrix: React.FC<{ data: SleepDataPoint[] }> = ({ data }) => {
                     onClick={() => !cell.isFuture && setSelectedDay(cell)}
                     className={`w-8 h-8 lg:w-10 lg:h-10 rounded-md transition-all cursor-pointer border ${selectedDay?.dateStr === cell.dateStr ? 'border-primary shadow-[0_0_12px_rgba(243,255,202,0.4)] scale-110' : 'border-surface-container hover:scale-110'} ${cell.isFuture ? 'opacity-0 cursor-default' : ''}`}
                     style={{ background: getColor(cell.score, cell.isFuture) }}
-                    title={cell.isFuture ? '' : `Fecha: ${cell.dateStr} | Score: ${Math.round(cell.score * 100)}`}
+                    title={cell.isFuture ? '' : `Date: ${cell.dateStr} | Score: ${Math.round(cell.score * 100)}`}
                   />
                 ))}
               </div>
@@ -118,11 +118,11 @@ const ConsistencyMatrix: React.FC<{ data: SleepDataPoint[] }> = ({ data }) => {
         
         {/* Leyenda */}
         <div className="flex items-center gap-2 mt-8 pl-10">
-          <span className="font-label text-[10px] tracking-widest text-on-surface-variant mr-1">CALIDAD DE SUEÑO</span>
-          <div className="w-3 h-3 rounded-sm bg-[#1a1a1a]"></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">S/D</span>
-          <div className="w-3 h-3 rounded-sm bg-[#ff7439]"></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">POBRE</span>
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'rgba(34, 211, 165, 0.4)' }}></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">MEDIA</span>
-          <div className="w-3 h-3 rounded-sm bg-[#22d3a5]"></div> <span className="font-label text-[9px] text-on-surface-variant">ÓPTIMA</span>
+          <span className="font-label text-[10px] tracking-widest text-on-surface-variant mr-1">SLEEP QUALITY</span>
+          <div className="w-3 h-3 rounded-sm bg-[#1a1a1a]"></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">N/A</span>
+          <div className="w-3 h-3 rounded-sm bg-[#ff7439]"></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">POOR</span>
+          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'rgba(34, 211, 165, 0.4)' }}></div> <span className="font-label text-[9px] text-on-surface-variant mr-2">FAIR</span>
+          <div className="w-3 h-3 rounded-sm bg-[#22d3a5]"></div> <span className="font-label text-[9px] text-on-surface-variant">OPTIMAL</span>
         </div>
       </div>
       
@@ -135,19 +135,19 @@ const ConsistencyMatrix: React.FC<{ data: SleepDataPoint[] }> = ({ data }) => {
             
             <div className="space-y-3">
               <div>
-                <p className="font-label text-[10px] text-on-surface-variant">DURACIÓN</p>
+                <p className="font-label text-[10px] text-on-surface-variant">DURATION</p>
                 <p className="font-body text-sm font-medium">{formatHours(selectedRecord.hours)}</p>
               </div>
               <div>
                 <p className="font-label text-[10px] text-on-surface-variant">NIGHTLY HRV</p>
-                <p className="font-body text-sm font-medium">{selectedRecord.hrv > 0 ? `${selectedRecord.hrv} ms` : 'Sin datos'}</p>
+                <p className="font-body text-sm font-medium">{selectedRecord.hrv > 0 ? `${selectedRecord.hrv} ms` : 'No data'}</p>
               </div>
             </div>
           </div>
         ) : (
           <div className="text-center opacity-50">
-            <p className="font-label text-label-sm text-on-surface-variant mb-2">SELECCIONA UN DÍA</p>
-            <p className="font-body text-xs">Haz click en cualquier cuadro de la matriz para ver los detalles de esa noche.</p>
+            <p className="font-label text-label-sm text-on-surface-variant mb-2">SELECT A DAY</p>
+            <p className="font-body text-xs">Click on any square in the matrix to see details for that night.</p>
           </div>
         )}
       </div>
@@ -160,7 +160,7 @@ export const Sleep: React.FC = () => {
   const { data: sleepApiData, loading: sleepLoading } = useSleep(period);
   const { data: hrvApiData, loading: hrvLoading } = useHrv(period);
   
-  // Siempre traemos mensual para la matrix, independientemente de si estamos viendo period="weekly"
+  // Always fetch monthly for the matrix, regardless of whether we're viewing period="weekly"
   const { data: monthlySleepApiData } = useSleep('monthly');
 
   const loading = sleepLoading || hrvLoading;
@@ -196,15 +196,15 @@ export const Sleep: React.FC = () => {
           <div className="flex items-center gap-4 lg:gap-6 mt-4">
             <div>
               <p className="font-display text-2xl lg:text-display-md font-bold text-on-surface">{sleepHours}</p>
-              <p className="font-label text-label-sm text-on-surface-variant">DURACIÓN</p>
+              <p className="font-label text-label-sm text-on-surface-variant">DURATION</p>
             </div>
             <div>
               <p className="font-display text-2xl lg:text-display-md font-bold text-primary">{sleepScore}%</p>
-              <p className="font-label text-label-sm text-on-surface-variant">CALIDAD</p>
+              <p className="font-label text-label-sm text-on-surface-variant">QUALITY</p>
             </div>
             <div>
               <p className={`font-display text-2xl lg:text-display-md font-bold ${recovery.title === 'PEAK RECOVERY' ? 'text-[#0e0e0e]' : 'text-secondary'}`}>{restingHR} <span className="text-lg">BPM</span></p>
-              <p className={`font-label text-label-sm ${recovery.title === 'PEAK RECOVERY' ? 'text-[#0e0e0e]/70' : 'text-on-surface-variant'}`}>FC REPOSO</p>
+              <p className={`font-label text-label-sm ${recovery.title === 'PEAK RECOVERY' ? 'text-[#0e0e0e]/70' : 'text-on-surface-variant'}`}>RESTING HR</p>
             </div>
           </div>
           <div className={`absolute right-4 top-4 font-display font-bold text-6xl lg:text-[8rem] leading-none hidden md:block ${recovery.title === 'PEAK RECOVERY' ? 'text-[#0e0e0e]/10' : 'text-on-surface-variant/10'}`}>
@@ -235,8 +235,8 @@ export const Sleep: React.FC = () => {
           <div className="mt-4 space-y-1 w-full">
             {[
               { label: 'REM', value: '22%', color: '#6a9cff' },
-              { label: 'PROFUNDO', value: '18%', color: '#22d3a5' },
-              { label: 'LIGERO', value: '52%', color: '#adaaaa' },
+              { label: 'DEEP', value: '18%', color: '#22d3a5' },
+              { label: 'LIGHT', value: '52%', color: '#adaaaa' },
             ].map((s) => (
               <div key={s.label} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -278,8 +278,8 @@ export const Sleep: React.FC = () => {
       <AIInsightPanel
         mode="sleep"
         payload={{ period }}
-        title="ANÁLISIS DE SUEÑO"
-        chatContext="Analizá mis patrones de sueño"
+        title="SLEEP ANALYSIS"
+        chatContext="Analyze my sleep patterns"
       />
 
       {/* Period Toggle */}
@@ -294,7 +294,7 @@ export const Sleep: React.FC = () => {
                 : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            {p === 'weekly' ? 'SEMANAL' : 'MENSUAL'}
+            {p === 'weekly' ? 'WEEKLY' : 'MONTHLY'}
           </button>
         ))}
       </div>
@@ -303,8 +303,8 @@ export const Sleep: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
         {/* Sleep Hours Chart */}
         <div className="bg-surface-low rounded-xl p-4 lg:p-6">
-          <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-1">HORAS DE SUEÑO</p>
-          <p className="font-label text-label-sm text-on-surface-variant mb-4">EVOLUCIÓN {period === 'weekly' ? 'SEMANAL' : 'MENSUAL'}</p>
+          <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-1">SLEEP HOURS</p>
+          <p className="font-label text-label-sm text-on-surface-variant mb-4">{period === 'weekly' ? 'WEEKLY' : 'MONTHLY'} TREND</p>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
               <defs>
@@ -316,15 +316,15 @@ export const Sleep: React.FC = () => {
               <XAxis dataKey={dayKey} tick={{ fill: '#adaaaa', fontSize: 10, fontFamily: 'Lexend' }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 10]} tick={{ fill: '#adaaaa', fontSize: 10, fontFamily: 'Lexend' }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="hours" name="HORAS" fill="url(#sleepHours)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="hours" name="HOURS" fill="url(#sleepHours)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         {/* Sleep Score Chart */}
         <div className="bg-surface-low rounded-xl p-4 lg:p-6">
-          <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-1">PUNTAJE DE SUEÑO</p>
-          <p className="font-label text-label-sm text-on-surface-variant mb-4">EVOLUCIÓN {period === 'weekly' ? 'SEMANAL' : 'MENSUAL'}</p>
+          <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-1">SLEEP SCORE</p>
+          <p className="font-label text-label-sm text-on-surface-variant mb-4">{period === 'weekly' ? 'WEEKLY' : 'MONTHLY'} TREND</p>
           <ResponsiveContainer width="100%" height={180}>
             <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
               <defs>
@@ -346,7 +346,7 @@ export const Sleep: React.FC = () => {
       <div className="bg-surface-low rounded-xl p-4 lg:p-8">
         <div className="mb-6">
           <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-1">CONSISTENCY MATRIX</p>
-          <p className="font-label text-label-sm text-on-surface-variant">REGULARIDAD DE SUEÑO — HISTÓRICO DE 4 SEMANAS</p>
+          <p className="font-label text-label-sm text-on-surface-variant">SLEEP REGULARITY — 4 WEEK HISTORY</p>
         </div>
         <ConsistencyMatrix data={matrixData} />
       </div>

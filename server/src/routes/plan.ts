@@ -70,11 +70,11 @@ router.delete('/:id', (req, res) => {
 // Initial seeder just in case the table is completely empty to simulate the mock data
 router.post('/seed', (req, res) => {
   const mockPlan = [
-    { day: 'LUN', sport: 'GYM / FUERZA', detail: 'UPPER BODY STRENGTH', completed: 1 },
-    { day: 'MAR', sport: 'WINGFOIL', detail: 'SESIÓN TÉCNICA - VIENTO 15KT', completed: 1 },
-    { day: 'MIÉ', sport: 'TENIS', detail: 'MATCH PLAY - 90 MIN', completed: 1 },
-    { day: 'JUE', sport: 'GYM / FUERZA', detail: 'LOWER BODY + CORE', completed: 0 },
-    { day: 'VIE', sport: 'TENIS', detail: 'ENTRENAMIENTO TÉCNICO', completed: 0 },
+    { day: 'MON', sport: 'GYM / STRENGTH', detail: 'UPPER BODY STRENGTH', completed: 1 },
+    { day: 'TUE', sport: 'WINGFOIL', detail: 'TECHNICAL SESSION - WIND 15KT', completed: 1 },
+    { day: 'WED', sport: 'TENNIS', detail: 'MATCH PLAY - 90 MIN', completed: 1 },
+    { day: 'THU', sport: 'GYM / STRENGTH', detail: 'LOWER BODY + CORE', completed: 0 },
+    { day: 'FRI', sport: 'TENNIS', detail: 'TECHNICAL TRAINING', completed: 0 },
   ];
 
   try {

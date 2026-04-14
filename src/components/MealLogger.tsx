@@ -4,12 +4,12 @@ import { STTButton } from './ui/STTButton';
 import AIProgressIndicator from './ui/AIProgressIndicator';
 
 const MEAL_SLOTS = [
-  { value: 'breakfast', label: 'Desayuno' },
-  { value: 'lunch', label: 'Almuerzo' },
+  { value: 'breakfast', label: 'Breakfast' },
+  { value: 'lunch', label: 'Lunch' },
   { value: 'snack', label: 'Snack' },
-  { value: 'dinner', label: 'Cena' },
-  { value: 'pre_workout', label: 'Pre-entreno' },
-  { value: 'post_workout', label: 'Post-entreno' },
+  { value: 'dinner', label: 'Dinner' },
+  { value: 'pre_workout', label: 'Pre-workout' },
+  { value: 'post_workout', label: 'Post-workout' },
 ];
 
 function getDefaultSlot(): string {
@@ -138,7 +138,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-outline-variant/20">
-          <h2 className="font-display text-on-surface font-semibold">Registrar Comida</h2>
+          <h2 className="font-display text-on-surface font-semibold">Log Meal</h2>
           <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface text-xl leading-none">×</button>
         </div>
 
@@ -154,7 +154,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
-              {m === 'photo' ? 'Con foto' : 'Manual'}
+              {m === 'photo' ? 'With photo' : 'Manual'}
             </button>
           ))}
         </div>
@@ -162,7 +162,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
         <div className="overflow-y-auto flex-1 px-5 py-4 flex flex-col gap-4">
           {/* Selector de slot */}
           <div>
-            <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1.5 block">Momento del día</label>
+            <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1.5 block">Time of day</label>
             <div className="flex flex-wrap gap-1.5">
               {MEAL_SLOTS.map(s => (
                 <button
@@ -189,7 +189,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
                   className="w-full h-36 rounded-xl border-2 border-dashed border-outline-variant flex flex-col items-center justify-center gap-2 text-on-surface-variant hover:text-on-surface hover:border-primary/50 transition-all"
                 >
                   <span className="text-3xl">📷</span>
-                  <span className="font-body text-sm">Tomar foto o seleccionar imagen</span>
+                  <span className="font-body text-sm">Take photo or select image</span>
                 </button>
               ) : (
                 <div className="relative">
@@ -219,14 +219,14 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
                       onClick={handleAnalyze}
                       className="flex-1 py-3 rounded-xl bg-primary text-surface font-label text-sm tracking-wider uppercase font-medium"
                     >
-                      Analizar con Claude AI
+                      Analyze with Claude AI
                     </button>
                   ) : (
                     <button
                       onClick={onStopAnalysis}
                       className="flex-1 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label text-sm tracking-wider uppercase"
                     >
-                      Detener
+                      Stop
                     </button>
                   )}
                 </div>
@@ -249,7 +249,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
               {/* Resultado editable */}
               {showAnalysisResult && analysisResult && (
                 <div className="flex items-center gap-2">
-                  <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Confianza:</span>
+                  <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Confidence:</span>
                   <span className={`font-label text-label-sm tracking-wider uppercase font-semibold ${confidenceColor[analysisResult.confidence] || 'text-on-surface-variant'}`}>
                     {analysisResult.confidence}
                   </span>
@@ -267,12 +267,12 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
           {(mode === 'manual' || showAnalysisResult) && (
             <>
               <div>
-                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">Nombre</label>
+                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">Name</label>
                 <div className="relative">
                   <input
                     value={mealName}
                     onChange={e => setMealName(e.target.value)}
-                    placeholder="Ej: Pollo con ensalada"
+                    placeholder="E.g.: Chicken with salad"
                     className="w-full bg-surface-container text-on-surface font-body text-sm px-3 py-2.5 pr-9 rounded-xl outline-none border border-transparent focus:border-primary/40 placeholder:text-on-surface-variant"
                   />
                   <STTButton
@@ -284,12 +284,12 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
               </div>
 
               <div>
-                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">Descripción</label>
+                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">Description</label>
                 <div className="relative">
                   <textarea
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    placeholder="Descripción opcional..."
+                    placeholder="Optional description..."
                     rows={2}
                     className="w-full bg-surface-container text-on-surface font-body text-sm px-3 py-2.5 pr-9 rounded-xl outline-none border border-transparent focus:border-primary/40 placeholder:text-on-surface-variant resize-none"
                   />
@@ -303,10 +303,10 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Calorías', value: calories, set: setCalories, unit: 'kcal' },
-                  { label: 'Proteína', value: proteinG, set: setProteinG, unit: 'g' },
-                  { label: 'Carbos', value: carbsG, set: setCarbsG, unit: 'g' },
-                  { label: 'Grasa', value: fatG, set: setFatG, unit: 'g' },
+                  { label: 'Calories', value: calories, set: setCalories, unit: 'kcal' },
+                  { label: 'Protein', value: proteinG, set: setProteinG, unit: 'g' },
+                  { label: 'Carbs', value: carbsG, set: setCarbsG, unit: 'g' },
+                  { label: 'Fat', value: fatG, set: setFatG, unit: 'g' },
                 ].map(({ label, value, set, unit }) => (
                   <div key={label}>
                     <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">
@@ -331,7 +331,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
             onClick={onClose}
             className="flex-1 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label text-sm tracking-wider uppercase"
           >
-            Cancelar
+            Cancel
           </button>
           {(mode === 'manual' || showAnalysisResult) && (
             <button
@@ -339,7 +339,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
               disabled={!mealName && !calories}
               className="flex-1 py-3 rounded-xl bg-primary text-surface font-label text-sm tracking-wider uppercase font-medium disabled:opacity-40"
             >
-              Guardar
+              Save
             </button>
           )}
         </div>

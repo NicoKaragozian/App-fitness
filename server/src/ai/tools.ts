@@ -13,57 +13,57 @@ import { computeMacroTargets } from '../lib/macros.js';
 export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'update_profile',
-    description: 'Actualiza el perfil del usuario con datos personales, objetivos y preferencias de entrenamiento. Usá esta herramienta cuando el usuario te dé información sobre sí mismo (edad, peso, altura, objetivo, deportes, etc.).',
+    description: 'Updates the user profile with personal data, goals, and training preferences. Use this tool when the user provides information about themselves (age, weight, height, goal, sports, etc.).',
     input_schema: {
       type: 'object' as const,
       properties: {
-        name: { type: 'string', description: 'Nombre del usuario' },
-        age: { type: 'number', description: 'Edad en años' },
-        sex: { type: 'string', enum: ['male', 'female'], description: 'Sexo biológico' },
-        height_cm: { type: 'number', description: 'Altura en centímetros' },
-        weight_kg: { type: 'number', description: 'Peso en kilogramos' },
-        experience_level: { type: 'string', enum: ['beginner', 'intermediate', 'advanced'], description: 'Nivel de experiencia' },
-        primary_goal: { type: 'string', enum: ['strength', 'hypertrophy', 'endurance', 'fat_loss', 'sport_performance', 'maintain'], description: 'Objetivo principal' },
-        sports: { type: 'array', items: { type: 'string' }, description: 'Deportes que practica' },
-        training_days_per_week: { type: 'number', description: 'Días de entrenamiento por semana' },
-        session_duration_min: { type: 'number', description: 'Duración de sesión en minutos' },
-        equipment: { type: 'array', items: { type: 'string' }, description: 'Equipamiento disponible (full_gym, home_basic, bodyweight, bands)' },
-        injuries: { type: 'string', description: 'Lesiones o limitaciones' },
+        name: { type: 'string', description: 'User name' },
+        age: { type: 'number', description: 'Age in years' },
+        sex: { type: 'string', enum: ['male', 'female'], description: 'Biological sex' },
+        height_cm: { type: 'number', description: 'Height in centimeters' },
+        weight_kg: { type: 'number', description: 'Weight in kilograms' },
+        experience_level: { type: 'string', enum: ['beginner', 'intermediate', 'advanced'], description: 'Experience level' },
+        primary_goal: { type: 'string', enum: ['strength', 'hypertrophy', 'endurance', 'fat_loss', 'sport_performance', 'maintain'], description: 'Primary goal' },
+        sports: { type: 'array', items: { type: 'string' }, description: 'Sports the user practices' },
+        training_days_per_week: { type: 'number', description: 'Training days per week' },
+        session_duration_min: { type: 'number', description: 'Session duration in minutes' },
+        equipment: { type: 'array', items: { type: 'string' }, description: 'Available equipment (full_gym, home_basic, bodyweight, bands)' },
+        injuries: { type: 'string', description: 'Injuries or limitations' },
       },
       required: [],
     },
   },
   {
     name: 'generate_training_plan',
-    description: 'Genera un plan de entrenamiento personalizado basado en el perfil, datos biométricos y objetivo del usuario. Tarda 10-15 segundos. Usá esta herramienta cuando el usuario pida un plan de entrenamiento.',
+    description: 'Generates a personalized training plan based on the user profile, biometric data, and goals. Takes 10-15 seconds. Use this tool when the user asks for a training plan.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        goal: { type: 'string', description: 'Descripción del objetivo del plan (ej: "plan de fuerza 3 días", "hipertrofia upper/lower")' },
+        goal: { type: 'string', description: 'Plan goal description (e.g., "3-day strength plan", "upper/lower hypertrophy")' },
       },
       required: ['goal'],
     },
   },
   {
     name: 'log_meal',
-    description: 'Registra una comida en el log de nutrición del día. Usá esta herramienta cuando el usuario te cuente qué comió o quiera registrar una comida.',
+    description: 'Logs a meal in the daily nutrition log. Use this tool when the user tells you what they ate or wants to log a meal.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        meal_name: { type: 'string', description: 'Nombre corto de la comida' },
-        description: { type: 'string', description: 'Descripción/ingredientes' },
-        meal_slot: { type: 'string', enum: ['breakfast', 'lunch', 'dinner', 'snack', 'pre_workout', 'post_workout'], description: 'Momento del día' },
-        calories: { type: 'number', description: 'Calorías estimadas' },
-        protein_g: { type: 'number', description: 'Proteína en gramos' },
-        carbs_g: { type: 'number', description: 'Carbohidratos en gramos' },
-        fat_g: { type: 'number', description: 'Grasa en gramos' },
+        meal_name: { type: 'string', description: 'Short meal name' },
+        description: { type: 'string', description: 'Description/ingredients' },
+        meal_slot: { type: 'string', enum: ['breakfast', 'lunch', 'dinner', 'snack', 'pre_workout', 'post_workout'], description: 'Time of day' },
+        calories: { type: 'number', description: 'Estimated calories' },
+        protein_g: { type: 'number', description: 'Protein in grams' },
+        carbs_g: { type: 'number', description: 'Carbohydrates in grams' },
+        fat_g: { type: 'number', description: 'Fat in grams' },
       },
       required: ['meal_name', 'calories', 'protein_g', 'carbs_g', 'fat_g'],
     },
   },
   {
     name: 'get_daily_briefing',
-    description: 'Obtiene el briefing completo del día: sueño, HRV, estrés, readiness, plan de entrenamiento y nutrición. Usá esta herramienta cuando el usuario pregunte cómo está hoy, pida un resumen del día, o quiera saber su estado.',
+    description: 'Gets the full daily briefing: sleep, HRV, stress, readiness, training plan, and nutrition. Use this tool when the user asks how they are today, requests a day summary, or wants to know their status.',
     input_schema: {
       type: 'object' as const,
       properties: {},
@@ -72,14 +72,14 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'navigate_to',
-    description: 'Navega al usuario a una sección de la app. Usá esta herramienta cuando el usuario pida ir a una página específica o después de crear algo (como un plan) para que lo vea.',
+    description: 'Navigates the user to a section of the app. Use this tool when the user asks to go to a specific page or after creating something (like a plan) so they can view it.',
     input_schema: {
       type: 'object' as const,
       properties: {
         route: {
           type: 'string',
           enum: ['/dashboard', '/training', '/nutrition', '/sports'],
-          description: 'Ruta de la app a la que navegar',
+          description: 'App route to navigate to',
         },
       },
       required: ['route'],
@@ -108,7 +108,7 @@ export async function executeTool(name: string, input: Record<string, any>): Pro
       case 'navigate_to':
         return { result: { navigated: true, route: input.route }, isError: false };
       default:
-        return { result: { error: `Tool "${name}" no encontrada` }, isError: true };
+        return { result: { error: `Tool "${name}" not found` }, isError: true };
     }
   } catch (err: any) {
     console.error(`[agent] Tool "${name}" error:`, err.message);
@@ -205,16 +205,16 @@ function executeUpdateProfile(input: Record<string, any>): any {
 async function executeGenerateTrainingPlan(input: Record<string, any>): Promise<any> {
   const goal = input.goal;
   const context = buildTrainingContext(goal);
-  const systemPrompt = PROMPTS.training_plan + '\n\nDatos del usuario:\n' + context;
+  const systemPrompt = PROMPTS.training_plan + '\n\nUser data:\n' + context;
 
   // Non-streaming inner call to Claude
-  const rawContent = await claudeChat(systemPrompt, `Generá un plan de entrenamiento para: ${goal}`, 4096);
+  const rawContent = await claudeChat(systemPrompt, `Generate a training plan for: ${goal}`, 4096);
 
   // Parse the ---PLAN_JSON--- delimiter
   const marker = '---PLAN_JSON---';
   const idx = rawContent.indexOf(marker);
   if (idx === -1) {
-    throw new Error('Claude no generó el JSON del plan correctamente');
+    throw new Error('Claude did not generate the plan JSON correctly');
   }
 
   let jsonStr = rawContent.slice(idx + marker.length).trim();
@@ -294,10 +294,10 @@ function executeGetDailyBriefing(): any {
     ? Math.round((slpScore * sleepW + stressInverse * stressW + customHrvScore * hrvW) / totalW)
     : 0;
 
-  const readinessLabel = readinessScore >= 85 ? 'Optimo'
-    : readinessScore >= 70 ? 'Bueno'
-    : readinessScore >= 50 ? 'Moderado'
-    : 'Bajo';
+  const readinessLabel = readinessScore >= 85 ? 'Optimal'
+    : readinessScore >= 70 ? 'Good'
+    : readinessScore >= 50 ? 'Moderate'
+    : 'Low';
 
   // Today's nutrition
   const todayStr = new Date().toISOString().slice(0, 10);

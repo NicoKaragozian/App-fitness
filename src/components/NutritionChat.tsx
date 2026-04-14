@@ -18,10 +18,10 @@ interface NutritionChatProps {
 }
 
 const SUGGESTIONS = [
-  '¿Qué puedo comer para llegar a mis macros?',
-  'Sugerime un snack alto en proteína',
-  '¿Cómo está mi distribución de macros hoy?',
-  '¿Qué ceno para completar mis objetivos?',
+  'What can I eat to hit my macros?',
+  'Suggest a high-protein snack',
+  'How is my macro distribution today?',
+  'What should I have for dinner to complete my goals?',
 ];
 
 export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targets, logs }) => {
@@ -74,7 +74,7 @@ export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targ
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(err.error || `Error ${res.status}`);
       }
 
@@ -114,7 +114,7 @@ export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targ
           return updated;
         });
       } else {
-        setError(err.message || 'Error al conectar con el coach');
+        setError(err.message || 'Error connecting to coach');
         setMessages(prev => prev.slice(0, -1));
       }
     } finally {
@@ -143,14 +143,14 @@ export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targ
       {/* Resumen de macros restantes */}
       <div className="bg-surface-low rounded-2xl p-4">
         <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">
-          Macros restantes hoy
+          Remaining macros today
         </p>
         <div className="grid grid-cols-4 gap-2 text-center">
           {[
             { label: 'KCAL', value: remCals, color: 'text-primary' },
             { label: 'PROT', value: remProt, color: 'text-secondary', unit: 'g' },
             { label: 'CARBS', value: remCarbs, color: 'text-tertiary', unit: 'g' },
-            { label: 'GRASA', value: remFat, color: 'text-[#22d3a5]', unit: 'g' },
+            { label: 'FAT', value: remFat, color: 'text-[#22d3a5]', unit: 'g' },
           ].map(({ label, value, color, unit }) => (
             <div key={label}>
               <p className={`font-display text-sm font-bold ${color}`}>
@@ -162,7 +162,7 @@ export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targ
         </div>
         {logs.length === 0 && (
           <p className="font-body text-xs text-on-surface-variant mt-2 text-center">
-            Registrá comidas para un análisis más preciso
+            Log meals for a more accurate analysis
           </p>
         )}
       </div>
@@ -174,9 +174,9 @@ export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targ
           {messages.length === 0 && (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="text-center">
-                <p className="font-display text-on-surface font-semibold mb-1">Chat Nutricional</p>
+                <p className="font-display text-on-surface font-semibold mb-1">Nutrition Chat</p>
                 <p className="font-body text-sm text-on-surface-variant">
-                  Preguntame sobre tu nutrición de hoy
+                  Ask me about your nutrition today
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-2 w-full">
@@ -245,7 +245,7 @@ export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targ
                 resizeTextarea();
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Preguntame sobre tus macros..."
+              placeholder="Ask me about your macros..."
               rows={1}
               disabled={isStreaming}
               className="flex-1 bg-transparent resize-none outline-none text-sm font-body text-on-surface placeholder:text-on-surface-variant/50 leading-relaxed overflow-hidden"

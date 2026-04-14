@@ -1,4 +1,4 @@
-// insights/index.ts — Orquestador: consulta DB, computa stats, evalúa reglas
+// insights/index.ts — Orchestrator: queries DB, computes stats, evaluates rules
 
 import db from '../db.js';
 import {
@@ -21,7 +21,7 @@ interface InsightsResult {
 export function computeInsights(): InsightsResult {
   const today = new Date().toISOString().slice(0, 10);
 
-  // --- Sueño (últimos 30 días) ---
+  // --- Sleep (last 30 days) ---
   const sleepRows = db.prepare(
     `SELECT date, score FROM sleep WHERE score IS NOT NULL ORDER BY date DESC LIMIT 30`
   ).all() as { date: string; score: number }[];
@@ -36,7 +36,7 @@ export function computeInsights(): InsightsResult {
     : null;
   const sleepTrend = sleepValues.length >= 5 ? trend(sleepValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
 
-  // --- HRV (últimos 30 días) ---
+  // --- HRV (last 30 days) ---
   const hrvRows = db.prepare(
     `SELECT date, nightly_avg, status FROM hrv WHERE nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 30`
   ).all() as { date: string; nightly_avg: number; status: string }[];
@@ -52,7 +52,7 @@ export function computeInsights(): InsightsResult {
   const hrvTrend = hrvValues.length >= 5 ? trend(hrvValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
   const hrvStatus = hrvRows[0]?.status ?? null;
 
-  // --- Stress (últimos 30 días) ---
+  // --- Stress (last 30 days) ---
   const stressRows = db.prepare(
     `SELECT date, avg_stress FROM stress WHERE avg_stress IS NOT NULL ORDER BY date DESC LIMIT 30`
   ).all() as { date: string; avg_stress: number }[];
@@ -61,13 +61,13 @@ export function computeInsights(): InsightsResult {
   const stressToday = stressRows[0]?.avg_stress ?? null;
   const stress7d = stressValues.length >= 3 ? rollingAverage(stressValues, 7) : null;
   const stressBaseline = stressValues.length >= 3 ? mean(stressValues) : null;
-  // Para stress: "improving" en la pendiente = valores BAJANDO (mejor). Invertimos la señal.
+  // For stress: "improving" in slope = values GOING DOWN (better). We invert the signal.
   const stressTrendRaw = stressValues.length >= 5 ? trend(stressValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
   const stressTrendDir = stressTrendRaw.direction === 'improving' ? 'declining'
     : stressTrendRaw.direction === 'declining' ? 'improving'
     : 'stable';
 
-  // --- FC reposo (últimos 14 días) ---
+  // --- Resting HR (last 14 days) ---
   const hrRows = db.prepare(
     `SELECT date, resting_hr FROM daily_summary WHERE resting_hr IS NOT NULL ORDER BY date DESC LIMIT 14`
   ).all() as { date: string; resting_hr: number }[];
@@ -75,10 +75,10 @@ export function computeInsights(): InsightsResult {
   const hrValues = [...hrRows].reverse().map(r => r.resting_hr);
   const hrToday = hrRows[0]?.resting_hr ?? null;
   const hr7d = hrValues.length >= 3 ? rollingAverage(hrValues, 7) : null;
-  // Para resting HR: pendiente positiva = mala señal (HR sube)
+  // For resting HR: positive slope = bad sign (HR rising)
   const hrTrendRaw = hrValues.length >= 5 ? trend(hrValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
 
-  // --- Actividades (últimos 30 días) ---
+  // --- Activities (last 30 days) ---
   const actRows = db.prepare(
     `SELECT date(start_time) as date, duration, avg_hr FROM activities ORDER BY start_time DESC LIMIT 100`
   ).all() as { date: string; duration: number; avg_hr: number | null }[];
@@ -89,14 +89,14 @@ export function computeInsights(): InsightsResult {
   const load3d = trainingLoad(actRows, 3);
   const load7d = trainingLoad(actRows, 7);
 
-  // --- Plan de hoy ---
-  const todayName = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'][new Date().getDay()];
+  // --- Today's plan ---
+  const todayName = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][new Date().getDay()];
   const planRow = db.prepare(
     `SELECT sport, detail FROM weekly_plan WHERE day = ? AND completed = 0 LIMIT 1`
   ).get(todayName) as { sport: string; detail: string | null } | undefined;
   const todayPlan = planRow ?? null;
 
-  // --- Construir InsightStats ---
+  // --- Build InsightStats ---
   const stats: InsightStats = {
     sleep: {
       current: sleepToday,

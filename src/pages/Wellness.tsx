@@ -62,7 +62,7 @@ export const Wellness: React.FC = () => {
             STRESS <span className="text-primary">LAB</span>
           </h1>
           <p className="font-body text-on-surface-variant text-sm mt-2 max-w-md">
-            Tu respuesta biológica a demandas cognitivas y físicas analizada mediante procesos HRV.
+            Your biological response to cognitive and physical demands analyzed through HRV processes.
           </p>
         </div>
       </div>
@@ -70,14 +70,14 @@ export const Wellness: React.FC = () => {
       {/* Stress Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5">
         <div className="bg-surface-low rounded-xl p-5">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">PROMEDIO SEMANAL</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">WEEKLY AVERAGE</p>
           <div className="flex items-end gap-3">
             <p className="font-display font-bold text-3xl lg:text-[4rem] leading-none" style={{ color: weeklyLabel.color }}>
               {weeklyStressAvg}
             </p>
             <div className="mb-1 lg:mb-2">
               <p className="font-display text-sm font-bold tracking-widest" style={{ color: weeklyLabel.color }}>{weeklyLabel.label}</p>
-              <p className="font-label text-label-sm text-on-surface-variant">ESTA SEMANA</p>
+              <p className="font-label text-label-sm text-on-surface-variant">THIS WEEK</p>
             </div>
           </div>
           <div className="mt-3 h-1 bg-surface-variant rounded-full overflow-hidden">
@@ -90,14 +90,14 @@ export const Wellness: React.FC = () => {
         </div>
 
         <div className="bg-surface-low rounded-xl p-5">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">PROMEDIO MENSUAL</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">MONTHLY AVERAGE</p>
           <div className="flex items-end gap-3">
             <p className="font-display font-bold text-3xl lg:text-[4rem] leading-none" style={{ color: monthlyLabel.color }}>
               {monthlyStressAvg}
             </p>
             <div className="mb-1 lg:mb-2">
               <p className="font-display text-sm font-bold tracking-widest" style={{ color: monthlyLabel.color }}>{monthlyLabel.label}</p>
-              <p className="font-label text-label-sm text-on-surface-variant">ESTE MES</p>
+              <p className="font-label text-label-sm text-on-surface-variant">THIS MONTH</p>
             </div>
           </div>
           <div className="mt-3 h-1 bg-surface-variant rounded-full overflow-hidden">
@@ -110,13 +110,13 @@ export const Wellness: React.FC = () => {
         </div>
 
         <div className="bg-surface-low rounded-xl p-5">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">DISTRIBUCIÓN</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3">DISTRIBUTION</p>
           <div className="space-y-2 mt-2">
             {[
-              { label: 'RELAJADO', pct: stressApiData?.distribution?.rest ?? 35, color: '#22d3a5' },
-              { label: 'BAJO', pct: stressApiData?.distribution?.low ?? 40, color: '#f3ffca' },
-              { label: 'MEDIO', pct: stressApiData?.distribution?.medium ?? 20, color: '#ff7439' },
-              { label: 'ALTO', pct: stressApiData?.distribution?.high ?? 5, color: '#ff4444' },
+              { label: 'REST', pct: stressApiData?.distribution?.rest ?? 35, color: '#22d3a5' },
+              { label: 'LOW', pct: stressApiData?.distribution?.low ?? 40, color: '#f3ffca' },
+              { label: 'MEDIUM', pct: stressApiData?.distribution?.medium ?? 20, color: '#ff7439' },
+              { label: 'HIGH', pct: stressApiData?.distribution?.high ?? 5, color: '#ff4444' },
             ].map((s) => (
               <div key={s.label}>
                 <div className="flex justify-between mb-0.5">
@@ -144,7 +144,7 @@ export const Wellness: React.FC = () => {
                 : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            {p === 'weekly' ? 'SEMANAL' : 'MENSUAL'}
+            {p === 'weekly' ? 'WEEKLY' : 'MONTHLY'}
           </button>
         ))}
       </div>
@@ -153,7 +153,7 @@ export const Wellness: React.FC = () => {
       <div className="bg-surface-low rounded-xl p-4 lg:p-6">
         <p className="font-display text-headline-md font-bold text-on-surface uppercase tracking-tight mb-1">STRESS EVOLUTION</p>
         <p className="font-label text-label-sm text-on-surface-variant mb-6">
-          Evolución del estrés — Umbral óptimo marcado
+          Stress evolution — Optimal threshold marked
         </p>
         <ResponsiveContainer width="100%" height={240}>
           <AreaChart data={stressData} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
@@ -174,12 +174,12 @@ export const Wellness: React.FC = () => {
               axisLine={false} tickLine={false}
             />
             <Tooltip content={<CustomTooltip />} />
-            <ReferenceLine y={25} stroke="#22d3a5" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: 'RELAJADO', fill: '#22d3a5', fontSize: 9, fontFamily: 'Lexend' }} />
-            <ReferenceLine y={50} stroke="#f3ffca" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: 'ÓPTIMO', fill: '#f3ffca', fontSize: 9, fontFamily: 'Lexend' }} />
+            <ReferenceLine y={25} stroke="#22d3a5" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: 'REST', fill: '#22d3a5', fontSize: 9, fontFamily: 'Lexend' }} />
+            <ReferenceLine y={50} stroke="#f3ffca" strokeDasharray="4 4" strokeOpacity={0.5} label={{ value: 'OPTIMAL', fill: '#f3ffca', fontSize: 9, fontFamily: 'Lexend' }} />
             <Area
               type="monotone"
               dataKey="stress"
-              name="ESTRÉS"
+              name="STRESS"
               stroke="#f3ffca"
               strokeWidth={2}
               fill="url(#stressGrad)"
@@ -199,14 +199,14 @@ export const Wellness: React.FC = () => {
               {
                 icon: '▲',
                 title: 'PEAK STRESS POINT',
-                desc: `${stressApiData?.momentum?.peakDay || '---'} mostró el mayor estrés del período medido.`,
+                desc: `${stressApiData?.momentum?.peakDay || '---'} showed the highest stress in the measured period.`,
                 value: stressApiData?.momentum?.peakStress || 0,
                 color: '#ff7439',
               },
               {
                 icon: '▼',
                 title: 'LOWEST STRESS',
-                desc: `Día de mayor relajación registrado el ${stressApiData?.momentum?.minDay || '---'}.`,
+                desc: `Most relaxed day recorded on ${stressApiData?.momentum?.minDay || '---'}.`,
                 value: stressApiData?.momentum?.minStress || 0,
                 color: '#6a9cff',
               },
@@ -227,7 +227,7 @@ export const Wellness: React.FC = () => {
           mode="wellness"
           payload={{ period }}
           title="RE-CENTER"
-          chatContext="Analizá mi estrés y recuperación"
+          chatContext="Analyze my stress and recovery"
         />
       </div>
     </div>

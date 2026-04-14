@@ -18,11 +18,11 @@ const getSpeechRecognition = (): (new () => SpeechRecognition) | null => {
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
-  'not-allowed': 'Permiso de micrófono denegado',
-  'no-speech': 'No se detectó voz',
-  'network': 'Error de red',
-  'audio-capture': 'No se pudo acceder al micrófono',
-  'service-not-allowed': 'Servicio de voz no permitido',
+  'not-allowed': 'Microphone permission denied',
+  'no-speech': 'No speech detected',
+  'network': 'Network error',
+  'audio-capture': 'Could not access microphone',
+  'service-not-allowed': 'Speech service not allowed',
 };
 
 export function useSTT(): UseSTTReturn {
@@ -53,7 +53,7 @@ export function useSTT(): UseSTTReturn {
     onResultRef.current = opts?.onResult;
 
     const recognition = new SR();
-    recognition.lang = 'es-AR';
+    recognition.lang = 'en-US';
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;

@@ -14,7 +14,7 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { ActivityRing } from '../components/ui/ActivityRing';
 import { apiFetch } from '../api/client';
 
-const DAYS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 function formatHours(h: number) {
   return `${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`;
@@ -52,9 +52,9 @@ export const Dashboard: React.FC = () => {
   const { data: stressData } = useStress('weekly');
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ day: 'LUN', sport: '', detail: '' });
+  const [editForm, setEditForm] = useState({ day: 'MON', sport: '', detail: '' });
   const [isAdding, setIsAdding] = useState(false);
-  const [addForm, setAddForm] = useState({ day: 'LUN', sport: '', detail: '' });
+  const [addForm, setAddForm] = useState({ day: 'MON', sport: '', detail: '' });
   const [startingId, setStartingId] = useState<number | null>(null);
 
   const loading = summaryLoading || activitiesLoading || planLoading;
@@ -99,7 +99,7 @@ export const Dashboard: React.FC = () => {
     try {
       const plan = await apiFetch<{ id: number; sessions: Array<{ id: number; name: string; notes: string | null; exercises: any[] }> }>(`/training/plans/${item.plan_id}`);
       const session = plan.sessions.find(s => s.id === item.session_id);
-      if (!session) throw new Error('Sesión no encontrada');
+      if (!session) throw new Error('Session not found');
       const result = await apiFetch<{ workoutId: number }>('/training/workouts', {
         method: 'POST',
         body: JSON.stringify({ planId: item.plan_id, sessionId: item.session_id }),
@@ -114,7 +114,7 @@ export const Dashboard: React.FC = () => {
   const handleAddSubmit = () => {
     if (addForm.sport.trim()) {
       addPlanItem({ day: addForm.day, sport: addForm.sport, detail: addForm.detail });
-      setAddForm({ day: 'LUN', sport: '', detail: '' });
+      setAddForm({ day: 'MON', sport: '', detail: '' });
       setIsAdding(false);
     }
   };
@@ -153,17 +153,17 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="mt-8 flex items-center gap-6">
             <div>
-              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">FC REPOSO</p>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">RESTING HR</p>
               <p className="font-display font-semibold text-lg text-white mt-1">{restingHRValue ?? '--'} BPM</p>
             </div>
             <div className="w-px h-8 bg-surface-container"></div>
             <div>
-              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">CALORÍAS</p>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">CALORIES</p>
               <p className="font-display font-semibold text-lg text-[#ff7439] mt-1">{caloriesValue}</p>
             </div>
             <div className="w-px h-8 bg-surface-container"></div>
             <div>
-              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">PASOS</p>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">STEPS</p>
               <p className="font-display font-semibold text-lg text-[#f3ffca] mt-1">{stepsValue}</p>
             </div>
           </div>
@@ -174,7 +174,7 @@ export const Dashboard: React.FC = () => {
           {/* Sleep tile */}
           <div className="flex-1 bg-surface-low rounded-xl p-4 flex flex-col justify-between">
             <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22d3a5]"></span> SUEÑO — ANOCHE
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22d3a5]"></span> SLEEP — LAST NIGHT
             </p>
             {lastSleep ? (
               <div>
@@ -193,7 +193,7 @@ export const Dashboard: React.FC = () => {
           {/* Stress tile */}
           <div className="flex-1 bg-surface-low rounded-xl p-4 flex flex-col justify-between">
             <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stressColor }}></span> ESTRÉS — 7D
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stressColor }}></span> STRESS — 7D
             </p>
             {stressAvg > 0 ? (
               <div>
@@ -212,7 +212,7 @@ export const Dashboard: React.FC = () => {
           {/* HRV tile */}
           <div className="flex-1 bg-surface-low rounded-xl p-4 flex flex-col justify-between">
             <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span> HRV — NOCHE
+              <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span> HRV — NIGHT
             </p>
             {hrvNightly > 0 ? (
               <div>
@@ -233,7 +233,7 @@ export const Dashboard: React.FC = () => {
         <div className="lg:col-span-4 bg-surface-low rounded-xl p-5 lg:p-6 flex flex-col max-h-[500px] overflow-y-auto">
           <div className="flex items-center justify-between mb-6 sticky top-0 bg-surface-low pb-2 z-10">
             <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">WEEKLY PLAN</p>
-            <p className="font-label text-label-sm text-primary">{weeklyPlan.filter(i => i.completed).length}/{weeklyPlan.length} DÍAS</p>
+            <p className="font-label text-label-sm text-primary">{weeklyPlan.filter(i => i.completed).length}/{weeklyPlan.length} DAYS</p>
           </div>
 
           <div className="space-y-3 flex-1 pb-4">
@@ -268,7 +268,7 @@ export const Dashboard: React.FC = () => {
                         value={editForm.sport}
                         onChange={e => setEditForm({ ...editForm, sport: e.target.value })}
                         className="w-full bg-surface-container-high text-on-surface font-display text-sm font-bold p-1 rounded outline-none border border-surface-variant focus:border-primary"
-                        placeholder="Ej. GYM / FUERZA"
+                        placeholder="E.g. GYM / STRENGTH"
                         autoFocus
                       />
                       <input
@@ -276,7 +276,7 @@ export const Dashboard: React.FC = () => {
                         value={editForm.detail}
                         onChange={e => setEditForm({ ...editForm, detail: e.target.value })}
                         className="w-full bg-surface-container-high text-on-surface-variant font-label text-xs p-1 rounded outline-none border border-surface-variant focus:border-primary"
-                        placeholder="Ej. Sesión piernas"
+                        placeholder="E.g. Leg session"
                       />
                       <div className="flex justify-end gap-2 mt-2">
                         <button onClick={() => setEditingId(null)} className="text-[10px] text-on-surface-variant font-label px-2 py-1">CANCEL</button>
@@ -295,7 +295,7 @@ export const Dashboard: React.FC = () => {
                           disabled={startingId === item.id}
                           className="mt-1.5 font-label text-[10px] tracking-widest uppercase text-primary hover:opacity-70 transition-opacity disabled:opacity-40"
                         >
-                          {startingId === item.id ? 'iniciando…' : '▶ Empezar'}
+                          {startingId === item.id ? 'starting...' : '▶ Start'}
                         </button>
                       )}
                     </div>
@@ -329,7 +329,7 @@ export const Dashboard: React.FC = () => {
                   value={addForm.sport}
                   onChange={e => setAddForm({ ...addForm, sport: e.target.value })}
                   className="w-full bg-surface-container text-on-surface font-display text-sm font-bold p-1 rounded outline-none border border-surface-variant focus:border-primary mb-2"
-                  placeholder="Título (Ej. NATACIÓN)"
+                  placeholder="Title (e.g. SWIMMING)"
                   autoFocus
                 />
                 <input
@@ -337,7 +337,7 @@ export const Dashboard: React.FC = () => {
                   value={addForm.detail}
                   onChange={e => setAddForm({ ...addForm, detail: e.target.value })}
                   className="w-full bg-surface-container text-on-surface-variant font-label text-xs p-1 rounded outline-none border border-surface-variant focus:border-primary mb-2"
-                  placeholder="Detalles"
+                  placeholder="Details"
                 />
                 <div className="flex justify-end gap-2 mt-2">
                   <button onClick={() => setIsAdding(false)} className="text-[10px] text-on-surface-variant font-label px-2 py-1">CANCEL</button>
@@ -360,18 +360,18 @@ export const Dashboard: React.FC = () => {
       {/* AI Daily Briefing */}
       <AIInsightPanel
         mode="daily"
-        title="BRIEFING DEL DÍA"
-        chatContext="Dame un resumen de cómo estoy hoy"
+        title="DAILY BRIEFING"
+        chatContext="Give me a summary of how I'm doing today"
       />
 
-      {/* Nutricion de hoy */}
+      {/* Today's nutrition */}
       <NutritionTodayCard />
 
-      {/* Últimas Sesiones — horizontal scroll */}
+      {/* Latest Sessions — horizontal scroll */}
       {recentSessions.length > 0 && (
         <div>
           <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-tertiary"></span> ÚLTIMAS SESIONES
+            <span className="w-2 h-2 rounded-full bg-tertiary"></span> RECENT SESSIONS
           </p>
           <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory">
             {recentSessions.map((session, i) => (

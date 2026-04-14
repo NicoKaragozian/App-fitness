@@ -10,10 +10,10 @@ const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 // POST /api/goals/generate
 router.post('/generate', async (req, res) => {
   const { objective, targetDate } = req.body;
-  if (!objective?.trim()) return res.status(400).json({ error: 'objective requerido' });
+  if (!objective?.trim()) return res.status(400).json({ error: 'objective required' });
 
   if (!isClaudeConfigured()) {
-    return res.status(503).json({ error: 'Claude API no configurada. Agregá ANTHROPIC_API_KEY en el .env' });
+    return res.status(503).json({ error: 'Claude API not configured. Add ANTHROPIC_API_KEY to .env' });
   }
 
   const context = buildGoalContext(objective, targetDate);
@@ -22,7 +22,7 @@ router.post('/generate', async (req, res) => {
   try {
     const raw = await claudeChat(
       `${systemPrompt}\n\n${context}`,
-      `Objetivo: ${objective}${targetDate ? `\nFecha límite: ${targetDate}` : ''}`
+      `Objective: ${objective}${targetDate ? `\nDeadline: ${targetDate}` : ''}`
     );
 
     let parsed: any;
@@ -40,11 +40,11 @@ router.post('/generate', async (req, res) => {
       }
       parsed = JSON.parse(jsonStr);
     } catch {
-      return res.status(502).json({ error: 'Claude no generó JSON válido. Intentá de nuevo.' });
+      return res.status(502).json({ error: 'Claude did not generate valid JSON. Try again.' });
     }
 
     if (!parsed.title || !Array.isArray(parsed.phases) || parsed.phases.length === 0) {
-      return res.status(502).json({ error: 'Estructura de guía inválida. Intentá de nuevo.' });
+      return res.status(502).json({ error: 'Invalid guide structure. Try again.' });
     }
 
     const saveGoal = db.transaction(() => {
@@ -73,7 +73,7 @@ router.post('/generate', async (req, res) => {
         insertPhase.run(
           goalId,
           p.phase ?? i + 1,
-          p.title ?? `Fase ${i + 1}`,
+          p.title ?? `Phase ${i + 1}`,
           p.description ?? null,
           p.success_criteria ?? null,
           JSON.stringify(Array.isArray(p.key_exercises) ? p.key_exercises : []),
@@ -113,7 +113,7 @@ router.get('/', (req, res) => {
 // GET /api/goals/:id
 router.get('/:id', (req, res) => {
   const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(req.params.id) as any;
-  if (!goal) return res.status(404).json({ error: 'Objetivo no encontrado' });
+  if (!goal) return res.status(404).json({ error: 'Goal not found' });
   const milestones = db.prepare('SELECT * FROM goal_milestones WHERE goal_id = ? ORDER BY sort_order').all(req.params.id) as any[];
   res.json({ ...goal, milestones });
 });
@@ -127,7 +127,7 @@ router.put('/:id', (req, res) => {
   if (req.body.description !== undefined) { updates.push('description = ?'); values.push(req.body.description); }
   if (req.body.status !== undefined) { updates.push('status = ?'); values.push(req.body.status); }
 
-  if (updates.length === 0) return res.status(400).json({ error: 'Sin campos para actualizar' });
+  if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
 
   updates.push('updated_at = CURRENT_TIMESTAMP');
   values.push(req.params.id);

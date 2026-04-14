@@ -4,12 +4,12 @@ export const TRAINING_PLAN_PROGRESS: AIProgressConfig = {
   mode: 'streaming',
   expectedTokens: 2500,
   phases: [
-    { at: 0,  label: 'Conectando con Claude...' },
-    { at: 5,  label: 'Analizando tus datos...' },
-    { at: 25, label: 'Diseñando las sesiones...' },
-    { at: 50, label: 'Armando tu plan...' },
-    { at: 75, label: 'Ajustando detalles...' },
-    { at: 90, label: 'Guardando plan...' },
+    { at: 0,  label: 'Connecting to Claude...' },
+    { at: 5,  label: 'Analyzing your data...' },
+    { at: 25, label: 'Designing sessions...' },
+    { at: 50, label: 'Building your plan...' },
+    { at: 75, label: 'Adjusting details...' },
+    { at: 90, label: 'Saving plan...' },
   ],
 };
 
@@ -17,12 +17,12 @@ export const NUTRITION_PLAN_PROGRESS: AIProgressConfig = {
   mode: 'streaming',
   expectedTokens: 4000,
   phases: [
-    { at: 0,  label: 'Conectando con Claude...' },
-    { at: 5,  label: 'Calculando tus macros...' },
-    { at: 20, label: 'Seleccionando alimentos...' },
-    { at: 45, label: 'Armando opciones por comida...' },
-    { at: 70, label: 'Equilibrando nutrientes...' },
-    { at: 90, label: 'Guardando plan...' },
+    { at: 0,  label: 'Connecting to Claude...' },
+    { at: 5,  label: 'Calculating your macros...' },
+    { at: 20, label: 'Selecting foods...' },
+    { at: 45, label: 'Building meal options...' },
+    { at: 70, label: 'Balancing nutrients...' },
+    { at: 90, label: 'Saving plan...' },
   ],
 };
 
@@ -30,11 +30,11 @@ export const GOAL_PROGRESS: AIProgressConfig = {
   mode: 'timed',
   estimatedDurationMs: 12000,
   phases: [
-    { at: 0,  label: 'Conectando con Claude...' },
-    { at: 10, label: 'Analizando tu objetivo...' },
-    { at: 30, label: 'Definiendo fases de progresión...' },
-    { at: 55, label: 'Identificando ejercicios clave...' },
-    { at: 80, label: 'Finalizando guía...' },
+    { at: 0,  label: 'Connecting to Claude...' },
+    { at: 10, label: 'Analyzing your goal...' },
+    { at: 30, label: 'Defining progression phases...' },
+    { at: 55, label: 'Identifying key exercises...' },
+    { at: 80, label: 'Finalizing guide...' },
   ],
 };
 
@@ -42,10 +42,10 @@ export const FOOD_ANALYSIS_PROGRESS: AIProgressConfig = {
   mode: 'streaming',
   expectedTokens: 300,
   phases: [
-    { at: 0,  label: 'Enviando imagen...' },
-    { at: 10, label: 'Analizando la foto...' },
-    { at: 40, label: 'Estimando porciones...' },
-    { at: 70, label: 'Calculando macros...' },
-    { at: 90, label: 'Finalizando...' },
+    { at: 0,  label: 'Sending image...' },
+    { at: 10, label: 'Analyzing photo...' },
+    { at: 40, label: 'Estimating portions...' },
+    { at: 70, label: 'Calculating macros...' },
+    { at: 90, label: 'Finalizing...' },
   ],
 };

@@ -312,17 +312,17 @@ if (groupCount === 0) {
   ins.run('water_sports', 'WATER SPORTS', 'WINGFOIL / SURF', '#6a9cff', '◎',
     JSON.stringify(['surfing','kitesurfing','kiteboarding','windsurfing','stand_up_paddleboarding','sailing','kayaking']),
     JSON.stringify(['sessions','distance','duration','calories']),
-    JSON.stringify([{dataKey:'distance',name:'DISTANCIA KM',type:'bar'},{dataKey:'maxSpeed',name:'VEL. MÁX KM/H',type:'line'}]),
+    JSON.stringify([{dataKey:'distance',name:'DISTANCE KM',type:'bar'},{dataKey:'maxSpeed',name:'MAX SPEED KM/H',type:'line'}]),
     0);
   ins.run('tennis', 'TENNIS', 'MATCH / TRAINING', '#f3ffca', '◈',
     JSON.stringify(['tennis']),
     JSON.stringify(['sessions','duration','calories']),
-    JSON.stringify([{dataKey:'duration',name:'DURACIÓN MIN',type:'bar'},{dataKey:'avgHr',name:'FC PROM BPM',type:'line'}]),
+    JSON.stringify([{dataKey:'duration',name:'DURATION MIN',type:'bar'},{dataKey:'avgHr',name:'AVG HR BPM',type:'line'}]),
     1);
-  ins.run('gym', 'GYM / STRENGTH', 'FUERZA / POTENCIA', '#ff7439', '⚡',
+  ins.run('gym', 'GYM / STRENGTH', 'STRENGTH / POWER', '#ff7439', '⚡',
     JSON.stringify(['strength_training','gym','indoor_cardio']),
     JSON.stringify(['sessions','duration','calories']),
-    JSON.stringify([{dataKey:'calories',name:'CALORÍAS KCAL',type:'bar'}]),
+    JSON.stringify([{dataKey:'calories',name:'CALORIES KCAL',type:'bar'}]),
     2);
 }
 

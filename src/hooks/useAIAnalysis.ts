@@ -87,7 +87,7 @@ export function useAIAnalysis(mode: AnalyzeMode, payload: Record<string, string>
       setState(s => ({ ...s, loading: false, cached: false, generatedAt }));
     } catch (err: any) {
       if (err.name === 'AbortError') return;
-      setState(s => ({ ...s, loading: false, error: err.message || 'Error de conexión' }));
+      setState(s => ({ ...s, loading: false, error: err.message || 'Connection error' }));
     }
   }, [mode, JSON.stringify(payload)]);
 

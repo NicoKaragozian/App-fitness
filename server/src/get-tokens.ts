@@ -1,11 +1,11 @@
 /**
- * get-tokens.ts — Obtiene tokens OAuth de Garmin via browser real (bypass Cloudflare SSO)
+ * get-tokens.ts — Fetches Garmin OAuth tokens via real browser (bypass Cloudflare SSO)
  *
- * Uso:
+ * Usage:
  *   npx tsx server/src/get-tokens.ts
  *
- * Abre Chromium, esperá que el browser te redirija a connect.garmin.com/modern después
- * de loguearte, y el script captura el ticket automáticamente.
+ * Opens Chromium, wait for the browser to redirect to connect.garmin.com/modern after
+ * logging in, and the script captures the ticket automatically.
  */
 
 import { chromium } from 'playwright';
@@ -100,7 +100,7 @@ async function getOAuth2Token(
 
   const data = JSON.parse(text);
 
-  // Calcular campos de expiración que la librería espera
+  // Calculate expiration fields that the library expects
   const now = Date.now();
   data.expires_at = Math.floor(now / 1000) + data.expires_in;
   data.refresh_token_expires_at = Math.floor(now / 1000) + (data.refresh_token_expires_in ?? 7776000);
@@ -113,8 +113,8 @@ async function getOAuth2Token(
 async function main() {
   console.log('\n=== Garmin Token Fetcher ===\n');
   console.log(`OUTPUT_DIR = ${path.resolve(OUTPUT_DIR)}`);
-  console.log('Abriendo browser... Logueate en Garmin Connect y esperá que cargue el dashboard.');
-  console.log('El script detecta el ticket automáticamente.\n');
+  console.log('Opening browser... Log in to Garmin Connect and wait for the dashboard to load.');
+  console.log('The script detects the ticket automatically.\n');
 
   const browser = await chromium.launch({
     headless: false,
@@ -124,7 +124,7 @@ async function main() {
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   });
-  // Ocultar el flag navigator.webdriver que delata la automatización
+  // Hide the navigator.webdriver flag that reveals automation
   await context.addInitScript(() => {
     Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
   });
@@ -132,14 +132,14 @@ async function main() {
 
   let ticket: string | null = null;
 
-  // Interceptar el redirect que contiene el ticket y ABORTAR la request
-  // para que connect.garmin.com no consuma el ticket antes que nosotros
+  // Intercept the redirect containing the ticket and ABORT the request
+  // so connect.garmin.com doesn't consume the ticket before us
   await page.route('**', async (route) => {
     const url = route.request().url();
     const match = url.match(/[?&]ticket=([^&]+)/);
     if (match && !ticket) {
       ticket = decodeURIComponent(match[1]);
-      console.log(`Ticket capturado (abortando redirect): ${ticket.substring(0, 20)}...`);
+      console.log(`Ticket captured (aborting redirect): ${ticket.substring(0, 20)}...`);
       await route.abort();
     } else {
       await route.continue();
@@ -148,28 +148,28 @@ async function main() {
 
   await page.goto(SSO_URL);
 
-  // Esperar hasta que el ticket sea capturado (máx 5 min)
+  // Wait until the ticket is captured (max 5 min)
   const timeout = 300_000;
   const start = Date.now();
   while (!ticket) {
     if (Date.now() - start > timeout) {
       await browser.close();
-      throw new Error('Timeout: no se capturó el ticket en 5 minutos');
+      throw new Error('Timeout: ticket was not captured within 5 minutes');
     }
     await page.waitForTimeout(500);
   }
 
   await browser.close();
-  console.log('\nBrowser cerrado. Procesando tokens...');
+  console.log('\nBrowser closed. Processing tokens...');
 
   const consumer = await fetchConsumerKeys();
-  console.log('Consumer keys obtenidas.');
+  console.log('Consumer keys obtained.');
 
   const oauth1Token = await getOAuth1Token(ticket, consumer);
-  console.log('OAuth1 token obtenido.');
+  console.log('OAuth1 token obtained.');
 
   const oauth2Token = await getOAuth2Token(oauth1Token, consumer);
-  console.log('OAuth2 token obtenido.');
+  console.log('OAuth2 token obtained.');
 
   const oauth1Path = path.join(OUTPUT_DIR, 'oauth1_token.json');
   const oauth2Path = path.join(OUTPUT_DIR, 'oauth2_token.json');
@@ -179,10 +179,10 @@ async function main() {
 
   const verify1 = fs.existsSync(oauth1Path);
   const verify2 = fs.existsSync(oauth2Path);
-  console.log(`\n✓ Tokens guardados en:`);
-  console.log(`  ${path.resolve(oauth1Path)} (existe: ${verify1})`);
-  console.log(`  ${path.resolve(oauth2Path)} (existe: ${verify2})`);
-  console.log('\nAhora levantá el servidor — se va a conectar automáticamente.\n');
+  console.log(`\n✓ Tokens saved to:`);
+  console.log(`  ${path.resolve(oauth1Path)} (exists: ${verify1})`);
+  console.log(`  ${path.resolve(oauth2Path)} (exists: ${verify2})`);
+  console.log('\nNow start the server — it will connect automatically.\n');
 }
 
 main().catch((err) => {

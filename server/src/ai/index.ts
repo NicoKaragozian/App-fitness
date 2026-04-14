@@ -1,4 +1,4 @@
-// ai/index.ts — Handler unificado para /api/ai/analyze
+// ai/index.ts — Unified handler for /api/ai/analyze
 
 import { Request, Response } from 'express';
 import db from '../db.js';
@@ -16,12 +16,12 @@ export async function handleAnalyze(req: Request, res: Response) {
   };
 
   if (!mode || !VALID_MODES.includes(mode as AnalyzeMode)) {
-    res.status(400).json({ error: `mode requerido. Válidos: ${VALID_MODES.join(', ')}` });
+    res.status(400).json({ error: `mode required. Valid: ${VALID_MODES.join(', ')}` });
     return;
   }
 
   if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
     return;
   }
 
@@ -45,7 +45,7 @@ export async function handleAnalyze(req: Request, res: Response) {
 
   // Build context and prompt
   const context = buildAnalyzeContext(analyzeMode, payload);
-  const systemPrompt = `${PROMPTS[analyzeMode] || PROMPTS.chat}\n\nDatos del usuario:\n${context || 'No hay datos disponibles.'}`;
+  const systemPrompt = `${PROMPTS[analyzeMode] || PROMPTS.chat}\n\nUser data:\n${context || 'No data available.'}`;
   const userMessage = getDefaultUserMessage(analyzeMode, payload);
 
   console.log(`[ai] Analyze mode=${analyzeMode} cacheKey=${cacheKey}`);
@@ -54,7 +54,7 @@ export async function handleAnalyze(req: Request, res: Response) {
 
   await claudeStreamChat(systemPrompt, [{ role: 'user', content: userMessage }], res, {
     beforeDone: (fullContent) => {
-      // Guardar en cache
+      // Save to cache
       if (fullContent.length > 0) {
         db.prepare(
           'INSERT OR REPLACE INTO ai_cache (cache_key, mode, content, model, created_at) VALUES (?, ?, ?, ?, ?)'
@@ -69,12 +69,12 @@ export async function handleAnalyze(req: Request, res: Response) {
 // Generate a natural user message for each mode so the LLM has a clear "question"
 function getDefaultUserMessage(mode: AnalyzeMode, payload: Record<string, string>): string {
   switch (mode) {
-    case 'session': return 'Analizá esta sesión de entrenamiento.';
-    case 'sleep': return `Analizá mis patrones de sueño (${payload.period || 'semanal'}).`;
-    case 'wellness': return `Analizá mi estrés y recuperación (${payload.period || 'semanal'}).`;
-    case 'sport': return 'Analizá mi progreso en este deporte.';
-    case 'monthly': return `Hacé un resumen de mi mes${payload.month ? ` (${payload.month})` : ''}.`;
-    case 'daily': return 'Dame un briefing de cómo estoy hoy.';
-    default: return 'Analizá mis datos.';
+    case 'session': return 'Analyze this training session.';
+    case 'sleep': return `Analyze my sleep patterns (${payload.period || 'weekly'}).`;
+    case 'wellness': return `Analyze my stress and recovery (${payload.period || 'weekly'}).`;
+    case 'sport': return 'Analyze my progress in this sport.';
+    case 'monthly': return `Give me a monthly summary${payload.month ? ` (${payload.month})` : ''}.`;
+    case 'daily': return 'Give me a briefing on how I am today.';
+    default: return 'Analyze my data.';
   }
 }

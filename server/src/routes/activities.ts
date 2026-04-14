@@ -231,7 +231,7 @@ router.get('/category/:category', (req, res) => {
   // Look up group by id in sport_groups
   const groupRow = db.prepare('SELECT * FROM sport_groups WHERE id = ?').get(category) as any;
   if (!groupRow) {
-    return res.status(404).json({ error: 'Grupo no encontrado' });
+    return res.status(404).json({ error: 'Group not found' });
   }
 
   const sportTypes: string[] = JSON.parse(groupRow.sport_types);
@@ -329,7 +329,7 @@ router.get('/category/:category', (req, res) => {
 router.get('/:id', (req, res) => {
   const { id } = req.params;
   const row = db.prepare('SELECT * FROM activities WHERE garmin_id = ?').get(id) as any;
-  if (!row) return res.status(404).json({ error: 'Actividad no encontrada' });
+  if (!row) return res.status(404).json({ error: 'Activity not found' });
 
   const raw = JSON.parse(row.raw_json ?? '{}');
 
@@ -345,7 +345,7 @@ router.get('/:id', (req, res) => {
 
   res.json({
     id: row.garmin_id,
-    name: raw.activityName ?? 'Actividad',
+    name: raw.activityName ?? 'Activity',
     sportType: row.sport_type,
     date: row.start_time.split('T')[0],
     startTime: row.start_time,

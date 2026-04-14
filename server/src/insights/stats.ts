@@ -1,4 +1,4 @@
-// stats.ts — Funciones estadísticas puras para el motor de insights
+// stats.ts — Pure statistical functions for the insights engine
 
 export function rollingAverage(values: number[], window: number): number {
   const slice = values.slice(-window);
@@ -23,7 +23,7 @@ export function zScore(value: number, m: number, stddev: number): number {
   return (value - m) / stddev;
 }
 
-// Regresión lineal simple — devuelve la pendiente (positiva = tendencia creciente)
+// Simple linear regression — returns slope (positive = increasing trend)
 export function trend(values: number[]): { slope: number; direction: 'improving' | 'declining' | 'stable' } {
   const n = values.length;
   if (n < 2) return { slope: 0, direction: 'stable' };
@@ -40,8 +40,8 @@ export function trend(values: number[]): { slope: number; direction: 'improving'
   return { slope, direction };
 }
 
-// Días consecutivos de entrenamiento contados hacia atrás desde hoy
-// activities ordenadas más reciente primero, con dates YYYY-MM-DD
+// Consecutive training days counted backwards from today
+// activities sorted most recent first, with dates YYYY-MM-DD
 export function consecutiveTrainingDays(activityDates: string[]): number {
   if (activityDates.length === 0) return 0;
   const today = new Date();
@@ -56,7 +56,7 @@ export function consecutiveTrainingDays(activityDates: string[]): number {
     if (trainingSet.has(dateStr)) {
       count++;
     } else if (i > 0) {
-      // Si el día anterior fue descanso, cortamos la racha
+      // If the previous day was rest, break the streak
       break;
     }
     cursor.setDate(cursor.getDate() - 1);
@@ -64,7 +64,7 @@ export function consecutiveTrainingDays(activityDates: string[]): number {
   return count;
 }
 
-// Días desde el último entrenamiento
+// Days since last training
 export function daysSinceLastTraining(activityDates: string[]): number {
   if (activityDates.length === 0) return 999;
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -75,7 +75,7 @@ export function daysSinceLastTraining(activityDates: string[]): number {
   return Math.max(0, diff);
 }
 
-// Carga de entrenamiento: sesiones y duración total en últimos N días
+// Training load: sessions and total duration in last N days
 export function trainingLoad(
   activities: { date: string; duration: number; avg_hr: number | null }[],
   days: number

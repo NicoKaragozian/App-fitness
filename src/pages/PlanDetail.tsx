@@ -7,17 +7,17 @@ import { apiFetch } from '../api/client';
 import { TTSButton } from '../components/ui/TTSButton';
 import type { TrainingExercise, TrainingSession, TrainingPlanDetail } from '../hooks/useTrainingPlan';
 
-const DAYS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 const CATEGORY_LABELS: Record<string, string> = {
-  warmup: 'Calentamiento',
-  main: 'Principal',
+  warmup: 'Warm-up',
+  main: 'Main',
   core: 'Core',
-  cooldown: 'Vuelta a la calma',
+  cooldown: 'Cool-down',
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function groupExercises(exercises: TrainingExercise[]) {
@@ -44,15 +44,15 @@ export const PlanDetail: React.FC = () => {
   const [showAddToWeekly, setShowAddToWeekly] = useState(false);
   const [describingId, setDescribingId] = useState<number | null>(null);
   const [openSessionHistory, setOpenSessionHistory] = useState<Set<number>>(new Set());
-  // Descripciones generadas en esta sesión (por si el componente no se re-fetchea)
+  // Descriptions generated in this session (in case the component isn't re-fetched)
   const [generatedDescs, setGeneratedDescs] = useState<Record<number, string>>({});
-  // Qué ejercicios tienen la descripción abierta
+  // Which exercises have their description open
   const [openDescs, setOpenDescs] = useState<Set<number>>(new Set());
 
   const handleDescribe = useCallback(async (ex: TrainingExercise) => {
     const hasDesc = generatedDescs[ex.id] ?? ex.description;
 
-    // Si ya tiene descripción, solo toggle
+    // If it already has a description, just toggle
     if (hasDesc) {
       setOpenDescs(prev => {
         const next = new Set(prev);
@@ -62,7 +62,7 @@ export const PlanDetail: React.FC = () => {
       return;
     }
 
-    // Sin descripción: generar, guardar y abrir
+    // No description: generate, save, and open
     setDescribingId(ex.id);
     try {
       const data = await apiFetch<{ description: string }>(`/training/exercises/${ex.id}/describe`, {
@@ -101,7 +101,7 @@ export const PlanDetail: React.FC = () => {
       const workoutId = await startWorkout(planId, session.id);
       navigate(`/training/workout/${workoutId}`, { state: { session, planId } });
     } catch (err: any) {
-      alert('Error iniciando workout: ' + err.message);
+      alert('Error starting workout: ' + err.message);
     }
   };
 
@@ -118,7 +118,7 @@ export const PlanDetail: React.FC = () => {
     for (const s of plan.sessions) {
       lines.push(s.name + (s.notes ? `. ${s.notes}` : ''));
       for (const ex of s.exercises) {
-        const target = ex.target_sets && ex.target_reps ? `, ${ex.target_sets} series de ${ex.target_reps}` : '';
+        const target = ex.target_sets && ex.target_reps ? `, ${ex.target_sets} sets of ${ex.target_reps}` : '';
         lines.push(`${ex.name}${target}${ex.notes ? `. ${ex.notes}` : ''}`);
       }
     }
@@ -137,8 +137,8 @@ export const PlanDetail: React.FC = () => {
   if (!plan) {
     return (
       <div className="p-6 text-center text-on-surface-variant">
-        Plan no encontrado.{' '}
-        <button onClick={() => navigate('/training')} className="text-primary underline">Volver</button>
+        Plan not found.{' '}
+        <button onClick={() => navigate('/training')} className="text-primary underline">Go back</button>
       </div>
     );
   }
@@ -151,14 +151,14 @@ export const PlanDetail: React.FC = () => {
         onClick={() => navigate('/training')}
         className="flex items-center gap-1 text-on-surface-variant text-sm hover:text-on-surface transition-colors"
       >
-        ← Planes
+        ← Plans
       </button>
 
       {/* Plan header */}
       <div className="bg-surface-low rounded-xl p-5 space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <span className="font-label text-label-sm text-primary tracking-widest uppercase">Plan activo</span>
+            <span className="font-label text-label-sm text-primary tracking-widest uppercase">Active plan</span>
             <h1 className="font-display text-2xl text-on-surface mt-1">{plan.title}</h1>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -179,15 +179,15 @@ export const PlanDetail: React.FC = () => {
             <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{plan.frequency}</span>
           )}
           <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-            {plan.sessions.length} sesiones
+            {plan.sessions.length} sessions
           </span>
           <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-            Creado {formatDate(plan.created_at)}
+            Created {formatDate(plan.created_at)}
           </span>
         </div>
       </div>
 
-      {/* Modal: agregar al weekly plan */}
+      {/* Modal: add to weekly plan */}
       {showAddToWeekly && (
         <AddToWeeklyPlanModal
           plan={plan}
@@ -195,7 +195,7 @@ export const PlanDetail: React.FC = () => {
         />
       )}
 
-      {/* Sesiones */}
+      {/* Sessions */}
       {plan.sessions.map((session) => {
         const hist = sessionHistory[session.id];
         const groups = groupExercises(session.exercises);
@@ -221,16 +221,16 @@ export const PlanDetail: React.FC = () => {
                           })}
                           className="font-label text-label-sm text-primary tracking-widest uppercase hover:opacity-70 transition-opacity"
                         >
-                          {hist.count}× completada {openSessionHistory.has(session.id) ? '▲' : '▼'}
+                          {hist.count}× completed {openSessionHistory.has(session.id) ? '▲' : '▼'}
                         </button>
                         {hist.last && (
                           <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-                            Última: {formatDate(hist.last)}
+                            Last: {formatDate(hist.last)}
                           </span>
                         )}
                       </>
                     ) : (
-                      <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Sin completar</span>
+                      <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Not completed</span>
                     )}
                   </div>
                 </div>
@@ -238,17 +238,17 @@ export const PlanDetail: React.FC = () => {
                   onClick={() => handleStartWorkout(session)}
                   className="shrink-0 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
                 >
-                  Empezar
+                  Start
                 </button>
               </div>
             </div>
 
-            {/* Historial de sesiones */}
+            {/* Session history */}
             {openSessionHistory.has(session.id) && planId && (
               <SessionHistoryPanel sessionId={session.id} planId={planId} />
             )}
 
-            {/* Ejercicios */}
+            {/* Exercises */}
             <div className="divide-y divide-outline-variant/10">
               {groups.map(({ category, exercises }) => (
                 <div key={category}>
@@ -284,7 +284,7 @@ export const PlanDetail: React.FC = () => {
                             {ex.notes && (
                               <p className="text-on-surface-variant text-xs mt-0.5">{ex.notes}</p>
                             )}
-                            {/* Descripción colapsable */}
+                            {/* Collapsible description */}
                             {openDescs.has(ex.id) && (
                               <p className="text-on-surface-variant text-xs mt-1.5 leading-relaxed border-l-2 border-primary/30 pl-2">
                                 {generatedDescs[ex.id] ?? ex.description}
@@ -295,11 +295,11 @@ export const PlanDetail: React.FC = () => {
                             )}
                           </div>
                           <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                            {/* Botón describir */}
+                            {/* Describe button */}
                             <button
                               onClick={() => handleDescribe(ex)}
                               disabled={describingId === ex.id}
-                              title="¿Cómo se hace este ejercicio?"
+                              title="How is this exercise done?"
                               className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs transition-colors ${
                                 openDescs.has(ex.id)
                                   ? 'bg-primary/20 text-primary'
@@ -314,7 +314,7 @@ export const PlanDetail: React.FC = () => {
                               onClick={() => { setEditingExercise(ex.id); setEditFields({ name: ex.name, target_sets: ex.target_sets ?? undefined, target_reps: ex.target_reps ?? undefined, notes: ex.notes ?? undefined }); }}
                               className="opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant text-xs px-2 py-1 rounded hover:bg-surface-container"
                             >
-                              editar
+                              edit
                             </button>
                           </div>
                         </div>
@@ -392,14 +392,14 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
   };
 
   const handleDeleteWorkout = async (workoutId: number) => {
-    if (!window.confirm('¿Eliminar esta sesión del historial? Se borrarán todos sus sets.')) return;
+    if (!window.confirm('Delete this session from history? All its sets will be removed.')) return;
     setDeletingId(workoutId);
     try {
       await apiFetch(`/training/workouts/${workoutId}`, { method: 'DELETE' });
       setLogs(prev => prev.filter(l => l.id !== workoutId));
       if (expandedId === workoutId) setExpandedId(null);
     } catch (err: any) {
-      alert('Error eliminando: ' + err.message);
+      alert('Error deleting: ' + err.message);
     } finally {
       setDeletingId(null);
     }
@@ -438,7 +438,7 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
         };
       });
     } catch (err: any) {
-      alert('Error guardando: ' + err.message);
+      alert('Error saving: ' + err.message);
     }
     setEditingSet(null);
   };
@@ -452,7 +452,7 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
         return { ...prev, [workoutId]: { ...d, sets: d.sets.filter(s => s.id !== setId) } };
       });
     } catch (err: any) {
-      alert('Error eliminando set: ' + err.message);
+      alert('Error deleting set: ' + err.message);
     }
   };
 
@@ -467,7 +467,7 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
   if (logs.length === 0) {
     return (
       <div className="px-5 py-3 border-t border-outline-variant/20">
-        <p className="text-on-surface-variant text-xs">Sin sesiones completadas</p>
+        <p className="text-on-surface-variant text-xs">No completed sessions</p>
       </div>
     );
   }
@@ -479,19 +479,19 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
         const detail = details[log.id];
         const duration = formatDuration(log.started_at, log.completed_at);
 
-        // Agrupar sets por ejercicio
+        // Group sets by exercise
         const setsByExercise: Record<string, { name: string; sets: WorkoutSetDetail[] }> = {};
         if (detail) {
           for (const s of detail.sets) {
             const key = String(s.exercise_id);
-            if (!setsByExercise[key]) setsByExercise[key] = { name: s.exercise_name ?? 'Ejercicio', sets: [] };
+            if (!setsByExercise[key]) setsByExercise[key] = { name: s.exercise_name ?? 'Exercise', sets: [] };
             setsByExercise[key].sets.push(s);
           }
         }
 
         return (
           <div key={log.id} className="bg-surface-container/20">
-            {/* Fila del workout */}
+            {/* Workout row */}
             <div className="flex items-center gap-3 px-5 py-2.5">
               <button
                 onClick={() => handleToggleExpand(log.id)}
@@ -501,7 +501,7 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
                   {isExpanded ? '▲' : '▼'}
                 </span>
                 <span className="text-on-surface text-xs font-medium">
-                  {new Date(log.completed_at!).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  {new Date(log.completed_at!).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
                 </span>
                 {duration && (
                   <span className="font-label text-[10px] tracking-widest uppercase text-on-surface-variant">{duration}</span>
@@ -511,19 +511,19 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
                 onClick={() => handleDeleteWorkout(log.id)}
                 disabled={deletingId === log.id}
                 className="text-on-surface-variant hover:text-red-400 transition-colors text-xs px-2 py-1 rounded hover:bg-surface-container disabled:opacity-40"
-                title="Eliminar esta sesión"
+                title="Delete this session"
               >
                 {deletingId === log.id ? '…' : '✕'}
               </button>
             </div>
 
-            {/* Sets expandidos */}
+            {/* Expanded sets */}
             {isExpanded && (
               <div className="px-5 pb-3 space-y-3">
                 {!detail ? (
-                  <p className="text-on-surface-variant text-xs animate-pulse">Cargando…</p>
+                  <p className="text-on-surface-variant text-xs animate-pulse">Loading...</p>
                 ) : Object.keys(setsByExercise).length === 0 ? (
-                  <p className="text-on-surface-variant text-xs">Sin sets registrados</p>
+                  <p className="text-on-surface-variant text-xs">No sets logged</p>
                 ) : (
                   Object.values(setsByExercise).map(({ name, sets }) => (
                     <div key={name}>
@@ -571,12 +571,12 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
                                 <button
                                   onClick={() => handleEditSet(s)}
                                   className="text-on-surface-variant text-[10px] hover:text-primary transition-colors px-1"
-                                  title="Editar set"
-                                >editar</button>
+                                  title="Edit set"
+                                >edit</button>
                                 <button
                                   onClick={() => handleDeleteSet(s.id, log.id)}
                                   className="text-on-surface-variant text-[10px] hover:text-red-400 transition-colors px-1"
-                                  title="Eliminar set"
+                                  title="Delete set"
                                 >✕</button>
                               </>
                             )}
@@ -611,7 +611,7 @@ function EditExerciseForm({ exercise, fields, onChange, onSave, onCancel }: {
         value={fields.name ?? exercise.name}
         onChange={e => onChange({ ...fields, name: e.target.value })}
         className="w-full bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        placeholder="Nombre"
+        placeholder="Name"
       />
       <div className="flex gap-2">
         <input
@@ -619,31 +619,31 @@ function EditExerciseForm({ exercise, fields, onChange, onSave, onCancel }: {
           value={fields.target_sets ?? exercise.target_sets ?? ''}
           onChange={e => onChange({ ...fields, target_sets: e.target.value ? parseInt(e.target.value) : undefined })}
           className="w-20 bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          placeholder="Series"
+          placeholder="Sets"
         />
         <input
           value={fields.target_reps ?? exercise.target_reps ?? ''}
           onChange={e => onChange({ ...fields, target_reps: e.target.value })}
           className="flex-1 bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          placeholder="Reps (ej: 10-12, 30s)"
+          placeholder="Reps (e.g.: 10-12, 30s)"
         />
       </div>
       <input
         value={fields.notes ?? exercise.notes ?? ''}
         onChange={e => onChange({ ...fields, notes: e.target.value })}
         className="w-full bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        placeholder="Notas técnicas"
+        placeholder="Technical notes"
       />
       <div className="flex gap-2">
-        <button onClick={onSave} className="flex-1 bg-primary text-surface font-label text-[10px] tracking-widest uppercase px-3 py-1.5 rounded">Guardar</button>
-        <button onClick={onCancel} className="flex-1 bg-surface-container text-on-surface-variant font-label text-[10px] tracking-widest uppercase px-3 py-1.5 rounded">Cancelar</button>
+        <button onClick={onSave} className="flex-1 bg-primary text-surface font-label text-[10px] tracking-widest uppercase px-3 py-1.5 rounded">Save</button>
+        <button onClick={onCancel} className="flex-1 bg-surface-container text-on-surface-variant font-label text-[10px] tracking-widest uppercase px-3 py-1.5 rounded">Cancel</button>
       </div>
     </div>
   );
 }
 
 function AddToWeeklyPlanModal({ plan, onClose }: { plan: TrainingPlanDetail; onClose: () => void }) {
-  // sessionId → day ('' = no agregar)
+  // sessionId → day ('' = don't add)
   const [assignments, setAssignments] = useState<Record<number, string>>(() => {
     const init: Record<number, string> = {};
     plan.sessions.forEach((s, i) => {
@@ -674,7 +674,7 @@ function AddToWeeklyPlanModal({ plan, onClose }: { plan: TrainingPlanDetail; onC
       setSaved(true);
       setTimeout(onClose, 900);
     } catch (err: any) {
-      alert('Error guardando: ' + err.message);
+      alert('Error saving: ' + err.message);
       setSaving(false);
     }
   };
@@ -686,9 +686,9 @@ function AddToWeeklyPlanModal({ plan, onClose }: { plan: TrainingPlanDetail; onC
         onClick={e => e.stopPropagation()}
       >
         <div>
-          <p className="font-label text-label-sm text-primary tracking-widest uppercase">Agregar al Weekly Plan</p>
+          <p className="font-label text-label-sm text-primary tracking-widest uppercase">Add to Weekly Plan</p>
           <p className="font-display text-lg text-on-surface mt-1">{plan.title}</p>
-          <p className="text-on-surface-variant text-xs mt-1">Elegí qué día hacer cada sesión. Dejá vacío para no incluirla.</p>
+          <p className="text-on-surface-variant text-xs mt-1">Choose what day to do each session. Leave empty to skip it.</p>
         </div>
 
         <div className="space-y-3">
@@ -703,7 +703,7 @@ function AddToWeeklyPlanModal({ plan, onClose }: { plan: TrainingPlanDetail; onC
                 onChange={e => setAssignments(prev => ({ ...prev, [s.id]: e.target.value }))}
                 className="bg-surface-container text-on-surface font-label text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="">— no agregar</option>
+                <option value="">— skip</option>
                 {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
@@ -715,14 +715,14 @@ function AddToWeeklyPlanModal({ plan, onClose }: { plan: TrainingPlanDetail; onC
             onClick={onClose}
             className="flex-1 bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:opacity-80"
           >
-            Cancelar
+            Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={saving || saved}
             className="flex-1 bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:opacity-90 disabled:opacity-60"
           >
-            {saved ? '✓ Guardado' : saving ? 'Guardando…' : 'Confirmar'}
+            {saved ? '✓ Saved' : saving ? 'Saving...' : 'Confirm'}
           </button>
         </div>
       </div>
@@ -733,8 +733,8 @@ function AddToWeeklyPlanModal({ plan, onClose }: { plan: TrainingPlanDetail; onC
 function ExerciseHistoryInline({ exerciseId }: { exerciseId: number }) {
   const { history, loading } = useExerciseHistory(exerciseId);
 
-  if (loading) return <p className="text-on-surface-variant text-xs mt-2 animate-pulse">Cargando historial…</p>;
-  if (history.length === 0) return <p className="text-on-surface-variant text-xs mt-2">Sin historial aún</p>;
+  if (loading) return <p className="text-on-surface-variant text-xs mt-2 animate-pulse">Loading history...</p>;
+  if (history.length === 0) return <p className="text-on-surface-variant text-xs mt-2">No history yet</p>;
 
   return (
     <div className="mt-2 space-y-1">

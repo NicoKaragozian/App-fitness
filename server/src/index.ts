@@ -45,7 +45,7 @@ app.use('/api/nutrition', nutritionRoutes);
 app.use('/api/goals', goalsRoutes);
 app.use('/api/assessment', assessmentRoutes);
 
-// Uploads estaticos (fotos de comidas)
+// Static uploads (meal photos)
 app.use('/uploads', express.static(UPLOAD_DIR));
 
 // Serve static frontend in production

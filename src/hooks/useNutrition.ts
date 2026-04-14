@@ -109,7 +109,7 @@ export function useNutrition(date?: string) {
       });
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({ error: 'Error desconocido' }));
+        const errData = await response.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(errData.error || `Error ${response.status}`);
       }
 
@@ -135,7 +135,7 @@ export function useNutrition(date?: string) {
               const parsed = JSON.parse(jsonStr);
               setAnalysisResult({ ...parsed, image_path: imagePath });
             } catch {
-              setAnalysisError('No se pudo parsear la respuesta de Claude. Intentá de nuevo.');
+              setAnalysisError('Could not parse Claude response. Try again.');
             }
             break;
           }
@@ -156,7 +156,7 @@ export function useNutrition(date?: string) {
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
-        setAnalysisError(err.message || 'Error al analizar la imagen');
+        setAnalysisError(err.message || 'Error analyzing image');
       }
     } finally {
       setAnalyzing(false);

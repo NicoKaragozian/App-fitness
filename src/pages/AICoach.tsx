@@ -32,40 +32,40 @@ interface ChatSession {
 }
 
 const SUGGESTIONS = [
-  'Dame mi briefing del día',
-  'Creame un plan de entrenamiento',
-  '¿Cómo dormí anoche?',
-  'Registrar una comida',
+  'Give me my daily briefing',
+  'Create a training plan for me',
+  'How did I sleep last night?',
+  'Log a meal',
 ];
 
 const AGENT_PLAN_PROGRESS: AIProgressConfig = {
   mode: 'timed',
   estimatedDurationMs: 15000,
   phases: [
-    { at: 0, label: 'Conectando con Claude...' },
-    { at: 8, label: 'Analizando tu perfil...' },
-    { at: 25, label: 'Diseñando las sesiones...' },
-    { at: 50, label: 'Armando tu plan...' },
-    { at: 75, label: 'Ajustando ejercicios...' },
-    { at: 90, label: 'Guardando plan...' },
+    { at: 0, label: 'Connecting to Claude...' },
+    { at: 8, label: 'Analyzing your profile...' },
+    { at: 25, label: 'Designing sessions...' },
+    { at: 50, label: 'Building your plan...' },
+    { at: 75, label: 'Adjusting exercises...' },
+    { at: 90, label: 'Saving plan...' },
   ],
 };
 
 const TOOL_LABELS: Record<string, string> = {
-  update_profile: 'Actualizando perfil...',
-  generate_training_plan: 'Generando plan de entrenamiento...',
-  log_meal: 'Registrando comida...',
-  get_daily_briefing: 'Cargando briefing del día...',
-  navigate_to: 'Navegando...',
+  update_profile: 'Updating profile...',
+  generate_training_plan: 'Generating training plan...',
+  log_meal: 'Logging meal...',
+  get_daily_briefing: 'Loading daily briefing...',
+  navigate_to: 'Navigating...',
 };
 
 const GREETING_KEY = 'drift_ai_greeted';
 
-const INITIAL_GREETING = `¡Hola! Soy DRIFT AI, tu coach deportivo personal. Tengo acceso a tus datos de entrenamiento, sueño, HRV, estrés y nutrición para darte recomendaciones personalizadas.
+const INITIAL_GREETING = `Hi! I'm DRIFT AI, your personal sports coach. I have access to your training, sleep, HRV, stress, and nutrition data to give you personalized recommendations.
 
-Podés preguntarme sobre tu recuperación, rendimiento deportivo, patrones de sueño, análisis nutricional o cualquier aspecto de tu entrenamiento. Usaré tus datos reales para interpretar y darte consejos concretos.
+You can ask me about your recovery, sports performance, sleep patterns, nutritional analysis, or any aspect of your training. I'll use your real data to interpret and give you actionable advice.
 
-¿Sobre qué querés trabajar hoy?`;
+What would you like to work on today?`;
 
 const CHATS_KEY = 'drift_ai_chats';
 const CURRENT_KEY = 'drift_ai_current_chat';
@@ -93,10 +93,10 @@ function formatRelativeDate(dateStr: string): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Hoy';
-  if (diffDays === 1) return 'Ayer';
-  if (diffDays < 7) return `Hace ${diffDays} días`;
-  return date.toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return date.toLocaleDateString('en', { day: 'numeric', month: 'short' });
 }
 
 // ── Inline tool result cards ─────────────────────────────────────────
@@ -117,7 +117,7 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
         <div className="mt-2 px-3 py-2.5 rounded-xl bg-primary/10 border border-primary/20">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-primary text-sm">▣</span>
-            <span className="font-label text-xs font-semibold text-primary tracking-wide uppercase">Plan creado</span>
+            <span className="font-label text-xs font-semibold text-primary tracking-wide uppercase">Plan created</span>
           </div>
           <p className="font-body text-sm font-semibold text-on-surface">{r.title}</p>
           {r.objective && <p className="font-body text-xs text-on-surface-variant mt-0.5">{r.objective}</p>}
@@ -131,7 +131,7 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
             </div>
           )}
           <a href={`/training/${r.plan_id}`} className="inline-block mt-2 font-label text-xs text-primary hover:text-primary/80 tracking-wide">
-            Ver plan completo →
+            View full plan →
           </a>
         </div>
       );
@@ -141,7 +141,7 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
         <div className="mt-2 px-3 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-green-400 text-sm">✓</span>
-            <span className="font-label text-xs font-semibold text-green-400 tracking-wide uppercase">Comida registrada</span>
+            <span className="font-label text-xs font-semibold text-green-400 tracking-wide uppercase">Meal logged</span>
           </div>
           <p className="font-body text-sm text-on-surface">{r.meal_name}</p>
           <div className="flex flex-wrap gap-2 mt-1.5">
@@ -158,11 +158,11 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
         <div className="mt-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
           <div className="flex items-center gap-2">
             <span className="text-blue-400 text-sm">✓</span>
-            <span className="font-label text-xs font-semibold text-blue-400 tracking-wide uppercase">Perfil actualizado</span>
+            <span className="font-label text-xs font-semibold text-blue-400 tracking-wide uppercase">Profile updated</span>
           </div>
           {r.updated_fields?.length > 0 && (
             <p className="font-body text-xs text-on-surface-variant mt-1">
-              Campos: {r.updated_fields.join(', ')}
+              Fields: {r.updated_fields.join(', ')}
             </p>
           )}
         </div>
@@ -173,7 +173,7 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
         <div className="mt-2 px-3 py-2.5 rounded-xl bg-primary/10 border border-primary/20">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-primary text-sm">◉</span>
-            <span className="font-label text-xs font-semibold text-primary tracking-wide uppercase">Briefing del día</span>
+            <span className="font-label text-xs font-semibold text-primary tracking-wide uppercase">Daily Briefing</span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs font-body">
             <div className="px-2 py-1.5 rounded-lg bg-surface-container">
@@ -181,21 +181,21 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
               <p className="font-semibold text-on-surface">{r.readiness?.score ?? '-'} — {r.readiness?.label ?? '-'}</p>
             </div>
             <div className="px-2 py-1.5 rounded-lg bg-surface-container">
-              <span className="text-on-surface-variant">Sueño</span>
-              <p className="font-semibold text-on-surface">{r.sleep?.score ?? 'sin datos'}</p>
+              <span className="text-on-surface-variant">Sleep</span>
+              <p className="font-semibold text-on-surface">{r.sleep?.score ?? 'no data'}</p>
             </div>
             <div className="px-2 py-1.5 rounded-lg bg-surface-container">
               <span className="text-on-surface-variant">HRV</span>
-              <p className="font-semibold text-on-surface">{r.hrv?.current ? `${r.hrv.current}ms` : 'sin datos'}</p>
+              <p className="font-semibold text-on-surface">{r.hrv?.current ? `${r.hrv.current}ms` : 'no data'}</p>
             </div>
             <div className="px-2 py-1.5 rounded-lg bg-surface-container">
-              <span className="text-on-surface-variant">Estrés</span>
-              <p className="font-semibold text-on-surface">{r.stress?.current ?? 'sin datos'}</p>
+              <span className="text-on-surface-variant">Stress</span>
+              <p className="font-semibold text-on-surface">{r.stress?.current ?? 'no data'}</p>
             </div>
           </div>
           {r.recommendations?.length > 0 && (
             <div className="mt-2 px-2 py-1.5 rounded-lg bg-surface-container">
-              <p className="text-xs text-on-surface-variant font-label uppercase tracking-wide mb-0.5">Top recomendación</p>
+              <p className="text-xs text-on-surface-variant font-label uppercase tracking-wide mb-0.5">Top recommendation</p>
               <p className="text-xs text-on-surface">{r.recommendations[0].title}: {r.recommendations[0].description}</p>
             </div>
           )}
@@ -230,7 +230,7 @@ export const AICoach: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>(() => {
     if (preseeded && preseededResponse) {
       return [
-        { role: 'user' as const, content: preseededContext || 'Análisis previo' },
+        { role: 'user' as const, content: preseededContext || 'Prior analysis' },
         { role: 'assistant' as const, content: preseededResponse },
       ];
     }
@@ -260,7 +260,7 @@ export const AICoach: React.FC = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Greeting inicial si el usuario nunca ha abierto el coach
+  // Initial greeting if the user has never opened the coach
   useEffect(() => {
     if (!preseeded && messages.length === 0 && !localStorage.getItem(GREETING_KEY)) {
       setMessages([{ role: 'assistant', content: INITIAL_GREETING }]);
@@ -282,7 +282,7 @@ export const AICoach: React.FC = () => {
         const firstUser = cleanMsgs.find(m => m.role === 'user');
         const newChat: ChatSession = {
           id: chatId || Date.now().toString(),
-          title: firstUser ? generateTitle(firstUser.content) : 'Nueva conversación',
+          title: firstUser ? generateTitle(firstUser.content) : 'New conversation',
           messages: cleanMsgs,
           model: 'claude',
           createdAt: new Date().toISOString(),
@@ -347,8 +347,8 @@ export const AICoach: React.FC = () => {
     }
 
     setError(null);
-    const displayText = userText || (imageFile ? '📷 Imagen de comida' : '');
-    const messageText = userText || (imageFile ? 'Analizá esta imagen de comida y registrala con log_meal.' : '');
+    const displayText = userText || (imageFile ? '📷 Food image' : '');
+    const messageText = userText || (imageFile ? 'Analyze this food image and log it with log_meal.' : '');
     const newMessages: Message[] = [...messages, { role: 'user', content: messageText }];
     setMessages([...messages, { role: 'user', content: displayText }, { role: 'assistant', content: '', streaming: true }]);
     setInput('');
@@ -390,7 +390,7 @@ export const AICoach: React.FC = () => {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Error desconocido' }));
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(err.error || `Error ${res.status}`);
       }
 
@@ -475,7 +475,7 @@ export const AICoach: React.FC = () => {
           return updated;
         });
       } else {
-        setError(err.message || 'Error al conectar con el coach');
+        setError(err.message || 'Error connecting to coach');
         setMessages(prev => prev.slice(0, -1));
       }
     } finally {
@@ -537,7 +537,7 @@ export const AICoach: React.FC = () => {
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/15 hover:bg-primary/25 disabled:opacity-40 disabled:cursor-not-allowed text-primary font-label font-semibold text-sm tracking-wide transition-colors"
           >
             <span className="text-lg leading-none">+</span>
-            Nueva conversación
+            New conversation
           </button>
         </div>
 
@@ -545,7 +545,7 @@ export const AICoach: React.FC = () => {
         <div className="flex-1 overflow-y-auto py-2">
           {chats.length === 0 ? (
             <p className="text-center text-on-surface-variant/40 font-label text-xs tracking-wider uppercase mt-6 px-3">
-              Sin conversaciones
+              No conversations
             </p>
           ) : (
             chats.map(chat => (
@@ -571,7 +571,7 @@ export const AICoach: React.FC = () => {
                       onClick={(e) => deleteChat(chat.id, e)}
                       className="px-1.5 py-0.5 rounded text-[0.6rem] bg-red-500/20 text-red-400 hover:bg-red-500/30 font-label font-semibold"
                     >
-                      Sí
+                      Yes
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
@@ -584,7 +584,7 @@ export const AICoach: React.FC = () => {
                   <button
                     onClick={(e) => { e.stopPropagation(); setDeletingId(chat.id); }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant/50 hover:text-red-400 text-base leading-none"
-                    title="Eliminar"
+                    title="Delete"
                   >
                     ×
                   </button>
@@ -615,7 +615,7 @@ export const AICoach: React.FC = () => {
 
             {/* Title */}
             <div className="shrink-0">
-              <p className="hidden sm:block font-label text-[0.6rem] text-on-surface-variant tracking-widest uppercase leading-none mb-0.5">Asistente</p>
+              <p className="hidden sm:block font-label text-[0.6rem] text-on-surface-variant tracking-widest uppercase leading-none mb-0.5">Assistant</p>
               <h1 className="font-display text-base sm:text-xl font-bold text-on-surface tracking-tight whitespace-nowrap leading-tight">
                 DRIFT AI <span className="text-primary">COACH</span>
               </h1>
@@ -638,15 +638,15 @@ export const AICoach: React.FC = () => {
                   <div className="text-4xl mb-3 opacity-60">◈</div>
                   <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">DRIFT AI Coach</p>
                   <p className="font-body text-sm text-on-surface-variant max-w-sm">
-                    Tu coach deportivo con poder de acción. Puedo generar planes, registrar comidas, actualizar tu perfil y analizar tus datos.
+                    Your sports coach with the power to act. I can generate plans, log meals, update your profile, and analyze your data.
                   </p>
                 </div>
                 {/* Featured briefing button */}
                 <button
-                  onClick={() => sendMessage('Dame mi briefing del día')}
+                  onClick={() => sendMessage('Give me my daily briefing')}
                   className="px-5 py-3 rounded-2xl bg-primary/20 hover:bg-primary/30 text-primary font-label text-sm font-semibold tracking-wide transition-all border border-primary/30"
                 >
-                  ◉ Briefing de hoy
+                  ◉ Today's Briefing
                 </button>
                 {/* Other suggestions */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
@@ -746,7 +746,7 @@ export const AICoach: React.FC = () => {
                     ×
                   </button>
                 </div>
-                <span className="font-label text-xs text-on-surface-variant tracking-wide">Imagen adjunta</span>
+                <span className="font-label text-xs text-on-surface-variant tracking-wide">Image attached</span>
               </div>
             )}
             <div className="flex gap-2 items-end bg-surface-container rounded-2xl px-4 py-3 border border-outline-variant/20 focus-within:border-primary/40 transition-colors">
@@ -774,7 +774,7 @@ export const AICoach: React.FC = () => {
                   resizeTextarea();
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder={imageFile ? "Describí la comida o enviá directo..." : "Preguntame sobre tus datos..."}
+                placeholder={imageFile ? "Describe the food or send directly..." : "Ask me about your data..."}
                 rows={1}
                 disabled={isStreaming}
                 className="flex-1 bg-transparent resize-none outline-none text-sm font-body text-on-surface placeholder:text-on-surface-variant/50 leading-relaxed overflow-hidden"
@@ -784,7 +784,7 @@ export const AICoach: React.FC = () => {
                 <button
                   onClick={handleStop}
                   className="shrink-0 w-8 h-8 rounded-xl bg-red-500/20 hover:bg-red-500/30 flex items-center justify-center transition-colors"
-                  title="Detener"
+                  title="Stop"
                 >
                   <span className="w-2.5 h-2.5 rounded-sm bg-red-400 block" />
                 </button>
@@ -798,7 +798,7 @@ export const AICoach: React.FC = () => {
                         ? 'bg-primary/20 text-primary'
                         : 'bg-surface-container-high hover:bg-surface-container-high/80 text-on-surface-variant hover:text-on-surface'
                     }`}
-                    title="Adjuntar imagen"
+                    title="Attach image"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -814,7 +814,7 @@ export const AICoach: React.FC = () => {
                     onClick={() => sendMessage(input)}
                     disabled={!input.trim() && !imageFile}
                     className="shrink-0 w-8 h-8 rounded-xl bg-primary/20 hover:bg-primary/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
-                    title="Enviar (Enter)"
+                    title="Send (Enter)"
                   >
                     <span className="text-primary text-base leading-none">↑</span>
                   </button>
@@ -822,7 +822,7 @@ export const AICoach: React.FC = () => {
               )}
             </div>
             <p className="text-center font-label text-[0.6rem] text-on-surface-variant/40 tracking-wider uppercase mt-2">
-              Enter para enviar · Shift+Enter para nueva línea · Micrófono para dictar
+              Enter to send · Shift+Enter for new line · Microphone to dictate
             </p>
           </div>
         </div>

@@ -25,7 +25,7 @@ export const AIInsightPanel: React.FC<AIInsightPanelProps> = ({
     navigate('/coach', {
       state: {
         preseeded: true,
-        context: chatContext || `Análisis ${mode}`,
+        context: chatContext || `Analysis ${mode}`,
         aiResponse: content,
       },
     });
@@ -45,7 +45,7 @@ export const AIInsightPanel: React.FC<AIInsightPanelProps> = ({
               {title || 'DRIFT AI'}
             </p>
             <p className="font-label text-label-sm text-on-surface-variant mt-0.5 group-hover:text-on-surface transition-colors">
-              Analizar con inteligencia artificial
+              Analyze with AI
             </p>
           </div>
           <span className="text-on-surface-variant group-hover:text-primary transition-colors">→</span>
@@ -75,7 +75,7 @@ export const AIInsightPanel: React.FC<AIInsightPanelProps> = ({
               onClick={stop}
               className="font-label text-label-sm text-on-surface-variant hover:text-on-surface transition-colors"
             >
-              ■ Detener
+              ■ Stop
             </button>
           )}
         </div>
@@ -89,7 +89,7 @@ export const AIInsightPanel: React.FC<AIInsightPanelProps> = ({
             onClick={() => generate()}
             className="font-label text-label-sm text-primary hover:underline"
           >
-            Reintentar
+            Retry
           </button>
         </div>
       )}
@@ -108,7 +108,7 @@ export const AIInsightPanel: React.FC<AIInsightPanelProps> = ({
       {loading && !content && (
         <div className="flex items-center gap-2 text-on-surface-variant">
           <span className="inline-block w-1.5 h-4 bg-primary animate-pulse rounded-sm" />
-          <span className="font-label text-label-sm">Analizando...</span>
+          <span className="font-label text-label-sm">Analyzing...</span>
         </div>
       )}
 
@@ -119,13 +119,13 @@ export const AIInsightPanel: React.FC<AIInsightPanelProps> = ({
             onClick={handleAskMore}
             className="font-label text-label-sm text-primary hover:underline"
           >
-            Preguntá más →
+            Ask more →
           </button>
           <button
             onClick={() => generate(true)}
             className="font-label text-label-sm text-on-surface-variant hover:text-on-surface transition-colors"
           >
-            ↻ Regenerar
+            ↻ Regenerate
           </button>
         </div>
       )}

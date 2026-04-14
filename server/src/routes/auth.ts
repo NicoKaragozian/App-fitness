@@ -10,14 +10,14 @@ router.post('/token-login', async (_req, res) => {
   try {
     const ok = await garmin.tryRestoreSession();
     if (!ok) {
-      res.status(401).json({ error: 'No se encontraron tokens válidos. Corré npx tsx server/src/get-tokens.ts primero.' });
+      res.status(401).json({ error: 'No valid tokens found. Run npx tsx server/src/get-tokens.ts first.' });
       return;
     }
     syncInitial().then(() => startPeriodicSync());
-    res.json({ success: true, message: 'Sesión restaurada, sincronizando datos...' });
+    res.json({ success: true, message: 'Session restored, syncing data...' });
   } catch (err: any) {
     console.error('Token login error:', err);
-    res.status(500).json({ error: err.message || 'Error al restaurar sesión' });
+    res.status(500).json({ error: err.message || 'Error restoring session' });
   }
 });
 

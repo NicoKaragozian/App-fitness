@@ -5,20 +5,20 @@ import { apiFetch } from '../api/client';
 import type { ChartMetricConfig } from '../hooks/useActivities';
 
 const VALID_METRICS: { key: string; label: string }[] = [
-  { key: 'sessions',  label: 'Sesiones' },
-  { key: 'distance',  label: 'Distancia (KM)' },
-  { key: 'duration',  label: 'Duración (MIN)' },
-  { key: 'calories',  label: 'Calorías (KCAL)' },
-  { key: 'avg_hr',    label: 'FC Promedio (BPM)' },
-  { key: 'max_speed', label: 'Vel. Máx (KM/H)' },
+  { key: 'sessions',  label: 'Sessions' },
+  { key: 'distance',  label: 'Distance (KM)' },
+  { key: 'duration',  label: 'Duration (MIN)' },
+  { key: 'calories',  label: 'Calories (KCAL)' },
+  { key: 'avg_hr',    label: 'Avg HR (BPM)' },
+  { key: 'max_speed', label: 'Max Speed (KM/H)' },
 ];
 
 const CHART_DATAKEYS: { key: string; label: string }[] = [
-  { key: 'distance',  label: 'Distancia KM' },
-  { key: 'duration',  label: 'Duración MIN' },
-  { key: 'calories',  label: 'Calorías KCAL' },
-  { key: 'avgHr',     label: 'FC Prom BPM' },
-  { key: 'maxSpeed',  label: 'Vel. Máx KM/H' },
+  { key: 'distance',  label: 'Distance KM' },
+  { key: 'duration',  label: 'Duration MIN' },
+  { key: 'calories',  label: 'Calories KCAL' },
+  { key: 'avgHr',     label: 'Avg HR BPM' },
+  { key: 'maxSpeed',  label: 'Max Speed KM/H' },
 ];
 
 const PRESET_COLORS = ['#6a9cff', '#f3ffca', '#ff7439', '#22d3a5', '#c084fc', '#fb923c', '#f472b6', '#34d399'];
@@ -26,28 +26,28 @@ const PRESET_ICONS = ['◎', '◈', '⚡', '●', '◆', '▲', '★', '◉', '�
 
 const SPORT_TYPE_GROUPS: { label: string; types: string[] }[] = [
   {
-    label: 'Agua',
+    label: 'Water',
     types: ['surfing', 'kitesurfing', 'kiteboarding', 'windsurfing', 'stand_up_paddleboarding',
       'sailing', 'kayaking', 'rowing', 'swimming', 'open_water_swimming', 'diving',
       'whitewater_rafting', 'wakeboarding', 'water_skiing'],
   },
   {
-    label: 'Correr & Caminar',
+    label: 'Running & Walking',
     types: ['running', 'trail_running', 'treadmill_running', 'track_running',
       'walking', 'hiking', 'mountain_hiking'],
   },
   {
-    label: 'Ciclismo',
+    label: 'Cycling',
     types: ['cycling', 'road_cycling', 'mountain_biking', 'gravel_cycling',
       'indoor_cycling', 'virtual_cycling'],
   },
   {
-    label: 'Montaña & Nieve',
+    label: 'Mountain & Snow',
     types: ['mountaineering', 'rock_climbing', 'indoor_climbing', 'skiing', 'snowboarding',
       'backcountry_skiing', 'cross_country_skiing', 'snowshoeing'],
   },
   {
-    label: 'Raqueta',
+    label: 'Racquet',
     types: ['tennis', 'padel', 'squash', 'badminton', 'table_tennis', 'pickleball'],
   },
   {
@@ -57,7 +57,7 @@ const SPORT_TYPE_GROUPS: { label: string; types: string[] }[] = [
       'dance', 'gymnastics', 'cheerleading'],
   },
   {
-    label: 'Otros',
+    label: 'Others',
     types: ['golf', 'triathlon', 'duathlon', 'obstacle_run', 'soccer', 'basketball',
       'volleyball', 'baseball', 'softball', 'american_football', 'rugby', 'cricket',
       'field_hockey', 'ice_hockey', 'skating', 'roller_skating', 'skateboarding',
@@ -79,7 +79,7 @@ const EMPTY_FORM: CreateGroupPayload = {
   icon: '◎',
   sportTypes: [],
   metrics: ['sessions', 'duration', 'calories'],
-  chartMetrics: [{ dataKey: 'duration', name: 'Duración MIN', type: 'bar' }],
+  chartMetrics: [{ dataKey: 'duration', name: 'Duration MIN', type: 'bar' }],
 };
 
 interface GroupFormProps {
@@ -95,7 +95,7 @@ interface GroupFormProps {
 const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, existingGroupId, onSave, onCancel, saving, error }) => {
   const [form, setForm] = useState<CreateGroupPayload>(initial);
 
-  // Abrir por defecto las categorías que ya tienen tipos seleccionados
+  // Open by default the categories that already have selected types
   const [openCategories, setOpenCategories] = useState<Set<string>>(() => {
     const open = new Set<string>();
     SPORT_TYPE_GROUPS.forEach((g) => {
@@ -162,20 +162,20 @@ const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, exi
       {/* Name + Subtitle */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">NOMBRE</label>
+          <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">NAME</label>
           <input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Ej: CARDIO MIX"
+            placeholder="E.g.: CARDIO MIX"
             className="w-full bg-surface-container rounded-lg px-3 py-2 font-label text-sm text-on-surface border border-outline-variant/30 focus:outline-none focus:border-primary"
           />
         </div>
         <div>
-          <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">SUBTÍTULO</label>
+          <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">SUBTITLE</label>
           <input
             value={form.subtitle}
             onChange={(e) => setForm((f) => ({ ...f, subtitle: e.target.value }))}
-            placeholder="Ej: TENIS / RUNNING"
+            placeholder="E.g.: TENNIS / RUNNING"
             className="w-full bg-surface-container rounded-lg px-3 py-2 font-label text-sm text-on-surface border border-outline-variant/30 focus:outline-none focus:border-primary"
           />
         </div>
@@ -197,7 +197,7 @@ const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, exi
           </div>
         </div>
         <div>
-          <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">ÍCONO</label>
+          <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">ICON</label>
           <div className="flex flex-wrap gap-2">
             {PRESET_ICONS.map((ic) => (
               <button
@@ -215,13 +215,13 @@ const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, exi
         </div>
       </div>
 
-      {/* Sport Types — agrupados por categoría */}
+      {/* Sport Types — grouped by category */}
       <div>
         <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">
-          DEPORTES INCLUIDOS
+          INCLUDED SPORTS
           {form.sportTypes.length > 0 && (
             <span className="ml-2 normal-case font-normal" style={{ color: form.color }}>
-              {form.sportTypes.length} seleccionado{form.sportTypes.length !== 1 ? 's' : ''}
+              {form.sportTypes.length} selected
             </span>
           )}
         </label>
@@ -281,7 +281,7 @@ const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, exi
 
       {/* Metrics */}
       <div>
-        <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">MÉTRICAS A MOSTRAR</label>
+        <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">METRICS TO DISPLAY</label>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {VALID_METRICS.map((m) => (
             <label key={m.key} className="flex items-center gap-2 cursor-pointer">
@@ -299,29 +299,29 @@ const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, exi
 
       {/* Chart config */}
       <div>
-        <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">GRÁFICO</label>
+        <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">CHART</label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <p className="font-label text-xs text-on-surface-variant mb-1">Métrica principal (barras)</p>
+            <p className="font-label text-xs text-on-surface-variant mb-1">Primary metric (bars)</p>
             <select
               value={currentBar}
               onChange={(e) => setBarMetric(e.target.value)}
               className="w-full bg-surface-container rounded-lg px-3 py-2 font-label text-sm text-on-surface border border-outline-variant/30 focus:outline-none focus:border-primary"
             >
-              <option value="">— sin gráfico —</option>
+              <option value="">— no chart —</option>
               {CHART_DATAKEYS.map((d) => (
                 <option key={d.key} value={d.key}>{d.label}</option>
               ))}
             </select>
           </div>
           <div>
-            <p className="font-label text-xs text-on-surface-variant mb-1">Métrica secundaria (línea)</p>
+            <p className="font-label text-xs text-on-surface-variant mb-1">Secondary metric (line)</p>
             <select
               value={currentLine}
               onChange={(e) => setLineMetric(e.target.value)}
               className="w-full bg-surface-container rounded-lg px-3 py-2 font-label text-sm text-on-surface border border-outline-variant/30 focus:outline-none focus:border-primary"
             >
-              <option value="">— ninguna —</option>
+              <option value="">— none —</option>
               {CHART_DATAKEYS.map((d) => (
                 <option key={d.key} value={d.key}>{d.label}</option>
               ))}
@@ -337,14 +337,14 @@ const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, exi
           onClick={onCancel}
           className="px-4 py-2 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label text-label-sm tracking-widest uppercase"
         >
-          CANCELAR
+          CANCEL
         </button>
         <button
           onClick={() => onSave(form)}
           disabled={saving || !form.name || form.metrics.length === 0}
           className="px-5 py-2 rounded-lg bg-primary text-surface font-label text-label-sm tracking-widest uppercase font-bold disabled:opacity-50"
         >
-          {saving ? 'GUARDANDO...' : 'GUARDAR'}
+          {saving ? 'SAVING...' : 'SAVE'}
         </button>
       </div>
     </div>
@@ -384,7 +384,7 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
         .filter((g) => g.id !== excludeGroupId)
         .flatMap((g) => g.sportTypes)
     );
-    // Combinar: lista completa de Garmin + los registrados en la DB + los que están en grupos
+    // Combine: full Garmin list + those recorded in DB + those already in groups
     const all = new Set([...ALL_GARMIN_SPORT_TYPES, ...availableSportTypes]);
     groups.forEach((g) => g.sportTypes.forEach((st) => all.add(st)));
     return Array.from(all).sort().filter((st) => !claimed.has(st));
@@ -397,7 +397,7 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
       await createGroup(payload);
       setIsCreating(false);
     } catch (err: any) {
-      setFormError(err?.message ?? 'Error al crear el grupo');
+      setFormError(err?.message ?? 'Error creating group');
     } finally {
       setSaving(false);
     }
@@ -411,14 +411,14 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
       await updateGroup(editingGroup.id, payload);
       setEditingGroup(null);
     } catch (err: any) {
-      setFormError(err?.message ?? 'Error al guardar el grupo');
+      setFormError(err?.message ?? 'Error saving group');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar este grupo? Las actividades pasarán a "Otros".')) return;
+    if (!confirm('Delete this group? Activities will move to "Others".')) return;
     try {
       await deleteGroup(id);
     } catch {}
@@ -449,8 +449,8 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-outline-variant/20">
           <div>
-            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">CONFIGURACIÓN</p>
-            <h2 className="font-display font-bold text-on-surface text-xl">GRUPOS DE DEPORTES</h2>
+            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">SETTINGS</p>
+            <h2 className="font-display font-bold text-on-surface text-xl">SPORT GROUPS</h2>
           </div>
           <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface text-xl transition-colors">✕</button>
         </div>
@@ -459,7 +459,7 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
           {/* Create / Edit form */}
           {isCreating && (
             <div className="bg-surface-container rounded-xl p-4">
-              <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-4">NUEVO GRUPO</p>
+              <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-4">NEW GROUP</p>
               <GroupForm
                 initial={{ ...EMPTY_FORM }}
                 availableSportTypes={getAvailableSportTypes()}
@@ -473,7 +473,7 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
 
           {editingGroup && (
             <div className="bg-surface-container rounded-xl p-4">
-              <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-4">EDITAR GRUPO</p>
+              <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-4">EDIT GROUP</p>
               <GroupForm
                 initial={{
                   name: editingGroup.name,
@@ -498,7 +498,7 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
           {!isCreating && !editingGroup && (
             <>
               {loading ? (
-                <p className="text-on-surface-variant font-label text-sm">Cargando...</p>
+                <p className="text-on-surface-variant font-label text-sm">Loading...</p>
               ) : (
                 <div className="space-y-2">
                   {localGroups.map((g, i) => (
@@ -521,7 +521,7 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
                           onClick={() => { setEditingGroup(g); setFormError(null); }}
                           className="px-3 py-1 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface font-label text-xs tracking-widest uppercase transition-colors"
                         >
-                          EDITAR
+                          EDIT
                         </button>
                         <button
                           onClick={() => handleDelete(g.id)}
@@ -540,7 +540,7 @@ export const SportGroupEditor: React.FC<SportGroupEditorProps> = ({ onClose }) =
                 className="w-full py-4 rounded-xl bg-primary/10 border border-primary/40 hover:bg-primary/20 hover:border-primary/70 text-primary font-label font-bold text-sm tracking-widest uppercase transition-all flex items-center justify-center gap-2"
               >
                 <span className="text-lg leading-none">+</span>
-                AGREGAR GRUPO
+                ADD GROUP
               </button>
             </>
           )}

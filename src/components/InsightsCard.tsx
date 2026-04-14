@@ -2,9 +2,9 @@ import React from 'react';
 import type { Recommendation } from '../hooks/useInsights';
 
 const TYPE_CONFIG = {
-  recovery: { color: '#ff7439', label: 'RECUPERACIÓN', icon: '◈' },
-  training: { color: '#22d3a5', label: 'ENTRENAMIENTO', icon: '◆' },
-  sleep: { color: '#6a9cff', label: 'SUEÑO', icon: '◉' },
+  recovery: { color: '#ff7439', label: 'RECOVERY', icon: '◈' },
+  training: { color: '#22d3a5', label: 'TRAINING', icon: '◆' },
+  sleep: { color: '#6a9cff', label: 'SLEEP', icon: '◉' },
   plan: { color: '#f3ffca', label: 'PLAN', icon: '◇' },
 };
 

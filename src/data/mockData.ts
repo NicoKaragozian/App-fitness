@@ -5,13 +5,13 @@ export const sleepHours = '7h 45m';
 export const restingHR = 48;
 
 export const weeklyStressData = [
-  { day: 'LUN', stress: 28, date: '2026-03-14' },
-  { day: 'MAR', stress: 35, date: '2026-03-15' },
-  { day: 'MIÉ', stress: 22, date: '2026-03-16' },
-  { day: 'JUE', stress: 41, date: '2026-03-17' },
-  { day: 'VIE', stress: 30, date: '2026-03-18' },
-  { day: 'SÁB', stress: 18, date: '2026-03-19' },
-  { day: 'DOM', stress: 25, date: '2026-03-20' },
+  { day: 'MON', stress: 28, date: '2026-03-14' },
+  { day: 'TUE', stress: 35, date: '2026-03-15' },
+  { day: 'WED', stress: 22, date: '2026-03-16' },
+  { day: 'THU', stress: 41, date: '2026-03-17' },
+  { day: 'FRI', stress: 30, date: '2026-03-18' },
+  { day: 'SAT', stress: 18, date: '2026-03-19' },
+  { day: 'SUN', stress: 25, date: '2026-03-20' },
 ];
 
 export const monthlyStressData = [
@@ -25,13 +25,13 @@ export const weeklyStressAvg = Math.round(weeklyStressData.reduce((a, b) => a + 
 export const monthlyStressAvg = Math.round(monthlyStressData.reduce((a, b) => a + b.stress, 0) / monthlyStressData.length);
 
 export const weeklySleepData = [
-  { day: 'LUN', hours: 7.2, score: 78, hrv: 58 },
-  { day: 'MAR', hours: 8.1, score: 88, hrv: 64 },
-  { day: 'MIÉ', hours: 6.8, score: 72, hrv: 52 },
-  { day: 'JUE', hours: 7.5, score: 82, hrv: 61 },
-  { day: 'VIE', hours: 8.5, score: 91, hrv: 70 },
-  { day: 'SÁB', hours: 9.0, score: 94, hrv: 75 },
-  { day: 'DOM', hours: 7.75, score: 85, hrv: 64 },
+  { day: 'MON', hours: 7.2, score: 78, hrv: 58 },
+  { day: 'TUE', hours: 8.1, score: 88, hrv: 64 },
+  { day: 'WED', hours: 6.8, score: 72, hrv: 52 },
+  { day: 'THU', hours: 7.5, score: 82, hrv: 61 },
+  { day: 'FRI', hours: 8.5, score: 91, hrv: 70 },
+  { day: 'SAT', hours: 9.0, score: 94, hrv: 75 },
+  { day: 'SUN', hours: 7.75, score: 85, hrv: 64 },
 ];
 
 export const monthlySleepData = Array.from({ length: 30 }, (_, i) => ({
@@ -48,13 +48,13 @@ export const sportsData = {
     weekly: { sessions: 3, distance: 54.2, duration: 285, calories: 1740 },
     monthly: { sessions: 12, distance: 218.6, duration: 1140, calories: 6960 },
     weeklyHistory: [
-      { day: 'LUN', distance: 0 },
-      { day: 'MAR', distance: 18.4 },
-      { day: 'MIÉ', distance: 0 },
-      { day: 'JUE', distance: 14.2 },
-      { day: 'VIE', distance: 0 },
-      { day: 'SÁB', distance: 21.6 },
-      { day: 'DOM', distance: 0 },
+      { day: 'MON', distance: 0 },
+      { day: 'TUE', distance: 18.4 },
+      { day: 'WED', distance: 0 },
+      { day: 'THU', distance: 14.2 },
+      { day: 'FRI', distance: 0 },
+      { day: 'SAT', distance: 21.6 },
+      { day: 'SUN', distance: 0 },
     ],
   },
   tennis: {
@@ -62,13 +62,13 @@ export const sportsData = {
     weekly: { sessions: 4, duration: 360, calories: 1680, matchesWon: 7 },
     monthly: { sessions: 15, duration: 1350, calories: 6300, matchesWon: 28 },
     weeklyHistory: [
-      { day: 'LUN', duration: 90 },
-      { day: 'MAR', duration: 0 },
-      { day: 'MIÉ', duration: 75 },
-      { day: 'JUE', duration: 90 },
-      { day: 'VIE', duration: 0 },
-      { day: 'SÁB', duration: 105 },
-      { day: 'DOM', duration: 0 },
+      { day: 'MON', duration: 90 },
+      { day: 'TUE', duration: 0 },
+      { day: 'WED', duration: 75 },
+      { day: 'THU', duration: 90 },
+      { day: 'FRI', duration: 0 },
+      { day: 'SAT', duration: 105 },
+      { day: 'SUN', duration: 0 },
     ],
   },
   gym: {
@@ -76,17 +76,17 @@ export const sportsData = {
     weekly: { sessions: 4, duration: 260, calories: 1520, volume: 49600 },
     monthly: { sessions: 16, duration: 1040, calories: 6080, volume: 198400 },
     weeklyHistory: [
-      { day: 'LUN', volume: 12400 },
-      { day: 'MAR', volume: 0 },
-      { day: 'MIÉ', volume: 14200 },
-      { day: 'JUE', volume: 11800 },
-      { day: 'VIE', volume: 0 },
-      { day: 'SÁB', volume: 11200 },
-      { day: 'DOM', volume: 0 },
+      { day: 'MON', volume: 12400 },
+      { day: 'TUE', volume: 0 },
+      { day: 'WED', volume: 14200 },
+      { day: 'THU', volume: 11800 },
+      { day: 'FRI', volume: 0 },
+      { day: 'SAT', volume: 11200 },
+      { day: 'SUN', volume: 0 },
     ],
   },
   others: [
-    { name: 'Ciclismo', sessions: 2, distance: 46.0 },
+    { name: 'Cycling', sessions: 2, distance: 46.0 },
     { name: 'Running', sessions: 3, distance: 19.0 },
     { name: 'Paddleboard', sessions: 2, distance: 8.5 },
     { name: 'Yoga', sessions: 4, duration: 180 },
@@ -193,8 +193,8 @@ export const activityDetailMock = {
 export const volumeHistoryMonthly = [
   { month: 'Oct', water: 180, tennis: 280, gym: 160 },
   { month: 'Nov', water: 220, tennis: 320, gym: 200 },
-  { month: 'Dic', water: 150, tennis: 260, gym: 180 },
-  { month: 'Ene', water: 190, tennis: 300, gym: 220 },
+  { month: 'Dec', water: 150, tennis: 260, gym: 180 },
+  { month: 'Jan', water: 190, tennis: 300, gym: 220 },
   { month: 'Feb', water: 240, tennis: 350, gym: 240 },
   { month: 'Mar', water: 210, tennis: 330, gym: 200 },
 ];
@@ -228,8 +228,8 @@ export const mockActivitiesData = {
       icon: '◎',
       metrics: ['sessions', 'distance', 'duration', 'calories'],
       chartMetrics: [
-        { dataKey: 'distance', name: 'DISTANCIA KM', type: 'bar' as const },
-        { dataKey: 'maxSpeed', name: 'VEL. MÁX KM/H', type: 'line' as const },
+        { dataKey: 'distance', name: 'DISTANCE KM', type: 'bar' as const },
+        { dataKey: 'maxSpeed', name: 'MAX SPEED KM/H', type: 'line' as const },
       ],
       sortOrder: 0,
       data: { sessions: 3, distance: 54.2, duration: 285, calories: 1740, avg_hr: 0, max_speed: 0 },
@@ -242,8 +242,8 @@ export const mockActivitiesData = {
       icon: '◈',
       metrics: ['sessions', 'duration', 'calories'],
       chartMetrics: [
-        { dataKey: 'duration', name: 'DURACIÓN MIN', type: 'bar' as const },
-        { dataKey: 'avgHr', name: 'FC PROM BPM', type: 'line' as const },
+        { dataKey: 'duration', name: 'DURATION MIN', type: 'bar' as const },
+        { dataKey: 'avgHr', name: 'AVG HR BPM', type: 'line' as const },
       ],
       sortOrder: 1,
       data: { sessions: 4, distance: 0, duration: 360, calories: 1680, avg_hr: 139, max_speed: 0 },
@@ -251,12 +251,12 @@ export const mockActivitiesData = {
     {
       id: 'gym',
       name: 'GYM / STRENGTH',
-      subtitle: 'FUERZA / POTENCIA',
+      subtitle: 'STRENGTH / POWER',
       color: '#ff7439',
       icon: '⚡',
       metrics: ['sessions', 'duration', 'calories'],
       chartMetrics: [
-        { dataKey: 'calories', name: 'CALORÍAS KCAL', type: 'bar' as const },
+        { dataKey: 'calories', name: 'CALORIES KCAL', type: 'bar' as const },
       ],
       sortOrder: 2,
       data: { sessions: 4, distance: 0, duration: 260, calories: 1520, avg_hr: 0, max_speed: 0 },
@@ -300,9 +300,9 @@ export const mockGroupDetail: Record<string, {
 };
 
 export const weeklyPlan = [
-  { day: 'LUN', sport: 'GYM / FUERZA', completed: true, detail: 'UPPER BODY STRENGTH' },
-  { day: 'MAR', sport: 'WINGFOIL', completed: true, detail: 'SESIÓN TÉCNICA - VIENTO 15KT' },
-  { day: 'MIÉ', sport: 'TENIS', completed: true, detail: 'MATCH PLAY - 90 MIN' },
-  { day: 'JUE', sport: 'GYM / FUERZA', completed: false, detail: 'LOWER BODY + CORE' },
-  { day: 'VIE', sport: 'TENIS', completed: false, detail: 'ENTRENAMIENTO TÉCNICO' },
+  { day: 'MON', sport: 'GYM / STRENGTH', completed: true, detail: 'UPPER BODY STRENGTH' },
+  { day: 'TUE', sport: 'WINGFOIL', completed: true, detail: 'TECHNICAL SESSION - WIND 15KT' },
+  { day: 'WED', sport: 'TENNIS', completed: true, detail: 'MATCH PLAY - 90 MIN' },
+  { day: 'THU', sport: 'GYM / STRENGTH', completed: false, detail: 'LOWER BODY + CORE' },
+  { day: 'FRI', sport: 'TENNIS', completed: false, detail: 'TECHNICAL TRAINING' },
 ];

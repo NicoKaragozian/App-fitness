@@ -3,41 +3,41 @@ import { useNavigate } from 'react-router-dom';
 import { useAssessment } from '../hooks/useAssessment';
 
 const FITNESS_LEVELS = [
-  { value: 'principiante', label: 'Principiante' },
-  { value: 'intermedio', label: 'Intermedio' },
-  { value: 'avanzado', label: 'Avanzado' },
-  { value: 'atleta', label: 'Atleta' },
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced', label: 'Advanced' },
+  { value: 'athlete', label: 'Athlete' },
 ];
 
 const GOAL_OPTIONS = [
-  { value: 'fuerza', label: 'Fuerza' },
-  { value: 'hipertrofia', label: 'Hipertrofia' },
-  { value: 'resistencia', label: 'Resistencia' },
-  { value: 'flexibilidad', label: 'Flexibilidad' },
-  { value: 'perdida_de_peso', label: 'Pérdida de peso' },
-  { value: 'rendimiento_deportivo', label: 'Rendimiento deportivo' },
-  { value: 'salud_general', label: 'Salud general' },
-  { value: 'otro', label: 'Otro' },
+  { value: 'strength', label: 'Strength' },
+  { value: 'hypertrophy', label: 'Hypertrophy' },
+  { value: 'endurance', label: 'Endurance' },
+  { value: 'flexibility', label: 'Flexibility' },
+  { value: 'weight_loss', label: 'Weight loss' },
+  { value: 'sports_performance', label: 'Sports performance' },
+  { value: 'general_health', label: 'General health' },
+  { value: 'other', label: 'Other' },
 ];
 
 const DAYS = [
-  { value: 'Lun', label: 'LUN' },
-  { value: 'Mar', label: 'MAR' },
-  { value: 'Mié', label: 'MIÉ' },
-  { value: 'Jue', label: 'JUE' },
-  { value: 'Vie', label: 'VIE' },
-  { value: 'Sáb', label: 'SÁB' },
-  { value: 'Dom', label: 'DOM' },
+  { value: 'Mon', label: 'MON' },
+  { value: 'Tue', label: 'TUE' },
+  { value: 'Wed', label: 'WED' },
+  { value: 'Thu', label: 'THU' },
+  { value: 'Fri', label: 'FRI' },
+  { value: 'Sat', label: 'SAT' },
+  { value: 'Sun', label: 'SUN' },
 ];
 
 const EQUIPMENT_OPTIONS = [
-  { value: 'gimnasio_completo', label: 'Gimnasio completo' },
-  { value: 'mancuernas', label: 'Mancuernas' },
-  { value: 'barras_y_discos', label: 'Barras y discos' },
-  { value: 'bandas_elasticas', label: 'Bandas elásticas' },
-  { value: 'cuerpo_libre', label: 'Peso corporal' },
-  { value: 'trx', label: 'TRX / Anillas' },
-  { value: 'maquinas', label: 'Máquinas' },
+  { value: 'full_gym', label: 'Full gym' },
+  { value: 'dumbbells', label: 'Dumbbells' },
+  { value: 'barbells', label: 'Barbells & plates' },
+  { value: 'resistance_bands', label: 'Resistance bands' },
+  { value: 'bodyweight', label: 'Bodyweight' },
+  { value: 'trx', label: 'TRX / Rings' },
+  { value: 'machines', label: 'Machines' },
   { value: 'kettlebells', label: 'Kettlebells' },
 ];
 
@@ -158,15 +158,15 @@ export const Assessment: React.FC = () => {
   const validateStep = (s: number): boolean => {
     const errs: Record<string, string> = {};
     if (s === 1) {
-      if (!form.name.trim()) errs.name = 'El nombre es requerido';
-      if (!form.age || isNaN(Number(form.age)) || Number(form.age) < 1 || Number(form.age) > 120) errs.age = 'Ingresá una edad válida';
+      if (!form.name.trim()) errs.name = 'Name is required';
+      if (!form.age || isNaN(Number(form.age)) || Number(form.age) < 1 || Number(form.age) > 120) errs.age = 'Enter a valid age';
     }
     if (s === 2) {
-      if (!form.fitness_level) errs.fitness_level = 'Seleccioná tu nivel de fitness';
-      if (form.goals.length === 0) errs.goals = 'Seleccioná al menos un objetivo';
+      if (!form.fitness_level) errs.fitness_level = 'Select your fitness level';
+      if (form.goals.length === 0) errs.goals = 'Select at least one goal';
     }
     if (s === 3) {
-      if (form.available_days.length === 0) errs.available_days = 'Seleccioná al menos un día';
+      if (form.available_days.length === 0) errs.available_days = 'Select at least one day';
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -210,7 +210,7 @@ export const Assessment: React.FC = () => {
       });
       navigate('/training');
     } catch (err: any) {
-      setSaveError(err.message || 'Error guardando el perfil');
+      setSaveError(err.message || 'Error saving profile');
     } finally {
       setSaving(false);
     }
@@ -239,7 +239,7 @@ export const Assessment: React.FC = () => {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-            Paso {step} de 3
+            Step {step} of 3
           </p>
           <div className="flex gap-1.5">
             {[1, 2, 3].map(s => (
@@ -254,20 +254,20 @@ export const Assessment: React.FC = () => {
         </div>
       </div>
 
-      {/* Step 1 — Datos Básicos */}
+      {/* Step 1 — Basic Info */}
       {step === 1 && (
         <div className="bg-surface-low rounded-xl p-5 space-y-5">
-          <p className="font-display text-on-surface text-lg">Datos básicos</p>
+          <p className="font-display text-on-surface text-lg">Basic Info</p>
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-              Nombre <span className="text-primary">*</span>
+              Name <span className="text-primary">*</span>
             </label>
             <input
               type="text"
               value={form.name}
               onChange={e => set('name', e.target.value)}
-              placeholder="Tu nombre"
+              placeholder="Your name"
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
             {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
@@ -275,7 +275,7 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-              Edad <span className="text-primary">*</span>
+              Age <span className="text-primary">*</span>
             </label>
             <input
               type="number"
@@ -293,7 +293,7 @@ export const Assessment: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Altura (cm)
+                Height (cm)
               </label>
               <input
                 type="number"
@@ -306,7 +306,7 @@ export const Assessment: React.FC = () => {
             </div>
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Peso (kg)
+                Weight (kg)
               </label>
               <input
                 type="number"
@@ -321,14 +321,14 @@ export const Assessment: React.FC = () => {
         </div>
       )}
 
-      {/* Step 2 — Perfil de Entrenamiento */}
+      {/* Step 2 — Training Profile */}
       {step === 2 && (
         <div className="bg-surface-low rounded-xl p-5 space-y-5">
-          <p className="font-display text-on-surface text-lg">Perfil de entrenamiento</p>
+          <p className="font-display text-on-surface text-lg">Training Profile</p>
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Nivel de fitness <span className="text-primary">*</span>
+              Fitness level <span className="text-primary">*</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {FITNESS_LEVELS.map(l => (
@@ -346,7 +346,7 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Objetivos de entrenamiento <span className="text-primary">*</span>
+              Training goals <span className="text-primary">*</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {GOAL_OPTIONS.map(g => (
@@ -362,16 +362,16 @@ export const Assessment: React.FC = () => {
             {errors.goals && <p className="text-red-400 text-xs mt-1">{errors.goals}</p>}
           </div>
 
-          {form.goals.includes('otro') && (
+          {form.goals.includes('other') && (
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Especificá el objetivo
+                Specify goal
               </label>
               <input
                 type="text"
                 value={form.goals_other}
                 onChange={e => set('goals_other', e.target.value)}
-                placeholder="Describí tu objetivo específico"
+                placeholder="Describe your specific goal"
                 className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -379,10 +379,10 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              ¿Practicás algún deporte?
+              Do you practice any sport?
             </label>
             <div className="flex gap-2">
-              {[{ value: 'sí', label: 'Sí' }, { value: 'no', label: 'No' }].map(opt => (
+              {[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }].map(opt => (
                 <ToggleButton
                   key={opt.value}
                   selected={form.sport_practice === opt.value}
@@ -394,16 +394,16 @@ export const Assessment: React.FC = () => {
             </div>
           </div>
 
-          {form.sport_practice === 'sí' && (
+          {form.sport_practice === 'yes' && (
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                ¿Cuál/es?
+                Which one(s)?
               </label>
               <input
                 type="text"
                 value={form.sport_name}
                 onChange={e => set('sport_name', e.target.value)}
-                placeholder="Ej: kitesurf, tenis, fútbol"
+                placeholder="E.g.: kitesurfing, tennis, soccer"
                 className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -411,14 +411,14 @@ export const Assessment: React.FC = () => {
         </div>
       )}
 
-      {/* Step 3 — Disponibilidad y Detalles */}
+      {/* Step 3 — Availability and Details */}
       {step === 3 && (
         <div className="bg-surface-low rounded-xl p-5 space-y-5">
-          <p className="font-display text-on-surface text-lg">Disponibilidad y detalles</p>
+          <p className="font-display text-on-surface text-lg">Availability and Details</p>
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Días disponibles para entrenar <span className="text-primary">*</span>
+              Available training days <span className="text-primary">*</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {DAYS.map(d => (
@@ -436,7 +436,7 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-              Duración de sesión disponible (minutos)
+              Available session duration (minutes)
             </label>
             <input
               type="number"
@@ -450,7 +450,7 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Equipamiento disponible
+              Available equipment
             </label>
             <div className="flex flex-wrap gap-2">
               {EQUIPMENT_OPTIONS.map(e => (
@@ -468,13 +468,13 @@ export const Assessment: React.FC = () => {
           {form.equipment.length > 0 && (
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Equipamiento adicional (opcional)
+                Additional equipment (optional)
               </label>
               <input
                 type="text"
                 value={form.equipment_other}
                 onChange={e => set('equipment_other', e.target.value)}
-                placeholder="Ej: caminadora, bicicleta fija"
+                placeholder="E.g.: treadmill, stationary bike"
                 className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -482,13 +482,13 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-              Lesiones o limitaciones actuales
+              Current injuries or limitations
             </label>
             <textarea
               value={form.injuries_limitations}
               onChange={e => set('injuries_limitations', e.target.value)}
               rows={2}
-              placeholder="Ej: dolor de rodilla, hernia lumbar, nada por el momento"
+              placeholder="E.g.: knee pain, lumbar hernia, nothing at the moment"
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             />
           </div>
@@ -500,72 +500,72 @@ export const Assessment: React.FC = () => {
             className="text-on-surface-variant text-xs hover:text-on-surface transition-colors flex items-center gap-1"
           >
             <span>{showAdvanced ? '▲' : '▼'}</span>
-            {showAdvanced ? 'Ocultar detalles adicionales' : 'Mostrar detalles adicionales'}
+            {showAdvanced ? 'Hide additional details' : 'Show additional details'}
           </button>
 
           {showAdvanced && (
             <div className="space-y-4 pt-2 border-t border-outline-variant/20">
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Preferencias de entrenamiento
+                  Training preferences
                 </label>
                 <textarea
                   value={form.training_preferences}
                   onChange={e => set('training_preferences', e.target.value)}
                   rows={2}
-                  placeholder="Ej: prefiero entrenamiento funcional, no me gustan las máquinas"
+                  placeholder="E.g.: I prefer functional training, I don't like machines"
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
               </div>
 
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Historial de lesiones
+                  Injury history
                 </label>
                 <textarea
                   value={form.past_injuries_detail}
                   onChange={e => set('past_injuries_detail', e.target.value)}
                   rows={2}
-                  placeholder="Ej: rotura de ligamento en 2022, operación de hombro"
+                  placeholder="E.g.: ligament tear in 2022, shoulder surgery"
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
               </div>
 
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Metas a corto plazo
+                  Short-term goals
                 </label>
                 <input
                   type="text"
                   value={form.short_term_goals}
                   onChange={e => set('short_term_goals', e.target.value)}
-                  placeholder="En los próximos 1-3 meses"
+                  placeholder="In the next 1-3 months"
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Metas a largo plazo
+                  Long-term goals
                 </label>
                 <input
                   type="text"
                   value={form.long_term_goals}
                   onChange={e => set('long_term_goals', e.target.value)}
-                  placeholder="En los próximos 6-12 meses"
+                  placeholder="In the next 6-12 months"
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Consideraciones especiales
+                  Special considerations
                 </label>
                 <textarea
                   value={form.special_considerations}
                   onChange={e => set('special_considerations', e.target.value)}
                   rows={2}
-                  placeholder="Cualquier información adicional relevante para tu entrenamiento"
+                  placeholder="Any additional information relevant to your training"
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
               </div>
@@ -589,7 +589,7 @@ export const Assessment: React.FC = () => {
             onClick={() => setStep(s => s - 1)}
             className="px-5 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase hover:bg-surface-high transition-colors"
           >
-            Atrás
+            Back
           </button>
         )}
         {step < 3 ? (
@@ -598,7 +598,7 @@ export const Assessment: React.FC = () => {
             onClick={handleNext}
             className="flex-1 bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl hover:opacity-90 transition-opacity"
           >
-            Siguiente
+            Next
           </button>
         ) : (
           <button
@@ -610,9 +610,9 @@ export const Assessment: React.FC = () => {
             {saving ? (
               <>
                 <span className="w-3.5 h-3.5 border-2 border-surface/30 border-t-surface rounded-full animate-spin block" />
-                Guardando…
+                Saving...
               </>
-            ) : (assessment ? 'Actualizar perfil' : 'Guardar perfil')}
+            ) : (assessment ? 'Update profile' : 'Save profile')}
           </button>
         )}
       </div>

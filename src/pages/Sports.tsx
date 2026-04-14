@@ -11,12 +11,12 @@ import { mockActivitiesData } from '../data/mockData';
 type Period = 'daily' | 'weekly' | 'monthly' | 'total';
 
 const METRIC_DEFINITIONS: Record<string, { label: string; unit: string }> = {
-  sessions:  { label: 'SESIONES',    unit: '' },
-  distance:  { label: 'DISTANCIA',   unit: 'KM' },
-  duration:  { label: 'DURACIÓN',    unit: 'MIN' },
-  calories:  { label: 'CALORÍAS',    unit: 'KCAL' },
-  avg_hr:    { label: 'FC PROMEDIO', unit: 'BPM' },
-  max_speed: { label: 'VEL. MÁX',   unit: 'KM/H' },
+  sessions:  { label: 'SESSIONS',    unit: '' },
+  distance:  { label: 'DISTANCE',    unit: 'KM' },
+  duration:  { label: 'DURATION',    unit: 'MIN' },
+  calories:  { label: 'CALORIES',    unit: 'KCAL' },
+  avg_hr:    { label: 'AVG HR',      unit: 'BPM' },
+  max_speed: { label: 'MAX SPEED',   unit: 'KM/H' },
 };
 
 const SportCard: React.FC<{ group: SportGroup; linkTo: string }> = ({ group, linkTo }) => (
@@ -74,9 +74,9 @@ export const Sports: React.FC = () => {
       {/* Header row */}
       <div className="flex flex-col md:flex-row items-start justify-between gap-4">
         <div>
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">PRÁCTICA DEPORTIVA</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">SPORTS PRACTICE</p>
           <h1 className="font-display font-bold text-on-surface text-3xl lg:text-[3rem] leading-none">
-            ANÁLISIS DE<br />DEPORTES
+            SPORTS<br />ANALYSIS
           </h1>
         </div>
         <div className="text-left md:text-right">
@@ -97,13 +97,13 @@ export const Sports: React.FC = () => {
                 : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            {p === 'daily' ? 'DIARIO' : p === 'weekly' ? 'SEMANAL' : p === 'monthly' ? 'MENSUAL' : 'TOTAL'}
+            {p === 'daily' ? 'DAILY' : p === 'weekly' ? 'WEEKLY' : p === 'monthly' ? 'MONTHLY' : 'TOTAL'}
           </button>
         ))}
         <button
           onClick={() => setEditorOpen(true)}
           className="ml-auto p-2 rounded-lg bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors"
-          title="Gestionar grupos"
+          title="Manage groups"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
@@ -141,7 +141,7 @@ export const Sports: React.FC = () => {
               <div key={s.name} className="bg-surface-low rounded-xl p-4">
                 <p className="font-label text-label-sm text-on-surface-variant uppercase tracking-widest">{s.name}</p>
                 <p className="font-display font-bold text-on-surface text-lg mt-0.5">
-                  {s.sessions} <span className="text-on-surface-variant text-xs font-normal">SESIONES</span>
+                  {s.sessions} <span className="text-on-surface-variant text-xs font-normal">SESSIONS</span>
                 </p>
                 {s.distance != null && s.distance > 0 && (
                   <p className="font-label text-label-sm text-on-surface-variant">{s.distance} KM</p>

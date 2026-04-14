@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .finally(() => setChecked(true));
   }, [isDemoMode, fetchStatus]);
 
-  // Polling cada 3 segundos mientras no esté autenticado (para auto-detect tokens)
+  // Poll every 3 seconds while not authenticated (for auto-detect tokens)
   useEffect(() => {
     if (!checked || isAuthenticated || isDemoMode) return;
     const id = setInterval(() => {

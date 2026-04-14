@@ -13,7 +13,7 @@ export default function AIProgressIndicator({ progress, phase, className = '' }:
     <div className={`space-y-2 ${className}`}>
       <div className="flex items-center justify-between">
         <p className="font-label text-[10px] text-primary tracking-widest uppercase">
-          {phase || 'Conectando...'}
+          {phase || 'Connecting...'}
         </p>
         <span className="font-label text-[10px] text-on-surface-variant tabular-nums">
           {pct}%

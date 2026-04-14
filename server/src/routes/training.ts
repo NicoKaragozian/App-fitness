@@ -31,13 +31,13 @@ export interface AIPlan {
 }
 
 export function validatePlan(obj: any): AIPlan {
-  if (typeof obj !== 'object' || obj === null) throw new Error('Respuesta no es un objeto JSON');
-  if (!obj.title) throw new Error('Falta el campo "title"');
-  if (!Array.isArray(obj.sessions) || obj.sessions.length === 0) throw new Error('Falta el array "sessions"');
+  if (typeof obj !== 'object' || obj === null) throw new Error('Response is not a JSON object');
+  if (!obj.title) throw new Error('Missing "title" field');
+  if (!Array.isArray(obj.sessions) || obj.sessions.length === 0) throw new Error('Missing "sessions" array');
   return obj as AIPlan;
 }
 
-// Guarda un AIPlan en la DB y retorna el ID insertado
+// Saves an AIPlan to DB and returns the inserted ID
 export function savePlanToDB(plan: AIPlan, rawContent: string): number {
   const insertPlan = db.prepare(
     'INSERT INTO training_plans (title, objective, frequency, ai_model, raw_ai_response) VALUES (?,?,?,?,?)'
@@ -83,28 +83,28 @@ export function savePlanToDB(plan: AIPlan, rawContent: string): number {
   return savedPlanId;
 }
 
-// POST /api/training/generate — Generar plan via AI con streaming SSE
-// Emite tokens de "análisis" para feedback al usuario, luego JSON del plan al final.
-// Protocolo SSE:
-//   data: {"token":"..."}                         — texto de análisis (visible al usuario)
+// POST /api/training/generate — Generate plan via AI with streaming SSE
+// Emits "analysis" tokens for user feedback, then JSON plan at the end.
+// SSE Protocol:
+//   data: {"token":"..."}                         — analysis text (visible to the user)
 //   data: {"plan":{...},"recommendations":"..."}  — plan guardado, antes de [DONE]
 //   data: {"error":"..."}                         — si falla el parseo del JSON
 //   data: [DONE]                                  — fin del stream
 router.post('/generate', async (req: Request, res: Response) => {
   const { goal } = req.body as { goal: string };
   if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
-    res.status(400).json({ error: 'Se requiere el campo "goal"' });
+    res.status(400).json({ error: '"goal" field is required' });
     return;
   }
 
   if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
     return;
   }
 
   const context = buildTrainingContext(goal.trim());
-  const systemPrompt = `${PROMPTS.training_plan}\n\nDatos del usuario:\n${context}`;
-  const userMessage = `Generá mi plan de entrenamiento personalizado. Objetivo: ${goal.trim()}`;
+  const systemPrompt = `${PROMPTS.training_plan}\n\nUser data:\n${context}`;
+  const userMessage = `Generate my personalized training plan. Goal: ${goal.trim()}`;
 
   await claudeStreamGenerate(systemPrompt, userMessage, res, {
     maxTokens: 4096,
@@ -129,13 +129,13 @@ router.post('/generate', async (req: Request, res: Response) => {
         res.write(`data: ${JSON.stringify({ plan: fullPlan, recommendations: plan.recommendations ?? null })}\n\n`);
       } catch (err: any) {
         console.error('[training] Error parseando respuesta de Claude:', err.message);
-        res.write(`data: ${JSON.stringify({ error: `Claude no devolvió un JSON válido: ${err.message}` })}\n\n`);
+        res.write(`data: ${JSON.stringify({ error: `Claude did not return valid JSON: ${err.message}` })}\n\n`);
       }
     },
   });
 });
 
-// Helpers para leer plan completo
+// Helpers to read full plan
 export function getPlanById(id: number) {
   const plan = db.prepare('SELECT * FROM training_plans WHERE id = ?').get(id) as any;
   if (!plan) return null;
@@ -154,7 +154,7 @@ export function getPlanById(id: number) {
   return plan;
 }
 
-// GET /api/training/plans — Listar planes
+// GET /api/training/plans — List plans
 router.get('/plans', (_req: Request, res: Response) => {
   const plans = db.prepare(
     'SELECT * FROM training_plans ORDER BY created_at DESC'
@@ -175,16 +175,16 @@ router.get('/plans', (_req: Request, res: Response) => {
 // GET /api/training/plans/:id — Plan completo
 router.get('/plans/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const plan = getPlanById(id);
-  if (!plan) { res.status(404).json({ error: 'Plan no encontrado' }); return; }
+  if (!plan) { res.status(404).json({ error: 'Plan not found' }); return; }
   res.json(plan);
 });
 
-// PUT /api/training/plans/:id — Actualizar plan (título, status)
+// PUT /api/training/plans/:id — Update plan (title, status)
 router.put('/plans/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { title, objective, frequency, status } = req.body as any;
   db.prepare(`
     UPDATE training_plans SET
@@ -198,11 +198,11 @@ router.put('/plans/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// DELETE /api/training/plans/:id — Borrar plan
+// DELETE /api/training/plans/:id — Delete plan
 router.delete('/plans/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
-  // workout_logs no tiene ON DELETE CASCADE, hay que borrarlo antes (sus sets se borran via CASCADE)
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
+  // workout_logs doesn't have ON DELETE CASCADE, must delete before (its sets are deleted via CASCADE)
   db.transaction(() => {
     db.prepare('DELETE FROM workout_logs WHERE plan_id = ?').run(id);
     db.prepare('DELETE FROM training_plans WHERE id = ?').run(id);
@@ -210,10 +210,10 @@ router.delete('/plans/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// PUT /api/training/exercises/:id — Editar targets de ejercicio
+// PUT /api/training/exercises/:id — Edit exercise targets
 router.put('/exercises/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { name, target_sets, target_reps, notes, category } = req.body as any;
   db.prepare(`
     UPDATE training_exercises SET
@@ -227,10 +227,10 @@ router.put('/exercises/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// POST /api/training/workouts — Iniciar workout
+// POST /api/training/workouts — Start workout
 router.post('/workouts', (req: Request, res: Response) => {
   const { planId, sessionId } = req.body as { planId: number; sessionId: number };
-  if (!planId || !sessionId) { res.status(400).json({ error: 'planId y sessionId requeridos' }); return; }
+  if (!planId || !sessionId) { res.status(400).json({ error: 'planId and sessionId required' }); return; }
   const now = new Date().toISOString();
   const result = db.prepare(
     'INSERT INTO workout_logs (plan_id, session_id, started_at) VALUES (?,?,?)'
@@ -238,10 +238,10 @@ router.post('/workouts', (req: Request, res: Response) => {
   res.json({ workoutId: result.lastInsertRowid });
 });
 
-// PUT /api/training/workouts/:id — Finalizar workout
+// PUT /api/training/workouts/:id — Finish workout
 router.put('/workouts/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { notes } = req.body as any;
   const now = new Date().toISOString();
   db.prepare(
@@ -250,7 +250,7 @@ router.put('/workouts/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// GET /api/training/workouts — Historial de workouts
+// GET /api/training/workouts — Workout history
 router.get('/workouts', (req: Request, res: Response) => {
   const { planId, sessionId } = req.query as any;
   let query = 'SELECT wl.*, ts.name as session_name FROM workout_logs wl JOIN training_sessions ts ON ts.id = wl.session_id WHERE 1=1';
@@ -262,12 +262,12 @@ router.get('/workouts', (req: Request, res: Response) => {
   res.json(logs);
 });
 
-// GET /api/training/workouts/:id — Detalle de un workout con sus sets
+// GET /api/training/workouts/:id — Workout detail with its sets
 router.get('/workouts/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const log = db.prepare('SELECT * FROM workout_logs WHERE id = ?').get(id) as any;
-  if (!log) { res.status(404).json({ error: 'Workout no encontrado' }); return; }
+  if (!log) { res.status(404).json({ error: 'Workout not found' }); return; }
   const sets = db.prepare(`
     SELECT ws.*, te.name as exercise_name, te.sort_order as exercise_sort_order
     FROM workout_sets ws
@@ -278,21 +278,21 @@ router.get('/workouts/:id', (req: Request, res: Response) => {
   res.json({ ...log, sets });
 });
 
-// DELETE /api/training/workouts/:id — Borrar workout log (CASCADE a sets)
+// DELETE /api/training/workouts/:id — Delete workout log (CASCADE to sets)
 router.delete('/workouts/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   db.prepare('DELETE FROM workout_logs WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 
-// POST /api/training/workouts/:id/sets — Logear un set
+// POST /api/training/workouts/:id/sets — Log a set
 router.post('/workouts/:id/sets', (req: Request, res: Response) => {
   const workoutId = parseInt(req.params.id as string);
-  if (isNaN(workoutId)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(workoutId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { exerciseId, setNumber, reps, weight, completed, notes } = req.body as any;
   if (!exerciseId || setNumber == null) {
-    res.status(400).json({ error: 'exerciseId y setNumber requeridos' });
+    res.status(400).json({ error: 'exerciseId and setNumber required' });
     return;
   }
   const result = db.prepare(
@@ -301,10 +301,10 @@ router.post('/workouts/:id/sets', (req: Request, res: Response) => {
   res.json({ setId: result.lastInsertRowid });
 });
 
-// PUT /api/training/sets/:id — Actualizar un set
+// PUT /api/training/sets/:id — Update a set
 router.put('/sets/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const body = req.body as any;
   const updates: string[] = [];
   const params: any[] = [];
@@ -318,20 +318,20 @@ router.put('/sets/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// DELETE /api/training/sets/:id — Borrar un set individual
+// DELETE /api/training/sets/:id — Delete an individual set
 router.delete('/sets/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
-  if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   db.prepare('DELETE FROM workout_sets WHERE id = ?').run(id);
   res.json({ ok: true });
 });
 
-// GET /api/training/exercises/:id/history — Historial de peso/reps para progressive overload
+// GET /api/training/exercises/:id/history — Weight/reps history for progressive overload
 router.get('/exercises/:id/history', (req: Request, res: Response) => {
   const exerciseId = parseInt(req.params.id as string);
-  if (isNaN(exerciseId)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(exerciseId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
 
-  // Buscar todos los sets completados de este ejercicio, ordenados por fecha
+  // Find all completed sets for this exercise, ordered by date
   const rows = db.prepare(`
     SELECT ws.set_number, ws.reps, ws.weight, ws.completed, wl.started_at, wl.id as workout_log_id
     FROM workout_sets ws
@@ -340,7 +340,7 @@ router.get('/exercises/:id/history', (req: Request, res: Response) => {
     ORDER BY wl.started_at ASC, ws.set_number ASC
   `).all(exerciseId) as any[];
 
-  // Agrupar por workout (fecha)
+  // Group by workout (date)
   const byWorkout: Record<string, { date: string; sets: { set: number; reps: number | null; weight: number | null }[] }> = {};
   for (const row of rows) {
     const date = row.started_at.slice(0, 10);
@@ -359,31 +359,31 @@ router.get('/exercises/:id/history', (req: Request, res: Response) => {
   res.json(history);
 });
 
-// POST /api/training/exercises/:id/describe — Generar descripción de cómo hacer el ejercicio
+// POST /api/training/exercises/:id/describe — Generate description of how to perform the exercise
 router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
   const exerciseId = parseInt(req.params.id as string);
-  if (isNaN(exerciseId)) { res.status(400).json({ error: 'ID inválido' }); return; }
+  if (isNaN(exerciseId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
 
   const exercise = db.prepare('SELECT * FROM training_exercises WHERE id = ?').get(exerciseId) as any;
-  if (!exercise) { res.status(404).json({ error: 'Ejercicio no encontrado' }); return; }
+  if (!exercise) { res.status(404).json({ error: 'Exercise not found' }); return; }
 
   if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
     return;
   }
 
-  const systemPrompt = 'Respondé en español. Sé conciso y técnicamente preciso.';
-  const prompt = `Explicá en 2-3 oraciones cortas y claras cómo se ejecuta correctamente el ejercicio "${exercise.name}". Incluí: posición inicial, movimiento principal, y el músculo que trabaja. Sin bullets, sin títulos, solo texto corrido.`;
+  const systemPrompt = 'Respond in English. Be concise and technically precise.';
+  const prompt = `Explain in 2-3 short, clear sentences how to correctly perform the exercise "${exercise.name}". Include: starting position, main movement, and the target muscle. No bullets, no titles, just running text.`;
 
   let description: string;
   try {
     description = (await claudeChat(systemPrompt, prompt, 512)).trim();
   } catch (err: any) {
-    res.status(502).json({ error: err.message || 'Error generando descripción' });
+    res.status(502).json({ error: err.message || 'Error generating description' });
     return;
   }
 
-  // Guardar en DB
+  // Save to DB
   db.prepare('UPDATE training_exercises SET description = ? WHERE id = ?').run(description, exerciseId);
 
   res.json({ description });

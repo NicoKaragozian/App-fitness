@@ -9,14 +9,14 @@ import { Goals } from './Goals';
 import { STTButton } from '../components/ui/STTButton';
 
 const PRESETS = [
-  'Plan de fuerza funcional para complementar deportes acuáticos y raqueta',
-  'Plan de hipertrofia con 3 sesiones semanales',
-  'Core y estabilidad para mejorar el equilibrio en el agua',
-  'Plan de fuerza general para principiantes en gym',
+  'Functional strength plan to complement water and racket sports',
+  'Hypertrophy plan with 3 weekly sessions',
+  'Core and stability to improve balance in the water',
+  'General strength plan for gym beginners',
 ];
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export const TrainingPlans: React.FC = () => {
@@ -61,7 +61,7 @@ export const TrainingPlans: React.FC = () => {
     } catch (err: any) {
       aiProgress.reset();
       if (err.name !== 'AbortError') {
-        setGenError(err.message || 'Error generando el plan');
+        setGenError(err.message || 'Error generating plan');
       }
     } finally {
       setGenerating(false);
@@ -85,14 +85,14 @@ export const TrainingPlans: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Training Plans</span>
-          <p className="font-display text-xl text-on-surface mt-0.5">Planes Personalizados</p>
+          <p className="font-display text-xl text-on-surface mt-0.5">Personalized Plans</p>
         </div>
         {activeTab === 'plans' && !showForm && (
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-2 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
           >
-            <span>+</span> Nuevo Plan
+            <span>+</span> New Plan
           </button>
         )}
       </div>
@@ -107,7 +107,7 @@ export const TrainingPlans: React.FC = () => {
               : 'text-on-surface-variant hover:text-on-surface'
           }`}
         >
-          Planes
+          Plans
         </button>
         <button
           onClick={() => setSearchParams({ tab: 'goals' })}
@@ -117,7 +117,7 @@ export const TrainingPlans: React.FC = () => {
               : 'text-on-surface-variant hover:text-on-surface'
           }`}
         >
-          Objetivos
+          Goals
         </button>
       </div>
 
@@ -132,14 +132,14 @@ export const TrainingPlans: React.FC = () => {
             <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-4">
               <div className="text-2xl shrink-0">◈</div>
               <div className="flex-1 min-w-0">
-                <p className="font-label text-label-sm text-primary tracking-widest uppercase mb-0.5">Perfil sin completar</p>
-                <p className="text-on-surface-variant text-xs">Completá tu perfil para que los planes de AI se personalicen con tus datos.</p>
+                <p className="font-label text-label-sm text-primary tracking-widest uppercase mb-0.5">Profile incomplete</p>
+                <p className="text-on-surface-variant text-xs">Complete your profile so AI plans are personalized with your data.</p>
               </div>
               <button
                 onClick={() => navigate('/training/profile')}
                 className="shrink-0 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-3 py-2 rounded-lg hover:opacity-90 transition-opacity text-xs"
               >
-                Completar
+                Complete
               </button>
             </div>
           )}
@@ -151,15 +151,15 @@ export const TrainingPlans: React.FC = () => {
               className="flex items-center gap-2 bg-surface-container border border-outline-variant/20 rounded-xl px-3 py-2 hover:bg-surface-high transition-colors w-fit"
             >
               <span className="text-xs">◈</span>
-              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Mi Perfil</span>
-              <span className="font-label text-[10px] text-primary tracking-widest uppercase bg-primary/10 px-1.5 py-0.5 rounded">Completado</span>
+              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">My Profile</span>
+              <span className="font-label text-[10px] text-primary tracking-widest uppercase bg-primary/10 px-1.5 py-0.5 rounded">Completed</span>
             </button>
           )}
 
           {/* Generation form */}
           {showForm && (
             <div className="bg-surface-low rounded-xl p-5 space-y-4 border border-primary/20">
-              <p className="font-label text-label-sm text-primary tracking-widest uppercase">Generar Plan con AI</p>
+              <p className="font-label text-label-sm text-primary tracking-widest uppercase">Generate Plan with AI</p>
 
               {/* Presets */}
               <div className="flex flex-wrap gap-2">
@@ -183,7 +183,7 @@ export const TrainingPlans: React.FC = () => {
                 <textarea
                   value={goal}
                   onChange={e => setGoal(e.target.value)}
-                  placeholder="Describí tu objetivo (ej: plan de fuerza para complementar surf y tenis, 3 días por semana)..."
+                  placeholder="Describe your goal (e.g.: strength plan to complement surfing and tennis, 3 days a week)..."
                   rows={3}
                   className="w-full bg-surface-container rounded-lg px-4 py-3 pr-10 text-on-surface text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder-on-surface-variant"
                 />
@@ -193,7 +193,7 @@ export const TrainingPlans: React.FC = () => {
                   className="absolute bottom-2 right-2"
                 />
               </div>
-              {/* Progreso de generacion */}
+              {/* Generation progress */}
               {aiProgress.isActive && (
                 <div className="bg-surface-container rounded-lg px-4 py-3">
                   <AIProgressIndicator progress={aiProgress.progress} phase={aiProgress.phase} />
@@ -213,9 +213,9 @@ export const TrainingPlans: React.FC = () => {
                   {generating ? (
                     <span className="flex items-center justify-center gap-2">
                       <span className="w-4 h-4 border-2 border-surface/30 border-t-surface rounded-full animate-spin" />
-                      Generando plan…
+                      Generating plan...
                     </span>
-                  ) : 'Generar Plan'}
+                  ) : 'Generate Plan'}
                 </button>
                 <button
                   onClick={() => {
@@ -230,16 +230,16 @@ export const TrainingPlans: React.FC = () => {
                   }}
                   className="px-4 py-3 rounded-lg bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase hover:bg-surface-high transition-colors"
                 >
-                  Cancelar
+                  Cancel
                 </button>
               </div>
             </div>
           )}
 
-          {/* Planes activos */}
+          {/* Active plans */}
           {activePlans.length > 0 && (
             <div className="space-y-3">
-              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Activos</span>
+              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Active</span>
               {activePlans.map(plan => (
                 <PlanCard
                   key={plan.id}
@@ -256,21 +256,21 @@ export const TrainingPlans: React.FC = () => {
           {activePlans.length === 0 && !showForm && (
             <div className="bg-surface-low rounded-xl p-8 text-center space-y-3">
               <p className="text-3xl">▣</p>
-              <p className="font-display text-on-surface">Sin planes activos</p>
-              <p className="text-on-surface-variant text-sm">Generá un plan personalizado basado en tus datos biométricos y deportivos.</p>
+              <p className="font-display text-on-surface">No active plans</p>
+              <p className="text-on-surface-variant text-sm">Generate a personalized plan based on your biometric and sports data.</p>
               <button
                 onClick={() => setShowForm(true)}
                 className="mt-2 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
               >
-                Crear mi primer plan
+                Create my first plan
               </button>
             </div>
           )}
 
-          {/* Planes archivados */}
+          {/* Archived plans */}
           {archivedPlans.length > 0 && (
             <div className="space-y-3">
-              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Archivados</span>
+              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Archived</span>
               {archivedPlans.map(plan => (
                 <PlanCard
                   key={plan.id}
@@ -284,24 +284,24 @@ export const TrainingPlans: React.FC = () => {
             </div>
           )}
 
-          {/* Modal confirmación borrar */}
+          {/* Delete confirmation modal */}
           {confirmDelete != null && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
               <div className="bg-surface-low rounded-xl p-6 max-w-sm w-full space-y-4">
-                <p className="font-display text-on-surface">Borrar plan</p>
-                <p className="text-on-surface-variant text-sm">Se borrarán el plan, todas las sesiones y el historial de workouts. Esta acción no se puede deshacer.</p>
+                <p className="font-display text-on-surface">Delete plan</p>
+                <p className="text-on-surface-variant text-sm">The plan, all sessions, and workout history will be deleted. This action cannot be undone.</p>
                 <div className="flex gap-3">
                   <button
                     onClick={async () => { await deletePlan(confirmDelete); setConfirmDelete(null); }}
                     className="flex-1 bg-red-600 text-white font-label text-label-sm tracking-widest uppercase px-4 py-2.5 rounded-lg hover:bg-red-700 transition-colors"
                   >
-                    Borrar
+                    Delete
                   </button>
                   <button
                     onClick={() => setConfirmDelete(null)}
                     className="flex-1 bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase px-4 py-2.5 rounded-lg"
                   >
-                    Cancelar
+                    Cancel
                   </button>
                 </div>
               </div>
@@ -334,7 +334,7 @@ function PlanCard({ plan, onOpen, onArchive, onDelete, archived }: PlanCardProps
           <div className="flex items-center gap-2 mb-1">
             {archived && (
               <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase bg-surface-container px-2 py-0.5 rounded">
-                Archivado
+                Archived
               </span>
             )}
           </div>
@@ -349,14 +349,14 @@ function PlanCard({ plan, onOpen, onArchive, onDelete, archived }: PlanCardProps
               </span>
             )}
             <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-              {plan.sessionCount} sesiones
+              {plan.sessionCount} sessions
             </span>
             <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-              {plan.workoutCount} completados
+              {plan.workoutCount} completed
             </span>
             {plan.lastWorkout && (
               <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-                Último: {formatDate(plan.lastWorkout)}
+                Last: {formatDate(plan.lastWorkout)}
               </span>
             )}
           </div>
@@ -377,14 +377,14 @@ function PlanCard({ plan, onOpen, onArchive, onDelete, archived }: PlanCardProps
                   onClick={() => { setMenuOpen(false); onArchive(); }}
                   className="w-full px-4 py-3 text-left text-sm text-on-surface-variant hover:bg-surface-high transition-colors"
                 >
-                  Archivar
+                  Archive
                 </button>
               )}
               <button
                 onClick={() => { setMenuOpen(false); onDelete(); }}
                 className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-surface-high transition-colors"
               >
-                Borrar
+                Delete
               </button>
             </div>
           )}
