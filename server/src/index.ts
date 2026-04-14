@@ -15,6 +15,8 @@ import aiRoutes from './routes/ai.js';
 import trainingRoutes from './routes/training.js';
 import profileRoutes from './routes/profile.js';
 import nutritionRoutes from './routes/nutrition.js';
+import goalsRoutes from './routes/goals.js';
+import assessmentRoutes from './routes/assessment.js';
 import { startPeriodicSync, syncInitial } from './sync.js';
 import { UPLOAD_DIR } from './lib/upload-dir.js';
 
@@ -43,6 +45,8 @@ app.use('/api/nutrition', nutritionRoutes);
 
 // Uploads estaticos (fotos de comidas)
 app.use('/uploads', express.static(UPLOAD_DIR));
+app.use('/api/goals', goalsRoutes);
+app.use('/api/assessment', assessmentRoutes);
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

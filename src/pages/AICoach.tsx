@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MarkdownText } from '../components/ui/MarkdownText';
+import { TTSButton } from '../components/ui/TTSButton';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -440,8 +441,12 @@ export const AICoach: React.FC = () => {
                   {msg.role === 'assistant' ? (
                     <>
                       <MarkdownText text={msg.content || ' '} />
-                      {msg.streaming && (
+                      {msg.streaming ? (
                         <span className="inline-block w-1.5 h-3.5 bg-primary/70 ml-0.5 animate-pulse rounded-sm" />
+                      ) : (
+                        <div className="flex justify-end mt-1.5">
+                          <TTSButton text={msg.content} />
+                        </div>
                       )}
                     </>
                   ) : (

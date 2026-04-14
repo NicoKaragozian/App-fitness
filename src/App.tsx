@@ -9,6 +9,9 @@ import { TrainingPlans } from './pages/TrainingPlans';
 import { PlanDetail } from './pages/PlanDetail';
 import { ActiveWorkout } from './pages/ActiveWorkout';
 import { Nutrition } from './pages/Nutrition';
+import { Goals } from './pages/Goals';
+import { GoalDetail } from './pages/GoalDetail';
+import { Assessment } from './pages/Assessment';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -26,7 +29,10 @@ function AuthenticatedLayout() {
             <Route path="/sleep" element={<Navigate to="/" replace />} />
             <Route path="/wellness" element={<Navigate to="/" replace />} />
             <Route path="/coach" element={<AICoach />} />
+            <Route path="/goals" element={<Navigate to="/training?tab=goals" replace />} />
+            <Route path="/goals/:id" element={<GoalDetail />} />
             <Route path="/training" element={<TrainingPlans />} />
+            <Route path="/training/profile" element={<Assessment />} />
             <Route path="/training/workout/:id" element={<ActiveWorkout />} />
             <Route path="/training/:id" element={<PlanDetail />} />
             <Route path="/nutrition" element={<Nutrition />} />

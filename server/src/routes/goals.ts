@@ -1,0 +1,156 @@
+import express from 'express';
+import db from '../db.js';
+import { buildGoalContext } from '../ai/context.js';
+import { PROMPTS } from '../ai/prompts.js';
+
+const router = express.Router();
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e2b';
+
+// POST /api/goals/generate
+router.post('/generate', async (req, res) => {
+  const { objective, targetDate, model } = req.body;
+  if (!objective?.trim()) return res.status(400).json({ error: 'objective requerido' });
+  if (!targetDate) return res.status(400).json({ error: 'targetDate requerido' });
+
+  const modelToUse = model && /^[a-zA-Z0-9._:\-/]+$/.test(model) ? model : OLLAMA_MODEL;
+  const context = buildGoalContext(objective, targetDate);
+  const systemPrompt = PROMPTS.goal_plan;
+
+  try {
+    const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelToUse,
+        format: 'json',
+        stream: false,
+        messages: [
+          { role: 'system', content: `${systemPrompt}\n\n${context}` },
+          { role: 'user', content: `Objetivo: ${objective}\nFecha límite: ${targetDate}` },
+        ],
+      }),
+    });
+
+    if (!ollamaRes.ok) {
+      const text = await ollamaRes.text();
+      if (ollamaRes.status === 404) {
+        return res.status(502).json({ error: `Modelo ${modelToUse} no encontrado. Instalalo con: ollama pull ${modelToUse}` });
+      }
+      return res.status(502).json({ error: text });
+    }
+
+    const ollamaData = await ollamaRes.json() as any;
+    const raw = ollamaData.message?.content ?? '';
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return res.status(502).json({ error: 'El modelo no generó JSON válido. Intentá con otro modelo.' });
+    }
+
+    if (!parsed.title || !Array.isArray(parsed.milestones) || parsed.milestones.length === 0) {
+      return res.status(502).json({ error: 'Estructura de plan inválida. Intentá de nuevo.' });
+    }
+
+    const saveGoal = db.transaction(() => {
+      const goalResult = db.prepare(`
+        INSERT INTO goals (title, description, target_date, ai_model, raw_ai_response)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(parsed.title, parsed.description ?? null, targetDate, modelToUse, raw);
+
+      const goalId = goalResult.lastInsertRowid as number;
+      const insertMilestone = db.prepare(`
+        INSERT INTO goal_milestones (goal_id, week_number, title, description, target, workouts, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (let i = 0; i < parsed.milestones.length; i++) {
+        const m = parsed.milestones[i];
+        insertMilestone.run(
+          goalId,
+          m.week ?? i + 1,
+          m.title ?? `Semana ${i + 1}`,
+          m.description ?? null,
+          m.target ?? null,
+          JSON.stringify(Array.isArray(m.workouts) ? m.workouts : []),
+          i
+        );
+      }
+
+      return goalId;
+    });
+
+    const goalId = saveGoal();
+    const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(goalId) as any;
+    const milestones = db.prepare('SELECT * FROM goal_milestones WHERE goal_id = ? ORDER BY sort_order').all(goalId) as any[];
+
+    res.json({ ...goal, milestones });
+  } catch (err: any) {
+    if (err.cause?.code === 'ECONNREFUSED') {
+      return res.status(503).json({ error: 'Ollama no está corriendo. Inicialo con: ollama serve' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/goals
+router.get('/', (req, res) => {
+  const goals = db.prepare(`
+    SELECT g.*,
+      COALESCE(COUNT(m.id), 0) as milestone_count,
+      COALESCE(SUM(m.completed), 0) as completed_count
+    FROM goals g
+    LEFT JOIN goal_milestones m ON m.goal_id = g.id
+    GROUP BY g.id
+    ORDER BY g.created_at DESC
+  `).all() as any[];
+  res.json(goals);
+});
+
+// GET /api/goals/:id
+router.get('/:id', (req, res) => {
+  const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(req.params.id) as any;
+  if (!goal) return res.status(404).json({ error: 'Objetivo no encontrado' });
+  const milestones = db.prepare('SELECT * FROM goal_milestones WHERE goal_id = ? ORDER BY sort_order').all(req.params.id) as any[];
+  res.json({ ...goal, milestones });
+});
+
+// PUT /api/goals/:id
+router.put('/:id', (req, res) => {
+  const updates: string[] = [];
+  const values: any[] = [];
+
+  if (req.body.title !== undefined) { updates.push('title = ?'); values.push(req.body.title); }
+  if (req.body.description !== undefined) { updates.push('description = ?'); values.push(req.body.description); }
+  if (req.body.status !== undefined) { updates.push('status = ?'); values.push(req.body.status); }
+
+  if (updates.length === 0) return res.status(400).json({ error: 'Sin campos para actualizar' });
+
+  updates.push('updated_at = CURRENT_TIMESTAMP');
+  values.push(req.params.id);
+
+  db.prepare(`UPDATE goals SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(req.params.id) as any;
+  res.json(goal);
+});
+
+// DELETE /api/goals/:id
+router.delete('/:id', (req, res) => {
+  db.prepare('DELETE FROM goals WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// PUT /api/goals/:goalId/milestones/:milestoneId
+router.put('/:goalId/milestones/:milestoneId', (req, res) => {
+  const { completed } = req.body;
+  const completedAt = completed ? new Date().toISOString() : null;
+  db.prepare(`
+    UPDATE goal_milestones SET completed = ?, completed_at = ? WHERE id = ? AND goal_id = ?
+  `).run(completed ? 1 : 0, completedAt, req.params.milestoneId, req.params.goalId);
+  const milestone = db.prepare('SELECT * FROM goal_milestones WHERE id = ?').get(req.params.milestoneId) as any;
+  res.json(milestone);
+});
+
+export default router;

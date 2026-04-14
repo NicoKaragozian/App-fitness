@@ -293,10 +293,53 @@ Carga 3d: ${stats.trainingLoad.last3d}min | Carga 7d: ${stats.trainingLoad.last7
   return sections.join('\n\n');
 }
 
+// --- User assessment context ---
+export function getAssessmentContext(): string {
+  const row = db.prepare('SELECT * FROM user_assessment WHERE id = 1').get() as any;
+  if (!row) return '';
+
+  const lines: string[] = [];
+  if (row.name) lines.push(`Nombre: ${row.name}`);
+  if (row.age) lines.push(`Edad: ${row.age} años`);
+  if (row.height) lines.push(`Altura: ${row.height} cm`);
+  if (row.weight) lines.push(`Peso: ${row.weight} kg`);
+  if (row.fitness_level) lines.push(`Nivel fitness: ${row.fitness_level}`);
+
+  if (row.goals) {
+    try { const g = JSON.parse(row.goals); if (g.length > 0) lines.push(`Objetivos de entrenamiento: ${g.join(', ')}`); } catch {}
+  }
+  if (row.goals_other) lines.push(`Otros objetivos: ${row.goals_other}`);
+  if (row.sport_practice) lines.push(`Practica deportes: ${row.sport_practice}`);
+  if (row.sport_name) lines.push(`Deportes que practica: ${row.sport_name}`);
+
+  if (row.available_days) {
+    try { const d = JSON.parse(row.available_days); if (d.length > 0) lines.push(`Días disponibles para entrenar: ${d.join(', ')}`); } catch {}
+  }
+  if (row.session_duration) lines.push(`Duración de sesión disponible: ${row.session_duration} minutos`);
+
+  if (row.equipment) {
+    try { const e = JSON.parse(row.equipment); if (e.length > 0) lines.push(`Equipamiento disponible: ${e.join(', ')}`); } catch {}
+  }
+  if (row.equipment_other) lines.push(`Equipamiento adicional: ${row.equipment_other}`);
+  if (row.injuries_limitations) lines.push(`Lesiones/limitaciones actuales: ${row.injuries_limitations}`);
+  if (row.training_preferences) lines.push(`Preferencias de entrenamiento: ${row.training_preferences}`);
+  if (row.past_injuries_detail) lines.push(`Historial de lesiones: ${row.past_injuries_detail}`);
+  if (row.time_constraints) lines.push(`Restricciones de tiempo: ${row.time_constraints}`);
+  if (row.short_term_goals) lines.push(`Metas a corto plazo: ${row.short_term_goals}`);
+  if (row.long_term_goals) lines.push(`Metas a largo plazo: ${row.long_term_goals}`);
+  if (row.special_considerations) lines.push(`Consideraciones especiales: ${row.special_considerations}`);
+
+  if (lines.length === 0) return '';
+  return `## Perfil del usuario\n${lines.join('\n')}`;
+}
+
 // --- Training plan context ---
 export function buildTrainingContext(goal: string): string {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const sections: string[] = [];
+
+  const assessmentCtx = getAssessmentContext();
+  if (assessmentCtx) sections.push(assessmentCtx);
 
   sections.push(`## Objetivo del usuario\n${goal}`);
 
@@ -375,19 +418,81 @@ export function buildTrainingContext(goal: string): string {
   return sections.join('\n\n');
 }
 
+// --- Goal plan context ---
+export function buildGoalContext(objective: string, targetDate: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const targetMs = new Date(targetDate + 'T12:00:00').getTime();
+  const todayMs = new Date(today + 'T12:00:00').getTime();
+  const weeksUntilTarget = Math.max(1, Math.round((targetMs - todayMs) / (7 * 24 * 60 * 60 * 1000)));
+
+  const sections: string[] = [];
+
+  const assessmentCtx = getAssessmentContext();
+  if (assessmentCtx) sections.push(assessmentCtx);
+
+  sections.push(`## Objetivo del usuario\n${objective}`);
+  sections.push(`## Información temporal\nFecha de hoy: ${today}\nFecha límite: ${targetDate}\nSemanas disponibles: ${weeksUntilTarget}\nNOTA: Generá EXACTAMENTE ${weeksUntilTarget} milestones, uno por semana.`);
+
+  const activities = db.prepare(`
+    SELECT sport_type, start_time, duration, distance, avg_hr
+    FROM activities WHERE start_time >= ? ORDER BY start_time DESC LIMIT 30
+  `).all(cutoff + 'T00:00:00') as any[];
+  if (activities.length > 0) {
+    const lines = activities.map((a: any) => {
+      const dur = a.duration ? `${Math.round(a.duration / 60)}min` : '-';
+      const dist = a.distance ? `${(a.distance / 1000).toFixed(1)}km` : '-';
+      return `${a.start_time.slice(0, 10)} | ${a.sport_type} | ${dur} | ${dist} | FC:${a.avg_hr ?? '-'}bpm`;
+    });
+    sections.push(`## Actividades recientes (30 días)\n${lines.join('\n')}`);
+  }
+
+  const groups = db.prepare('SELECT name, sport_types FROM sport_groups ORDER BY sort_order').all() as any[];
+  if (groups.length > 0) {
+    const groupStr = groups.map((g: any) => `- ${g.name}: ${JSON.parse(g.sport_types ?? '[]').join(', ')}`).join('\n');
+    sections.push(`## Deportes del usuario\n${groupStr}`);
+  }
+
+  const sleep = db.prepare(`
+    SELECT date, score FROM sleep WHERE date >= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 7
+  `).all(cutoff) as any[];
+  if (sleep.length > 0) {
+    const avgScore = Math.round(sleep.reduce((s: number, r: any) => s + r.score, 0) / sleep.length);
+    sections.push(`## Sueño reciente (score promedio: ${avgScore})\n${sleep.map((s: any) => `${s.date} | score:${s.score}`).join('\n')}`);
+  }
+
+  const hrv = db.prepare(`
+    SELECT date, nightly_avg, status FROM hrv
+    WHERE date >= ? AND nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 7
+  `).all(cutoff) as any[];
+  if (hrv.length > 0) {
+    const avgHrv = (hrv.reduce((s: number, r: any) => s + r.nightly_avg, 0) / hrv.length).toFixed(1);
+    sections.push(`## HRV reciente (promedio: ${avgHrv}ms)\n${hrv.map((h: any) => `${h.date} | ${Number(h.nightly_avg).toFixed(1)}ms | ${h.status ?? '-'}`).join('\n')}`);
+  }
+
+  return sections.join('\n\n');
+}
+
 // --- Main dispatcher ---
 export type AnalyzeMode = 'session' | 'sleep' | 'wellness' | 'sport' | 'monthly' | 'daily';
 
 export function buildAnalyzeContext(mode: AnalyzeMode, payload: AnalyzePayload): string {
-  switch (mode) {
-    case 'session': return buildSessionContext(payload);
-    case 'sleep': return buildSleepContext(payload);
-    case 'wellness': return buildWellnessContext(payload);
-    case 'sport': return buildSportContext(payload);
-    case 'monthly': return buildMonthlyContext(payload);
-    case 'daily': return buildDailyContext();
-    default: return '';
-  }
+  const modeContext = (() => {
+    switch (mode) {
+      case 'session': return buildSessionContext(payload);
+      case 'sleep': return buildSleepContext(payload);
+      case 'wellness': return buildWellnessContext(payload);
+      case 'sport': return buildSportContext(payload);
+      case 'monthly': return buildMonthlyContext(payload);
+      case 'daily': return buildDailyContext();
+      default: return '';
+    }
+  })();
+
+  const assessmentCtx = getAssessmentContext();
+  if (!assessmentCtx) return modeContext;
+  return modeContext ? `${assessmentCtx}\n\n${modeContext}` : assessmentCtx;
 }
 
 // Cache key generation

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'DASHBOARD', subtitle: 'DRIFT OVERVIEW' },
   '/sports': { title: 'ANÁLISIS DE DEPORTES', subtitle: 'BIOMETRIC PERFORMANCE OVERVIEW' },
+  '/training/profile': { title: 'MI PERFIL', subtitle: 'ASSESSMENT' },
   '/training': { title: 'TRAINING PLANS', subtitle: 'PLANES PERSONALIZADOS' },
   '/nutrition': { title: 'NUTRICIÓN', subtitle: 'TRACKING DIARIO' },
   '/coach': { title: 'AI COACH', subtitle: 'DRIFT AI' },
@@ -21,6 +22,7 @@ export const Header: React.FC = () => {
   const location = useLocation();
   const pathKey = Object.keys(pageTitles)
     .filter(k => k !== '/')
+    .sort((a, b) => b.length - a.length)
     .find(k => location.pathname === k || location.pathname.startsWith(k + '/'))
     ?? (pageTitles[location.pathname] ? location.pathname : '/');
   const page = pageTitles[pathKey] || pageTitles['/'];

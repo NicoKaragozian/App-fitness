@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import db from '../db.js';
 import { handleAnalyze } from '../ai/index.js';
 import { claudeStreamChat, isClaudeConfigured } from '../ai/claude.js';
+import { getAssessmentContext } from '../ai/context.js';
 
 const router = Router();
 
@@ -78,6 +79,9 @@ function buildContext(needs: ReturnType<typeof detectNeeds>): string {
 - Sesión: "${lastWorkout.session_name}" | Fecha: ${date}`);
     }
   }
+
+  const assessmentCtx = getAssessmentContext();
+  if (assessmentCtx) sections.push(assessmentCtx);
 
   if (needs.activities) {
     const rows = (db.prepare(`
