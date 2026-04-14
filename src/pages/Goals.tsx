@@ -7,6 +7,7 @@ import AIProgressIndicator from '../components/ui/AIProgressIndicator';
 import { GOAL_PROGRESS } from '../utils/aiProgressConfigs';
 
 const SUGGESTIONS = [
+  'Lograr mi primer muscle-up',
   'Hacer 10 dominadas seguidas',
   'Correr 10km en menos de 50 minutos',
   'Mejorar flexibilidad con yoga 3 veces por semana',
@@ -63,12 +64,12 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
   const [menuOpen, setMenuOpen] = useState<number | null>(null);
 
   const handleGenerate = useCallback(async () => {
-    if (!objective.trim() || !targetDate) return;
+    if (!objective.trim()) return;
     setGenerating(true);
     setGenError(null);
     aiProgress.start(GOAL_PROGRESS);
     try {
-      const data = await generateGoal(objective.trim(), targetDate);
+      const data = await generateGoal(objective.trim(), targetDate || undefined);
       aiProgress.complete();
       setTimeout(() => {
         setShowForm(false);
@@ -78,7 +79,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       }, 400);
     } catch (err: any) {
       aiProgress.reset();
-      setGenError(err.message || 'Error generando el plan');
+      setGenError(err.message || 'Error generando la guía');
     } finally {
       setGenerating(false);
     }
@@ -130,7 +131,13 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {/* Generation form */}
       {showForm && (
         <div className="bg-surface-low rounded-xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
-          <p className="font-label text-label-sm text-primary tracking-widest uppercase">Nuevo objetivo</p>
+          <div>
+            <p className="font-label text-label-sm text-primary tracking-widest uppercase">Nuevo objetivo</p>
+            <p className="text-xs text-on-surface-variant mt-1">
+              Los objetivos son guías de progresión: qué trabajar, en qué orden y cómo avanzar.
+              Si querés un plan de entrenamiento con series y repeticiones, usá la sección <span className="text-primary">Planes de Entrenamiento</span>.
+            </p>
+          </div>
 
           {/* Suggestions */}
           <div className="flex flex-wrap gap-2">
@@ -158,15 +165,15 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
               value={objective}
               onChange={e => setObjective(e.target.value)}
               rows={3}
-              placeholder="Describí tu objetivo en detalle. Por ejemplo: quiero llegar a hacer 10 dominadas seguidas sin asistencia."
+              placeholder="Describí tu objetivo en detalle. Por ejemplo: quiero lograr mi primer muscle-up en la barra."
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-on-surface-variant/40"
             />
           </div>
 
-          {/* Target date */}
+          {/* Target date (optional) */}
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1.5 block">
-              Fecha objetivo
+              Fecha objetivo <span className="normal-case text-on-surface-variant/60">(opcional)</span>
             </label>
             <input
               type="date"
@@ -193,10 +200,10 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
 
           <button
             onClick={handleGenerate}
-            disabled={generating || !objective.trim() || !targetDate}
+            disabled={generating || !objective.trim()}
             className="w-full bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
           >
-            {generating ? 'Generando plan…' : 'Generar Plan'}
+            {generating ? 'Generando guía…' : 'Generar Guía'}
           </button>
         </div>
       )}
@@ -206,7 +213,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
         <div className="bg-surface-low rounded-xl p-10 text-center space-y-3">
           <div className="text-4xl opacity-30">◎</div>
           <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Sin objetivos activos</p>
-          <p className="text-sm text-on-surface-variant">Creá tu primer objetivo y la AI va a generar un plan progresivo para lograrlo.</p>
+          <p className="text-sm text-on-surface-variant">Creá tu primer objetivo y la AI va a generar una guía de progresión con fases, ejercicios clave y tips para lograrlo.</p>
         </div>
       )}
 
@@ -252,7 +259,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="bg-surface-low rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-xl">
             <p className="font-display text-lg text-on-surface">¿Eliminar objetivo?</p>
-            <p className="text-sm text-on-surface-variant">Se borrará el objetivo y todos sus hitos. Esta acción no se puede deshacer.</p>
+            <p className="text-sm text-on-surface-variant">Se borrará el objetivo y todas sus fases. Esta acción no se puede deshacer.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
@@ -286,7 +293,7 @@ interface GoalCardProps {
 }
 
 function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon, onDelete, archived }: GoalCardProps) {
-  const countdown = formatCountdown(goal.target_date);
+  const countdown = goal.target_date ? formatCountdown(goal.target_date) : null;
   const progress = goal.milestone_count > 0 ? (goal.completed_count / goal.milestone_count) * 100 : 0;
 
   return (
@@ -317,17 +324,26 @@ function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon,
               />
             </div>
             <span className="font-label text-[10px] text-on-surface-variant tracking-widest shrink-0">
-              {goal.completed_count}/{goal.milestone_count}
+              {goal.completed_count}/{goal.milestone_count} fases
             </span>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <span className={`font-label text-[10px] tracking-widest uppercase ${countdown.urgent ? 'text-yellow-400' : 'text-on-surface-variant'}`}>
-              {countdown.label}
-            </span>
-            <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
-              {formatDate(goal.target_date)}
-            </span>
+            {countdown && (
+              <span className={`font-label text-[10px] tracking-widest uppercase ${countdown.urgent ? 'text-yellow-400' : 'text-on-surface-variant'}`}>
+                {countdown.label}
+              </span>
+            )}
+            {goal.target_date && (
+              <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
+                {formatDate(goal.target_date)}
+              </span>
+            )}
+            {goal.estimated_timeline && !goal.target_date && (
+              <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
+                ~{goal.estimated_timeline}
+              </span>
+            )}
           </div>
         </div>
 

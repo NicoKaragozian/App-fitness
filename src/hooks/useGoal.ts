@@ -7,9 +7,11 @@ export interface GoalMilestone {
   week_number: number;
   title: string;
   description: string | null;
-  target: string | null;
-  workouts: string; // JSON array
-  completed: number; // 0 or 1
+  target: string | null;         // success_criteria
+  workouts: string;              // JSON array of key_exercises
+  duration: string | null;       // estimated phase duration
+  tips: string;                  // JSON array of tips
+  completed: number;             // 0 or 1
   completed_at: string | null;
   sort_order: number;
 }
@@ -18,8 +20,11 @@ export interface GoalDetail {
   id: number;
   title: string;
   description: string | null;
-  target_date: string;
+  target_date: string;           // empty string if not set
   status: string;
+  prerequisites: string;         // JSON array
+  common_mistakes: string;       // JSON array
+  estimated_timeline: string | null;
   ai_model: string | null;
   created_at: string;
   milestones: GoalMilestone[];

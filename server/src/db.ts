@@ -247,7 +247,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     description TEXT,
-    target_date TEXT NOT NULL,
+    target_date TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'active',
     ai_model TEXT,
     raw_ai_response TEXT,
@@ -268,6 +268,12 @@ db.exec(`
     sort_order INTEGER DEFAULT 0
   );
 `);
+// Goals schema migrations
+try { db.exec("ALTER TABLE goals ADD COLUMN prerequisites TEXT DEFAULT '[]'"); } catch { /* ya existe */ }
+try { db.exec("ALTER TABLE goals ADD COLUMN common_mistakes TEXT DEFAULT '[]'"); } catch { /* ya existe */ }
+try { db.exec('ALTER TABLE goals ADD COLUMN estimated_timeline TEXT'); } catch { /* ya existe */ }
+try { db.exec('ALTER TABLE goal_milestones ADD COLUMN duration TEXT'); } catch { /* ya existe */ }
+try { db.exec("ALTER TABLE goal_milestones ADD COLUMN tips TEXT DEFAULT '[]'"); } catch { /* ya existe */ }
 
 // User assessment table (single-row, id always = 1)
 db.exec(`

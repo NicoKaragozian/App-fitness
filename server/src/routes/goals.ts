@@ -11,7 +11,6 @@ const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 router.post('/generate', async (req, res) => {
   const { objective, targetDate } = req.body;
   if (!objective?.trim()) return res.status(400).json({ error: 'objective requerido' });
-  if (!targetDate) return res.status(400).json({ error: 'targetDate requerido' });
 
   if (!isClaudeConfigured()) {
     return res.status(503).json({ error: 'Claude API no configurada. Agregá ANTHROPIC_API_KEY en el .env' });
@@ -23,41 +22,63 @@ router.post('/generate', async (req, res) => {
   try {
     const raw = await claudeChat(
       `${systemPrompt}\n\n${context}`,
-      `Objetivo: ${objective}\nFecha límite: ${targetDate}`
+      `Objetivo: ${objective}${targetDate ? `\nFecha límite: ${targetDate}` : ''}`
     );
 
     let parsed: any;
     try {
-      parsed = JSON.parse(raw);
+      let jsonStr = raw.trim();
+      // Strip markdown fences (Claude sometimes wraps with ```json ... ```)
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
+      }
+      // Fallback: extract from first { to last }
+      if (!jsonStr.startsWith('{')) {
+        const first = jsonStr.indexOf('{');
+        const last = jsonStr.lastIndexOf('}');
+        if (first >= 0 && last > first) jsonStr = jsonStr.slice(first, last + 1);
+      }
+      parsed = JSON.parse(jsonStr);
     } catch {
       return res.status(502).json({ error: 'Claude no generó JSON válido. Intentá de nuevo.' });
     }
 
-    if (!parsed.title || !Array.isArray(parsed.milestones) || parsed.milestones.length === 0) {
-      return res.status(502).json({ error: 'Estructura de plan inválida. Intentá de nuevo.' });
+    if (!parsed.title || !Array.isArray(parsed.phases) || parsed.phases.length === 0) {
+      return res.status(502).json({ error: 'Estructura de guía inválida. Intentá de nuevo.' });
     }
 
     const saveGoal = db.transaction(() => {
       const goalResult = db.prepare(`
-        INSERT INTO goals (title, description, target_date, ai_model, raw_ai_response)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(parsed.title, parsed.description ?? null, targetDate, CLAUDE_MODEL, raw);
+        INSERT INTO goals (title, description, target_date, prerequisites, common_mistakes, estimated_timeline, ai_model, raw_ai_response)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        parsed.title,
+        parsed.description ?? null,
+        targetDate || '',
+        JSON.stringify(Array.isArray(parsed.prerequisites) ? parsed.prerequisites : []),
+        JSON.stringify(Array.isArray(parsed.common_mistakes) ? parsed.common_mistakes : []),
+        parsed.estimated_timeline ?? null,
+        CLAUDE_MODEL,
+        raw
+      );
 
       const goalId = goalResult.lastInsertRowid as number;
-      const insertMilestone = db.prepare(`
-        INSERT INTO goal_milestones (goal_id, week_number, title, description, target, workouts, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+      const insertPhase = db.prepare(`
+        INSERT INTO goal_milestones (goal_id, week_number, title, description, target, workouts, duration, tips, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      for (let i = 0; i < parsed.milestones.length; i++) {
-        const m = parsed.milestones[i];
-        insertMilestone.run(
+      for (let i = 0; i < parsed.phases.length; i++) {
+        const p = parsed.phases[i];
+        insertPhase.run(
           goalId,
-          m.week ?? i + 1,
-          m.title ?? `Semana ${i + 1}`,
-          m.description ?? null,
-          m.target ?? null,
-          JSON.stringify(Array.isArray(m.workouts) ? m.workouts : []),
+          p.phase ?? i + 1,
+          p.title ?? `Fase ${i + 1}`,
+          p.description ?? null,
+          p.success_criteria ?? null,
+          JSON.stringify(Array.isArray(p.key_exercises) ? p.key_exercises : []),
+          p.duration ?? null,
+          JSON.stringify(Array.isArray(p.tips) ? p.tips : []),
           i
         );
       }

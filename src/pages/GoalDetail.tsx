@@ -33,29 +33,44 @@ export const GoalDetail: React.FC = () => {
   const goalId = id ? parseInt(id) : null;
   const { goal, loading, toggleMilestone, updateStatus } = useGoal(goalId);
 
-  const countdown = goal ? formatCountdown(goal.target_date) : null;
+  const hasTargetDate = goal?.target_date && goal.target_date !== '';
+  const countdown = hasTargetDate ? formatCountdown(goal!.target_date) : null;
 
   const completedCount = goal?.milestones.filter(m => m.completed).length ?? 0;
   const totalCount = goal?.milestones.length ?? 0;
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
 
-  // Build TTS text for the full plan
+  const prerequisites: string[] = useMemo(() => {
+    if (!goal?.prerequisites) return [];
+    try { return JSON.parse(goal.prerequisites); } catch { return []; }
+  }, [goal?.prerequisites]);
+
+  const commonMistakes: string[] = useMemo(() => {
+    if (!goal?.common_mistakes) return [];
+    try { return JSON.parse(goal.common_mistakes); } catch { return []; }
+  }, [goal?.common_mistakes]);
+
+  // Build TTS text for the full guide
   const planText = useMemo(() => {
     if (!goal) return '';
     const lines: string[] = [goal.title];
     if (goal.description) lines.push(goal.description);
-    lines.push(`Plan de ${totalCount} semanas hasta el ${formatDate(goal.target_date)}.`);
+    if (goal.estimated_timeline) lines.push(`Tiempo estimado: ${goal.estimated_timeline}.`);
+    if (prerequisites.length > 0) lines.push(`Prerequisitos: ${prerequisites.join('. ')}.`);
     for (const m of goal.milestones) {
-      const workouts: string[] = JSON.parse(m.workouts || '[]');
+      const keyExercises: string[] = JSON.parse(m.workouts || '[]');
+      const tips: string[] = JSON.parse(m.tips || '[]');
       lines.push(
-        `Semana ${m.week_number}: ${m.title}.` +
+        `Fase ${m.week_number}: ${m.title}.` +
         (m.description ? ` ${m.description}` : '') +
-        (m.target ? ` Meta: ${m.target}.` : '') +
-        (workouts.length > 0 ? ` ${workouts.join('. ')}.` : '')
+        (m.target ? ` Criterio de avance: ${m.target}.` : '') +
+        (keyExercises.length > 0 ? ` Ejercicios clave: ${keyExercises.join(', ')}.` : '') +
+        (tips.length > 0 ? ` Tips: ${tips.join('. ')}.` : '')
       );
     }
+    if (commonMistakes.length > 0) lines.push(`Errores comunes: ${commonMistakes.join('. ')}.`);
     return lines.join('\n');
-  }, [goal, totalCount]);
+  }, [goal, prerequisites, commonMistakes]);
 
   if (loading) {
     return (
@@ -91,7 +106,7 @@ export const GoalDetail: React.FC = () => {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <span className="font-label text-label-sm text-primary tracking-widest uppercase">Objetivo</span>
+              <span className="font-label text-label-sm text-primary tracking-widest uppercase">Guía de Progresión</span>
               {goal.status !== 'active' && (
                 <span className={`font-label text-[10px] tracking-widest uppercase px-2 py-0.5 rounded ${
                   goal.status === 'completed' ? 'text-green-400 bg-green-400/10' : 'text-on-surface-variant bg-surface-container'
@@ -109,17 +124,31 @@ export const GoalDetail: React.FC = () => {
           <p className="text-on-surface-variant text-sm leading-relaxed">{goal.description}</p>
         )}
 
+        {/* Timeline + deadline */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {goal.estimated_timeline && (
+            <span className="font-label text-[10px] text-primary/80 tracking-widest uppercase bg-primary/10 px-2 py-0.5 rounded">
+              ~{goal.estimated_timeline}
+            </span>
+          )}
+          {hasTargetDate && countdown && (
+            <span className={`font-label text-[10px] tracking-widest uppercase ${countdown.urgent ? 'text-yellow-400' : 'text-on-surface-variant'}`}>
+              {countdown.label}
+            </span>
+          )}
+          {hasTargetDate && (
+            <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
+              Fecha límite: {formatDate(goal.target_date)}
+            </span>
+          )}
+        </div>
+
         {/* Progress bar */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
-              {completedCount}/{totalCount} semanas completadas
+              {completedCount}/{totalCount} fases completadas
             </span>
-            {countdown && (
-              <span className={`font-label text-[10px] tracking-widest uppercase ${countdown.urgent ? 'text-yellow-400' : 'text-on-surface-variant'}`}>
-                {countdown.label}
-              </span>
-            )}
           </div>
           <div className="w-full h-2 bg-surface-container rounded-full overflow-hidden">
             <div
@@ -127,9 +156,6 @@ export const GoalDetail: React.FC = () => {
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
-            Fecha límite: {formatDate(goal.target_date)}
-          </p>
         </div>
 
         {/* Status actions */}
@@ -159,13 +185,28 @@ export const GoalDetail: React.FC = () => {
         )}
       </div>
 
-      {/* Milestone timeline */}
+      {/* Prerequisites */}
+      {prerequisites.length > 0 && (
+        <div className="bg-surface-low rounded-xl p-4 space-y-2">
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Antes de empezar</p>
+          <ul className="space-y-1.5">
+            {prerequisites.map((p, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-on-surface-variant">
+                <span className="text-primary/60 shrink-0 mt-0.5">◦</span>
+                <span>{p}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Phases */}
       <div className="space-y-3">
         <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase px-1">
-          Plan semanal
+          Fases de progresión
         </p>
         {goal.milestones.map(milestone => (
-          <MilestoneCard
+          <PhaseCard
             key={milestone.id}
             milestone={milestone}
             onToggle={completed => toggleMilestone(milestone.id, completed)}
@@ -173,24 +214,56 @@ export const GoalDetail: React.FC = () => {
           />
         ))}
       </div>
+
+      {/* Common Mistakes */}
+      {commonMistakes.length > 0 && (
+        <div className="bg-surface-low rounded-xl p-4 space-y-2 border border-yellow-400/10">
+          <p className="font-label text-label-sm text-yellow-400/80 tracking-widest uppercase">Errores comunes</p>
+          <ul className="space-y-1.5">
+            {commonMistakes.map((m, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-on-surface-variant">
+                <span className="text-yellow-400/50 shrink-0 mt-0.5">!</span>
+                <span>{m}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* CTA: Create Training Plan */}
+      <div className="bg-surface-low rounded-xl p-5 space-y-3 border border-primary/20">
+        <div>
+          <p className="font-label text-label-sm text-primary tracking-widest uppercase">¿Querés entrenar para este objetivo?</p>
+          <p className="text-sm text-on-surface-variant mt-1">
+            Esta guía te muestra el camino. Si querés un plan de entrenamiento estructurado con sesiones, series y repeticiones, generalo en Planes de Entrenamiento.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate('/training', { state: { prefillGoal: `${goal.title}: ${goal.description ?? goal.title}` } })}
+          className="w-full bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl hover:opacity-90 transition-opacity"
+        >
+          Crear Plan de Entrenamiento
+        </button>
+      </div>
     </div>
   );
 };
 
-interface MilestoneCardProps {
+interface PhaseCardProps {
   milestone: GoalMilestone;
   onToggle: (completed: boolean) => void;
   disabled: boolean;
 }
 
-function MilestoneCard({ milestone, onToggle, disabled }: MilestoneCardProps) {
+function PhaseCard({ milestone, onToggle, disabled }: PhaseCardProps) {
   const completed = milestone.completed === 1;
-  const workouts: string[] = JSON.parse(milestone.workouts || '[]');
+  const keyExercises: string[] = JSON.parse(milestone.workouts || '[]');
+  const tips: string[] = JSON.parse(milestone.tips || '[]');
 
   return (
     <div className={`bg-surface-low rounded-xl p-4 transition-opacity ${completed ? 'opacity-75' : ''}`}>
       <div className="flex items-start gap-3">
-        {/* Week badge */}
+        {/* Phase badge */}
         <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-display font-bold text-sm ${
           completed ? 'bg-primary/20 text-primary' : 'bg-surface-container text-on-surface-variant'
         }`}>
@@ -201,29 +274,59 @@ function MilestoneCard({ milestone, onToggle, disabled }: MilestoneCardProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1">
-              <p className={`font-medium text-sm mb-0.5 ${completed ? 'line-through text-on-surface-variant' : 'text-on-surface'}`}>
-                {milestone.title}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                <p className={`font-medium text-sm ${completed ? 'line-through text-on-surface-variant' : 'text-on-surface'}`}>
+                  {milestone.title}
+                </p>
+                {milestone.duration && (
+                  <span className="font-label text-[10px] text-on-surface-variant tracking-widest bg-surface-container px-2 py-0.5 rounded">
+                    {milestone.duration}
+                  </span>
+                )}
+              </div>
+
               {milestone.description && (
-                <p className="text-on-surface-variant text-xs leading-relaxed mb-1.5">
+                <p className="text-on-surface-variant text-xs leading-relaxed mb-2">
                   {milestone.description}
                 </p>
               )}
+
+              {/* Key exercises */}
+              {keyExercises.length > 0 && (
+                <div className="mb-2">
+                  <p className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1">Ejercicios clave</p>
+                  <ul className="space-y-1">
+                    {keyExercises.map((ex, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs text-on-surface-variant">
+                        <span className="text-primary/50 mt-0.5 shrink-0">·</span>
+                        <span>{ex}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Success criteria */}
               {milestone.target && (
                 <div className="inline-flex items-center gap-1.5 bg-primary/10 rounded-lg px-2.5 py-1 mb-2">
                   <span className="text-primary text-[10px]">◎</span>
                   <span className="font-label text-[10px] text-primary tracking-wide">{milestone.target}</span>
                 </div>
               )}
-              {workouts.length > 0 && (
-                <ul className="space-y-1">
-                  {workouts.map((w, i) => (
-                    <li key={i} className="flex items-start gap-1.5 text-xs text-on-surface-variant">
-                      <span className="text-primary/50 mt-0.5 shrink-0">·</span>
-                      <span>{w}</span>
-                    </li>
-                  ))}
-                </ul>
+
+              {/* Tips */}
+              {tips.length > 0 && (
+                <div>
+                  <p className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1">Tips</p>
+                  <ul className="space-y-1">
+                    {tips.map((tip, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs text-on-surface-variant/80">
+                        <span className="text-yellow-400/50 mt-0.5 shrink-0">→</span>
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
 

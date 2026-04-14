@@ -5,8 +5,11 @@ export interface Goal {
   id: number;
   title: string;
   description: string | null;
-  target_date: string;
+  target_date: string;           // empty string if not set
   status: 'active' | 'completed' | 'abandoned';
+  prerequisites: string;         // JSON array
+  common_mistakes: string;       // JSON array
+  estimated_timeline: string | null;
   ai_model: string | null;
   created_at: string;
   updated_at: string;
@@ -31,7 +34,7 @@ export function useGoals() {
 
   useEffect(() => { fetchGoals(); }, [fetchGoals]);
 
-  const generateGoal = useCallback(async (objective: string, targetDate: string) => {
+  const generateGoal = useCallback(async (objective: string, targetDate?: string) => {
     const data = await apiFetch<Goal & { milestones: any[] }>('/goals/generate', {
       method: 'POST',
       body: JSON.stringify({ objective, targetDate }),

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 import db from '../db.js';
 import { claudeVisionStream, claudeStreamGenerate, isClaudeConfigured } from '../ai/claude.js';
 import { PROMPTS } from '../ai/prompts.js';
@@ -52,15 +53,16 @@ const upload = multer({
   },
 });
 
-function getImageMediaType(mimetype: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
-  const map: Record<string, 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'> = {
-    'image/jpeg': 'image/jpeg',
-    'image/jpg': 'image/jpeg',
-    'image/png': 'image/png',
-    'image/webp': 'image/webp',
-    'image/gif': 'image/gif',
-  };
-  return map[mimetype] || 'image/jpeg';
+const CLAUDE_SUPPORTED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+async function toClaudeCompatible(filePath: string, mimetype: string): Promise<{ base64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' }> {
+  if (CLAUDE_SUPPORTED.has(mimetype)) {
+    const base64 = fs.readFileSync(filePath).toString('base64');
+    return { base64, mediaType: mimetype as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' };
+  }
+  // Convertir formatos no soportados (AVIF, HEIC, BMP, TIFF, etc.) a JPEG
+  const jpegBuffer = await sharp(filePath).jpeg({ quality: 90 }).toBuffer();
+  return { base64: jpegBuffer.toString('base64'), mediaType: 'image/jpeg' };
 }
 
 // POST /api/nutrition/analyze — Analisis de foto con Claude Vision (streaming SSE)
@@ -77,9 +79,7 @@ router.post('/analyze', upload.single('image'), async (req: Request, res: Respon
   }
 
   try {
-    const imageBuffer = fs.readFileSync(req.file.path);
-    const imageBase64 = imageBuffer.toString('base64');
-    const mediaType = getImageMediaType(req.file.mimetype);
+    const { base64: imageBase64, mediaType } = await toClaudeCompatible(req.file.path, req.file.mimetype);
     const imagePath = path.basename(req.file.path);
 
     await claudeVisionStream(

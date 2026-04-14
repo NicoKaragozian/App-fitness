@@ -32,9 +32,9 @@ export const GOAL_PROGRESS: AIProgressConfig = {
   phases: [
     { at: 0,  label: 'Conectando con Claude...' },
     { at: 10, label: 'Analizando tu objetivo...' },
-    { at: 30, label: 'Diseñando hitos semanales...' },
-    { at: 55, label: 'Armando la progresión...' },
-    { at: 80, label: 'Finalizando plan...' },
+    { at: 30, label: 'Definiendo fases de progresión...' },
+    { at: 55, label: 'Identificando ejercicios clave...' },
+    { at: 80, label: 'Finalizando guía...' },
   ],
 };
 

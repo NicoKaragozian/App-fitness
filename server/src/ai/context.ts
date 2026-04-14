@@ -419,13 +419,9 @@ export function buildTrainingContext(goal: string): string {
 }
 
 // --- Goal plan context ---
-export function buildGoalContext(objective: string, targetDate: string): string {
+export function buildGoalContext(objective: string, targetDate?: string): string {
   const today = new Date().toISOString().slice(0, 10);
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-  const targetMs = new Date(targetDate + 'T12:00:00').getTime();
-  const todayMs = new Date(today + 'T12:00:00').getTime();
-  const weeksUntilTarget = Math.max(1, Math.round((targetMs - todayMs) / (7 * 24 * 60 * 60 * 1000)));
 
   const sections: string[] = [];
 
@@ -433,7 +429,15 @@ export function buildGoalContext(objective: string, targetDate: string): string 
   if (assessmentCtx) sections.push(assessmentCtx);
 
   sections.push(`## Objetivo del usuario\n${objective}`);
-  sections.push(`## Información temporal\nFecha de hoy: ${today}\nFecha límite: ${targetDate}\nSemanas disponibles: ${weeksUntilTarget}\nNOTA: Generá EXACTAMENTE ${weeksUntilTarget} milestones, uno por semana.`);
+
+  if (targetDate) {
+    const targetMs = new Date(targetDate + 'T12:00:00').getTime();
+    const todayMs = new Date(today + 'T12:00:00').getTime();
+    const weeksUntilTarget = Math.max(1, Math.round((targetMs - todayMs) / (7 * 24 * 60 * 60 * 1000)));
+    sections.push(`## Información temporal\nFecha de hoy: ${today}\nFecha límite (orientativa): ${targetDate}\nSemanas aproximadas disponibles: ${weeksUntilTarget}\nTené en cuenta este tiempo al definir la duración de cada fase.`);
+  } else {
+    sections.push(`## Información temporal\nFecha de hoy: ${today}\nSin fecha límite definida. Usá duraciones realistas para el objetivo.`);
+  }
 
   const activities = db.prepare(`
     SELECT sport_type, start_time, duration, distance, avg_hr

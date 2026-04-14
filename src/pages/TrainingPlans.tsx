@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useTrainingPlans } from '../hooks/useTrainingPlans';
 import { useAssessment } from '../hooks/useAssessment';
 import { useAIProgress } from '../hooks/useAIProgress';
@@ -21,6 +21,7 @@ function formatDate(iso: string) {
 
 export const TrainingPlans: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') ?? 'plans';
 
@@ -33,6 +34,17 @@ export const TrainingPlans: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+
+  // Pre-fill from Goals CTA navigation
+  useEffect(() => {
+    const state = location.state as { prefillGoal?: string } | null;
+    if (state?.prefillGoal) {
+      setGoal(state.prefillGoal);
+      setShowForm(true);
+      // Clear state so it doesn't re-trigger on navigation
+      navigate(location.pathname + location.search, { replace: true, state: {} });
+    }
+  }, []);
 
   const activePlans = plans.filter(p => p.status === 'active');
   const archivedPlans = plans.filter(p => p.status === 'archived');
