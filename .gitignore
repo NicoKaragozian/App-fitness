@@ -30,6 +30,7 @@ server/drift.db-wal
 server/.garmin-session.json
 server/oauth1_token.json
 server/oauth2_token.json
+server/uploads/
 .env
 
 # Claude settings

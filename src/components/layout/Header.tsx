@@ -7,6 +7,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/sports': { title: 'ANÁLISIS DE DEPORTES', subtitle: 'BIOMETRIC PERFORMANCE OVERVIEW' },
   '/training/profile': { title: 'MI PERFIL', subtitle: 'ASSESSMENT' },
   '/training': { title: 'TRAINING PLANS', subtitle: 'PLANES PERSONALIZADOS' },
+  '/nutrition': { title: 'NUTRICIÓN', subtitle: 'TRACKING DIARIO' },
   '/coach': { title: 'AI COACH', subtitle: 'DRIFT AI' },
 };
 

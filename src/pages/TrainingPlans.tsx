@@ -4,13 +4,6 @@ import { useTrainingPlans } from '../hooks/useTrainingPlans';
 import { useAssessment } from '../hooks/useAssessment';
 import { Goals } from './Goals';
 
-const MODELS = [
-  { id: 'gemma3:4b', label: 'G3 · 4B', badge: 'Rápido' },
-  { id: 'gemma3:12b', label: 'G3 · 12B', badge: 'Potente' },
-  { id: 'gemma4:26b', label: 'G4 · 26B', badge: 'Top' },
-  { id: 'gemma4:e2b', label: 'G4 · E2B', badge: 'Mobile' },
-];
-
 const PRESETS = [
   'Plan de fuerza funcional para complementar deportes acuáticos y raqueta',
   'Plan de hipertrofia con 3 sesiones semanales',
@@ -27,16 +20,13 @@ export const TrainingPlans: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') ?? 'plans';
 
-  const { plans, loading, generatePlan, archivePlan, deletePlan } = useTrainingPlans();
+  const { plans, loading, generatePlanStream, stopGeneration, archivePlan, deletePlan } = useTrainingPlans();
   const { assessment, loading: assessmentLoading } = useAssessment();
-
   const [showForm, setShowForm] = useState(false);
   const [goal, setGoal] = useState('');
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState(() =>
-    localStorage.getItem('drift_ai_model') ?? 'gemma3:4b'
-  );
+  const [thinkingText, setThinkingText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const activePlans = plans.filter(p => p.status === 'active');
@@ -45,12 +35,17 @@ export const TrainingPlans: React.FC = () => {
   const handleGenerate = async () => {
     if (!goal.trim()) return;
     setGenerating(true);
+    setThinkingText('');
     setGenError(null);
     try {
-      const result = await generatePlan(goal.trim(), selectedModel);
+      const result = await generatePlanStream(goal.trim(), (text) => {
+        setThinkingText(text);
+      });
       navigate(`/training/${result.plan.id}`);
     } catch (err: any) {
-      setGenError(err.message || 'Error generando el plan');
+      if (err.name !== 'AbortError') {
+        setGenError(err.message || 'Error generando el plan');
+      }
     } finally {
       setGenerating(false);
     }
@@ -174,26 +169,16 @@ export const TrainingPlans: React.FC = () => {
                 rows={3}
                 className="w-full bg-surface-container rounded-lg px-4 py-3 text-on-surface text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder-on-surface-variant"
               />
-
-              {/* Selector de modelo */}
-              <div className="flex flex-wrap gap-2">
-                {MODELS.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => { setSelectedModel(m.id); localStorage.setItem('drift_ai_model', m.id); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-label tracking-wide transition-colors ${
-                      selectedModel === m.id
-                        ? 'bg-primary text-surface'
-                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-high'
-                    }`}
-                  >
-                    {m.label}
-                    <span className={`text-[10px] px-1 rounded ${selectedModel === m.id ? 'bg-surface/20' : 'bg-surface-high'}`}>
-                      {m.badge}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              {/* Texto de análisis en streaming */}
+              {generating && thinkingText && (
+                <div className="bg-surface-container rounded-lg px-4 py-3 space-y-1.5">
+                  <p className="font-label text-[10px] text-primary tracking-widest uppercase">Analizando tus datos...</p>
+                  <p className="text-on-surface-variant text-sm whitespace-pre-line leading-relaxed">
+                    {thinkingText}
+                    <span className="animate-pulse">▍</span>
+                  </p>
+                </div>
+              )}
 
               {genError && (
                 <p className="text-red-400 text-sm bg-red-950/30 rounded-lg px-4 py-2">{genError}</p>
@@ -213,8 +198,16 @@ export const TrainingPlans: React.FC = () => {
                   ) : 'Generar Plan'}
                 </button>
                 <button
-                  onClick={() => { setShowForm(false); setGoal(''); setGenError(null); }}
-                  disabled={generating}
+                  onClick={() => {
+                    if (generating) {
+                      stopGeneration();
+                    } else {
+                      setShowForm(false);
+                      setGoal('');
+                      setGenError(null);
+                      setThinkingText('');
+                    }
+                  }}
                   className="px-4 py-3 rounded-lg bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase hover:bg-surface-high transition-colors"
                 >
                   Cancelar

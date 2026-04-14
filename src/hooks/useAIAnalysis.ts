@@ -10,16 +10,6 @@ interface AnalysisState {
   generatedAt: string | null;
 }
 
-const STORAGE_KEY = 'drift_ai_model';
-
-function getModel(): string {
-  try {
-    return localStorage.getItem(STORAGE_KEY) || 'gemma4:e2b';
-  } catch {
-    return 'gemma4:e2b';
-  }
-}
-
 export function useAIAnalysis(mode: AnalyzeMode, payload: Record<string, string> = {}) {
   const [state, setState] = useState<AnalysisState>({
     content: '',
@@ -42,7 +32,7 @@ export function useAIAnalysis(mode: AnalyzeMode, payload: Record<string, string>
       const res = await fetch('/api/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, payload, model: getModel(), force }),
+        body: JSON.stringify({ mode, payload, force }),
         signal: controller.signal,
       });
 

@@ -280,6 +280,16 @@ Carga 3d: ${stats.trainingLoad.last3d}min | Carga 7d: ${stats.trainingLoad.last7
     sections.push(`## Plan para hoy (${todayName})\n${planStr}`);
   }
 
+  // Nutricion de hoy
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const nutritionToday = db.prepare(`
+    SELECT SUM(calories) as cals, SUM(protein_g) as prot, SUM(carbs_g) as carbs, SUM(fat_g) as fat, COUNT(*) as meals
+    FROM nutrition_logs WHERE date = ?
+  `).get(todayStr) as any;
+  if (nutritionToday?.meals > 0) {
+    sections.push(`## Nutrición de hoy\n${nutritionToday.meals} comidas | ${nutritionToday.cals || 0}kcal | prot:${nutritionToday.prot || 0}g | carbs:${nutritionToday.carbs || 0}g | grasa:${nutritionToday.fat || 0}g`);
+  }
+
   return sections.join('\n\n');
 }
 
@@ -390,6 +400,19 @@ export function buildTrainingContext(goal: string): string {
   if (stress.length > 0) {
     const avgStress = Math.round(stress.reduce((s: number, r: any) => s + r.avg_stress, 0) / stress.length);
     sections.push(`## Estrés reciente (promedio: ${avgStress})\n${stress.map((s: any) => `${s.date} | ${s.avg_stress}`).join('\n')}`);
+  }
+
+  // Ingesta nutricional promedio 7 dias (relevante para training plan — proteina/kg)
+  const nutritionRows = db.prepare(`
+    SELECT SUM(calories) as cals, SUM(protein_g) as prot, SUM(carbs_g) as carbs, SUM(fat_g) as fat, COUNT(DISTINCT date) as days
+    FROM nutrition_logs WHERE date >= ?
+  `).get(cutoff) as any;
+  if (nutritionRows?.days > 0) {
+    const avgCals = Math.round(nutritionRows.cals / nutritionRows.days);
+    const avgProt = Math.round(nutritionRows.prot / nutritionRows.days);
+    const avgCarbs = Math.round(nutritionRows.carbs / nutritionRows.days);
+    const avgFat = Math.round(nutritionRows.fat / nutritionRows.days);
+    sections.push(`## Ingesta nutricional promedio (${nutritionRows.days} dias con registro)\n${avgCals}kcal/dia | prot:${avgProt}g | carbs:${avgCarbs}g | grasa:${avgFat}g`);
   }
 
   return sections.join('\n\n');

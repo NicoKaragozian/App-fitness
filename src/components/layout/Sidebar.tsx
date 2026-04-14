@@ -6,6 +6,7 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: '◉' },
   { path: '/sports', label: 'Sports', icon: '⚡' },
   { path: '/training', label: 'Training', icon: '▣' },
+  { path: '/nutrition', label: 'Nutrition', icon: '◈' },
   { path: '/coach', label: 'AI Coach', icon: '◎' },
 ];
 

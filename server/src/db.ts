@@ -150,6 +150,77 @@ db.exec(`
     notes TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS user_profile (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    has_wearable INTEGER DEFAULT 0,
+    name TEXT,
+    age INTEGER,
+    sex TEXT,
+    height_cm INTEGER,
+    weight_kg REAL,
+    experience_level TEXT,
+    primary_goal TEXT,
+    secondary_goals TEXT,
+    sports TEXT,
+    training_days_per_week INTEGER,
+    session_duration_min INTEGER,
+    equipment TEXT,
+    injuries TEXT,
+    dietary_preferences TEXT,
+    daily_calorie_target INTEGER,
+    daily_protein_g INTEGER,
+    daily_carbs_g INTEGER,
+    daily_fat_g INTEGER,
+    onboarded_at TEXT,
+    updated_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS nutrition_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    logged_at TEXT,
+    meal_slot TEXT,
+    meal_name TEXT,
+    description TEXT,
+    calories INTEGER,
+    protein_g INTEGER,
+    carbs_g INTEGER,
+    fat_g INTEGER,
+    fiber_g INTEGER,
+    image_path TEXT,
+    ai_model TEXT,
+    ai_confidence TEXT,
+    raw_ai_response TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_nutrition_logs_date ON nutrition_logs(date);
+
+  CREATE TABLE IF NOT EXISTS nutrition_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    training_plan_id INTEGER,
+    title TEXT,
+    daily_calories INTEGER,
+    daily_protein_g INTEGER,
+    daily_carbs_g INTEGER,
+    daily_fat_g INTEGER,
+    strategy TEXT,
+    rationale TEXT,
+    ai_model TEXT,
+    raw_ai_response TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS nutrition_plan_meals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL REFERENCES nutrition_plans(id) ON DELETE CASCADE,
+    slot TEXT,
+    name TEXT,
+    description TEXT,
+    calories INTEGER,
+    protein_g INTEGER,
+    carbs_g INTEGER,
+    fat_g INTEGER
+  );
+
 `);
 
 // Migration: agregar columna description a training_exercises si no existe
@@ -163,6 +234,11 @@ try {
 } catch { /* ya existe */ }
 try {
   db.exec('ALTER TABLE weekly_plan ADD COLUMN session_id INTEGER');
+} catch { /* ya existe */ }
+
+// Migration: agregar option_number a nutrition_plan_meals (para multiples opciones por slot)
+try {
+  db.exec('ALTER TABLE nutrition_plan_meals ADD COLUMN option_number INTEGER DEFAULT 1');
 } catch { /* ya existe */ }
 
 // Goals tables

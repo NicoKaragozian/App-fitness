@@ -112,6 +112,7 @@ async function getOAuth2Token(
 
 async function main() {
   console.log('\n=== Garmin Token Fetcher ===\n');
+  console.log(`OUTPUT_DIR = ${path.resolve(OUTPUT_DIR)}`);
   console.log('Abriendo browser... Logueate en Garmin Connect y esperá que cargue el dashboard.');
   console.log('El script detecta el ticket automáticamente.\n');
 
@@ -176,9 +177,11 @@ async function main() {
   fs.writeFileSync(oauth1Path, JSON.stringify(oauth1Token, null, 2));
   fs.writeFileSync(oauth2Path, JSON.stringify(oauth2Token, null, 2));
 
+  const verify1 = fs.existsSync(oauth1Path);
+  const verify2 = fs.existsSync(oauth2Path);
   console.log(`\n✓ Tokens guardados en:`);
-  console.log(`  ${oauth1Path}`);
-  console.log(`  ${oauth2Path}`);
+  console.log(`  ${path.resolve(oauth1Path)} (existe: ${verify1})`);
+  console.log(`  ${path.resolve(oauth2Path)} (existe: ${verify2})`);
   console.log('\nAhora levantá el servidor — se va a conectar automáticamente.\n');
 }
 
