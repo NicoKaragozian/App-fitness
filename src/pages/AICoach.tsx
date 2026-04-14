@@ -16,19 +16,20 @@ interface ChatSession {
   createdAt: string;
 }
 
-const MODELS = [
-  { id: 'gemma3:4b', label: 'G3 · 4B', badge: 'Rápido' },
-  { id: 'gemma3:12b', label: 'G3 · 12B', badge: 'Potente' },
-  { id: 'gemma4:26b', label: 'G4 · 26B', badge: 'Top Local' },
-  { id: 'gemma4:e2b', label: 'G4 · E2B', badge: 'Mobile' },
-];
-
 const SUGGESTIONS = [
   '¿Cómo estuvo mi sueño esta semana?',
-  '¿Cuándo fue mi última sesión de tenis?',
   '¿Cómo está mi recuperación según el HRV?',
-  '¿El estrés afectó mi rendimiento deportivo?',
+  '¿Cómo van mis macros esta semana?',
+  '¿Estoy comiendo suficiente proteína para mis objetivos?',
 ];
+
+const GREETING_KEY = 'drift_ai_greeted';
+
+const INITIAL_GREETING = `¡Hola! Soy DRIFT AI, tu coach deportivo personal. Tengo acceso a tus datos de entrenamiento, sueño, HRV, estrés y nutrición para darte recomendaciones personalizadas.
+
+Podés preguntarme sobre tu recuperación, rendimiento deportivo, patrones de sueño, análisis nutricional o cualquier aspecto de tu entrenamiento. Usaré tus datos reales para interpretar y darte consejos concretos.
+
+¿Sobre qué querés trabajar hoy?`;
 
 const CHATS_KEY = 'drift_ai_chats';
 const CURRENT_KEY = 'drift_ai_current_chat';
@@ -89,9 +90,6 @@ export const AICoach: React.FC = () => {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<string>(() => {
-    return localStorage.getItem('drift_ai_model') || MODELS[0].id;
-  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -101,24 +99,27 @@ export const AICoach: React.FC = () => {
   const currentChatIdRef = useRef<string | null>(currentChatId);
   currentChatIdRef.current = currentChatId;
 
-  const handleModelChange = (modelId: string) => {
-    if (isStreaming) return;
-    setSelectedModel(modelId);
-    localStorage.setItem('drift_ai_model', modelId);
-  };
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Greeting inicial si el usuario nunca ha abierto el coach
+  useEffect(() => {
+    if (!preseeded && messages.length === 0 && !localStorage.getItem(GREETING_KEY)) {
+      setMessages([{ role: 'assistant', content: INITIAL_GREETING }]);
+      localStorage.setItem(GREETING_KEY, '1');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Persist current chat after streaming ends
-  const persistMessages = useCallback((msgs: Message[], chatId: string | null, model: string) => {
+  const persistMessages = useCallback((msgs: Message[], chatId: string | null) => {
     const cleanMsgs = msgs.map(m => ({ role: m.role, content: m.content }));
     setChats(prev => {
       let updated: ChatSession[];
       if (chatId && prev.find(c => c.id === chatId)) {
         updated = prev.map(c =>
-          c.id === chatId ? { ...c, messages: cleanMsgs, model } : c
+          c.id === chatId ? { ...c, messages: cleanMsgs } : c
         );
       } else {
         const firstUser = cleanMsgs.find(m => m.role === 'user');
@@ -126,7 +127,7 @@ export const AICoach: React.FC = () => {
           id: chatId || Date.now().toString(),
           title: firstUser ? generateTitle(firstUser.content) : 'Nueva conversación',
           messages: cleanMsgs,
-          model,
+          model: 'claude',
           createdAt: new Date().toISOString(),
         };
         updated = [newChat, ...prev];
@@ -156,7 +157,6 @@ export const AICoach: React.FC = () => {
     setCurrentChatId(chat.id);
     currentChatIdRef.current = chat.id;
     localStorage.setItem(CURRENT_KEY, chat.id);
-    setSelectedModel(chat.model);
     setError(null);
     setSidebarOpen(false);
   }, [isStreaming]);
@@ -204,7 +204,7 @@ export const AICoach: React.FC = () => {
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages, model: selectedModel }),
+        body: JSON.stringify({ messages: newMessages }),
         signal: abortRef.current.signal,
       });
 
@@ -242,14 +242,14 @@ export const AICoach: React.FC = () => {
         { role: 'assistant', content: assistantContent, streaming: false },
       ];
       setMessages(finalMessages);
-      persistMessages(finalMessages, currentChatIdRef.current, selectedModel);
+      persistMessages(finalMessages, currentChatIdRef.current);
     } catch (err: any) {
       if (err.name === 'AbortError') {
         setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = { ...updated[updated.length - 1], streaming: false };
           // Save partial response
-          persistMessages(updated, currentChatIdRef.current, selectedModel);
+          persistMessages(updated, currentChatIdRef.current);
           return updated;
         });
       } else {
@@ -261,7 +261,7 @@ export const AICoach: React.FC = () => {
       abortRef.current = null;
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [messages, isStreaming, selectedModel, persistMessages]);
+  }, [messages, isStreaming, persistMessages]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -386,26 +386,10 @@ export const AICoach: React.FC = () => {
               </h1>
             </div>
 
-            {/* Model selector — scrollable on mobile */}
-            <div className="flex-1 overflow-x-auto scrollbar-none ml-1">
-              <div className="flex items-center gap-1 bg-surface-container rounded-xl p-1 border border-outline-variant/20 w-fit ml-auto">
-                {MODELS.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => handleModelChange(m.id)}
-                    disabled={isStreaming}
-                    title={m.id}
-                    className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50 shrink-0 ${
-                      selectedModel === m.id
-                        ? 'bg-primary/20 text-primary'
-                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
-                    }`}
-                  >
-                    <span className="font-label font-semibold tracking-wide leading-none text-[0.7rem]">{m.label}</span>
-                    <span className={`hidden sm:block font-label text-[0.55rem] tracking-widest uppercase mt-0.5 ${selectedModel === m.id ? 'text-primary/70' : 'text-on-surface-variant/50'}`}>{m.badge}</span>
-                  </button>
-                ))}
-              </div>
+            {/* Claude badge */}
+            <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20">
+              <span className="text-primary text-[0.6rem]">◈</span>
+              <span className="font-label text-[0.6rem] text-primary tracking-widest uppercase font-semibold">Claude</span>
             </div>
           </div>
         </div>
@@ -419,7 +403,7 @@ export const AICoach: React.FC = () => {
                   <div className="text-4xl mb-3 opacity-60">◈</div>
                   <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">Coach personalizado</p>
                   <p className="font-body text-sm text-on-surface-variant max-w-xs">
-                    Preguntame sobre tus entrenamientos, sueño, estrés o recuperación. Uso tus datos reales de Garmin.
+                    Preguntame sobre entrenamientos, sueño, nutrición, HRV o recuperación. Uso tus datos reales.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">

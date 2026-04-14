@@ -32,10 +32,10 @@ export function useTrainingPlans() {
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
-  const generatePlan = useCallback(async (goal: string, model?: string): Promise<{ plan: TrainingPlanSummary; recommendations: string | null }> => {
+  const generatePlan = useCallback(async (goal: string): Promise<{ plan: TrainingPlanSummary; recommendations: string | null }> => {
     const data = await apiFetch<{ plan: TrainingPlanSummary; recommendations: string | null }>('/training/generate', {
       method: 'POST',
-      body: JSON.stringify({ goal, model }),
+      body: JSON.stringify({ goal }),
     });
     await fetchPlans();
     return data;

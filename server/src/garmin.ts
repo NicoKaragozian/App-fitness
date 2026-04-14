@@ -1,9 +1,12 @@
 import { GarminConnect } from '@gooin/garmin-connect';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SESSION_DIR = path.join(__dirname, '..');
+const SESSION_DIR = path.resolve(path.join(__dirname, '..'));
+
+console.log(`[garmin] SESSION_DIR = ${SESSION_DIR}`);
 
 let client: GarminConnect | null = null;
 let isLoggedIn = false;
@@ -25,6 +28,16 @@ async function saveSession() {
 
 export async function tryRestoreSession(): Promise<boolean> {
   try {
+    const oauth1Path = path.join(SESSION_DIR, 'oauth1_token.json');
+    const oauth2Path = path.join(SESSION_DIR, 'oauth2_token.json');
+    const has1 = fs.existsSync(oauth1Path);
+    const has2 = fs.existsSync(oauth2Path);
+    console.log(`[garmin] oauth1_token.json exists: ${has1} (${oauth1Path})`);
+    console.log(`[garmin] oauth2_token.json exists: ${has2} (${oauth2Path})`);
+    if (!has1 || !has2) {
+      console.error('[garmin] Token files missing — run: npx tsx server/src/get-tokens.ts');
+      return false;
+    }
     client = new GarminConnect({ username: 'token', password: 'token' });
     await client.loadTokenByFile(SESSION_DIR);
     isLoggedIn = true;
@@ -46,8 +59,6 @@ export async function login(email: string, password: string): Promise<void> {
   isLoggedIn = true;
   await saveSession();
 }
-
-import fs from 'fs';
 
 export function logout(): void {
   client = null;

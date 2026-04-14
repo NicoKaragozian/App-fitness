@@ -1,7 +1,7 @@
 # DRIFT — Claude Context
 
 ## Qué es esto
-App de fitness personal conectada a Garmin Connect. Dashboard de datos biométricos: sueño, HRV, actividades, wellness. Stack: React + TypeScript (Vite) frontend, Express + SQLite backend, librería `@gooin/garmin-connect`.
+App de fitness personal conectada a Garmin Connect. Dashboard de datos biométricos: sueño, HRV, actividades, wellness + módulo de nutrición con análisis de fotos via AI. Stack: React + TypeScript (Vite) frontend, Express + SQLite backend, librería `@gooin/garmin-connect`. AI: Ollama (local) para AI Coach y Training Plans; Claude API (Anthropic) para nutrición.
 
 ## Estructura del proyecto
 ```
@@ -9,29 +9,34 @@ App de fitness personal conectada a Garmin Connect. Dashboard de datos biométri
 /server/                → Backend Express (src/)
 /server/drift.db        → SQLite (gitignored)
 /server/oauth*.json     → Tokens Garmin (gitignored)
+/server/uploads/        → Fotos de comidas subidas (gitignored)
+/server/.env            → Variables de entorno (ANTHROPIC_API_KEY, OLLAMA_MODEL, etc.)
 /render.yaml            → Deploy config para Render
 ```
 
 ## Arquitectura
 
 ### Frontend (`src/`)
-- `pages/` → Dashboard, Sports, Sleep, Wellness, AICoach, TrainingPlans, PlanDetail, ActiveWorkout
+- `pages/` → Dashboard, Sports, Sleep, Wellness, AICoach, TrainingPlans, PlanDetail, ActiveWorkout, **Nutrition**
 - `components/layout/` → Sidebar, Header (con logout button)
 - `components/DynamicChart.tsx` → Chart genérico (bars/lines) configurado por `chartMetrics` del grupo
 - `components/SportGroupEditor.tsx` → Modal para crear/editar/reordenar grupos de deportes (con selector de deportes agrupado por categoría)
 - `components/InsightsCard.tsx` → Tarjetas de recomendaciones del motor de insights
+- `components/MealLogger.tsx` → Modal de registro de comidas (foto con streaming Claude + manual)
+- `components/NutritionTodayCard.tsx` → Widget de macros del día para el Dashboard
 - `context/AuthContext.tsx` → Auth global con `login`, `logout`, `enterDemoMode`
-- `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`, `useTrainingPlans`, `useTrainingPlan`, `useWorkout`, `useExerciseHistory`
+- `hooks/` → `useDailySummary`, `useSleep`, `useActivities`, `useHrv`, `useStress`, `useInsights`, `useSportGroups`, `useTrainingPlans`, `useTrainingPlan`, `useWorkout`, `useExerciseHistory`, **`useNutrition`**, **`useNutritionPlan`**, **`useProfile`**
 - `api/client.ts` → `apiFetch()` helper
 
 ### Backend (`server/src/`)
-- `index.ts` → Express server. En producción sirve `/dist/` estático + SPA fallback
+- `index.ts` → Express server. En producción sirve `/dist/` estático + SPA fallback. Registra `/uploads` como static.
 - `garmin.ts` → Wrapper sobre la librería Garmin. Gestiona sesión OAuth
 - `sync.ts` → Sync de datos: `syncInitial()` (30 días) y `syncToday()` (periódico cada 15min)
-- `db.ts` → SQLite con tables: `activities`, `sleep`, `hrv`, `stress`, `daily_summary`, `sync_log`, `weekly_plan`, `sport_groups`, `training_plans`, `training_sessions`, `training_exercises`, `workout_logs`, `workout_sets`
-- `routes/` → `auth`, `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`, `ai`, `training`
+- `db.ts` → SQLite con tables: `activities`, `sleep`, `hrv`, `stress`, `daily_summary`, `sync_log`, `weekly_plan`, `sport_groups`, `training_plans`, `training_sessions`, `training_exercises`, `workout_logs`, `workout_sets`, **`user_profile`**, **`nutrition_logs`**, **`nutrition_plans`**, **`nutrition_plan_meals`**
+- `routes/` → `auth`, `activities`, `health`, `sync`, `plan`, `insights`, `sport-groups`, `ai`, `training`, **`nutrition`**, **`profile`**
 - `insights/` → Motor de recomendaciones: `stats.ts` (estadísticas), `rules.ts` (8 reglas), `index.ts` (orquestador)
-- `ai/` → `prompts.ts` (system prompts por modo), `context.ts` (context builders), `index.ts` (orquestador analyze)
+- `ai/` → `prompts.ts` (system prompts por modo), `context.ts` (context builders), `index.ts` (orquestador analyze), **`claude.ts`** (provider Claude API), **`nutrition-context.ts`** (context builder para planes nutricionales)
+- `lib/` → **`macros.ts`** (calculadora Mifflin-St Jeor), **`upload-dir.ts`** (directorio de uploads)
 
 ## El offset sistemático de Garmin (CRÍTICO)
 
@@ -177,7 +182,7 @@ Garmin bloqueó el SSO programático con Cloudflare WAF (marzo 2026). El login a
 - Build: `npm install --legacy-peer-deps && npm run build && cd server && npm install`
 - Start: `cd server && npx tsx src/index.ts`
 - DB persistida en `/data/drift.db` via Render Disk
-- Env vars necesarias: `NODE_ENV=production`, `DB_PATH=/data/drift.db`
+- Env vars necesarias: `NODE_ENV=production`, `DB_PATH=/data/drift.db`, `ANTHROPIC_API_KEY=...`, `UPLOAD_PATH=/data/uploads`
 - GitHub repo: privado, nombre `drift`
 
 ## DB — resumen de tablas
@@ -196,6 +201,10 @@ Garmin bloqueó el SSO programático con Cloudflare WAF (marzo 2026). El login a
 | `training_exercises` | id autoincrement | `session_id` FK, `name`, `category` (warmup/main/core/cooldown), `target_sets`, `target_reps` TEXT, `notes`, `sort_order`, `description` TEXT (generado por AI, nullable) |
 | `workout_logs` | id autoincrement | `plan_id` FK, `session_id` FK, `started_at`, `completed_at`, `notes` |
 | `workout_sets` | id autoincrement | `workout_log_id` FK CASCADE, `exercise_id` FK, `set_number`, `reps`, `weight` REAL (kg), `completed` |
+| `user_profile` | `id=1` (single-user) | Perfil: datos físicos, objetivo, deportes, targets de macros (auto-calculados con Mifflin-St Jeor si no se setean manualmente). JSON arrays: `sports`, `equipment`, `dietary_preferences`, `secondary_goals` |
+| `nutrition_logs` | id autoincrement | Log diario de comidas: `date`, `meal_slot`, `meal_name`, `calories`, macros, `image_path` (basename en `server/uploads/`), `ai_model`, `ai_confidence`. Indexado por `date`. |
+| `nutrition_plans` | id autoincrement | Planes nutricionales generados por Claude: targets diarios, `strategy` (cut/bulk/recomp/maintain/endurance), `rationale`. `training_plan_id` FK opcional. |
+| `nutrition_plan_meals` | id autoincrement | Comidas de un plan: `slot`, `name`, `description`, macros. `plan_id` FK CASCADE. |
 
 ## Comandos útiles
 
@@ -240,7 +249,7 @@ El logout es una **purga total**. POST `/api/auth/logout` hace:
 
 Sin esto, cambiar de cuenta mezcla datos de dos usuarios en la misma DB (el sync nuevo inyecta filas sobre los datos del usuario anterior).
 
-**Nota**: las tablas de training plans (`training_plans`, `training_sessions`, etc.) y `weekly_plan` **no se purgan en logout** — son datos del usuario de la app, no de Garmin.
+**Nota**: las tablas de training plans (`training_plans`, `training_sessions`, etc.), `weekly_plan`, y las de **nutrición** (`nutrition_logs`, `nutrition_plans`, `nutrition_plan_meals`, `user_profile`) **no se purgan en logout** — son datos del usuario de la app, no de Garmin.
 
 ## Errores de API — manejo en frontend
 
@@ -274,8 +283,9 @@ Chat conversacional con un modelo de lenguaje corriendo localmente via **Ollama*
 | `activities` | actividad, tenis, surf, kite, gym, running, velocidad... | últimas 40 actividades de 30 días |
 | `sleep` | sueño, dormir, rem, profundo, descanso... | últimas 21 noches con score |
 | `wellness` | estrés, hrv, pasos, recuperación, readiness... | HRV + stress + daily_summary (14 días) |
+| `nutrition` | comida, almuerzo, cena, dieta, proteína, calorías, macros... | nutrition_logs últimos 7 días + targets del profile |
 
-Si no se detecta ningún keyword → carga los 3 contextos (primera pregunta genérica).
+Si no se detecta ningún keyword → carga los 4 contextos (primera pregunta genérica).
 
 ### Selección de modelos
 
@@ -422,6 +432,116 @@ curl http://localhost:3001/api/training/plans
 
 # Ver historial de un ejercicio
 curl http://localhost:3001/api/training/exercises/1/history
+```
+
+## Nutrición (tracking de comidas + planes AI)
+
+Módulo de tracking diario de macros con análisis de fotos via Claude Vision y generación de planes nutricionales. Usa **Claude API** (no Ollama) — modelo `claude-sonnet-4-6`.
+
+### Archivos
+- `src/pages/Nutrition.tsx` → Página principal: rings de macros, lista de comidas, plan nutricional
+- `src/components/MealLogger.tsx` → Modal de registro: modo foto (streaming) + modo manual
+- `src/components/NutritionTodayCard.tsx` → Widget compacto en el Dashboard con mini progress bars
+- `src/hooks/useNutrition.ts` → Fetch de logs, análisis de foto con SSE streaming, CRUD
+- `src/hooks/useNutritionPlan.ts` → CRUD de planes nutricionales
+- `src/hooks/useProfile.ts` → GET/PUT del perfil de usuario
+- `server/src/routes/nutrition.ts` → Todos los endpoints `/api/nutrition/*`
+- `server/src/routes/profile.ts` → GET/PUT `/api/profile`
+- `server/src/ai/claude.ts` → Provider Claude API: `claudeChat()` y `claudeVisionStream()`
+- `server/src/ai/nutrition-context.ts` → Context builder para generación de planes
+- `server/src/lib/macros.ts` → Calculadora Mifflin-St Jeor BMR + TDEE + macros por objetivo
+- `server/src/lib/upload-dir.ts` → `UPLOAD_DIR` — evita dependencia circular entre index.ts y nutrition.ts
+
+### Rutas `/api/nutrition`
+
+| Método | Path | Descripción |
+|--------|------|-------------|
+| POST | `/analyze` | Análisis de foto con Claude Vision **streaming SSE**. Multer recibe la imagen (max 10MB), la convierte a base64, llama `claudeVisionStream()`. Emite `{"image_path":"..."}` primero, luego tokens del análisis. |
+| POST | `/logs` | Guardar log de comida |
+| GET | `/logs` | Logs de un día + totales + targets. Query: `?date=YYYY-MM-DD`. Retorna `{ logs, totals, targets, hasProfile }` |
+| GET | `/logs/range` | Logs por rango `?from=&to=`. Retorna `{ days: [{date, calories, protein_g, carbs_g, fat_g, log_count}] }` |
+| PUT | `/logs/:id` | Editar log (usuario corrige estimación AI) |
+| DELETE | `/logs/:id` | Borrar log + `fs.unlink()` de la imagen asociada |
+| POST | `/plans/generate` | Genera plan con Claude. Body: `{ strategy?, linkedTrainingPlanId? }`. No-streaming. |
+| GET | `/plans` | Listar planes |
+| GET | `/plans/:id` | Plan completo con meals |
+| DELETE | `/plans/:id` | Borrar plan (CASCADE a meals) |
+
+### Rutas `/api/profile`
+
+| Método | Path | Descripción |
+|--------|------|-------------|
+| GET | `/` | Retorna row de `user_profile` o null |
+| PUT | `/` | Upsert. Si no hay targets manuales y hay datos físicos, calcula macros automáticamente con Mifflin-St Jeor |
+
+### Claude provider (`server/src/ai/claude.ts`)
+
+- `isClaudeConfigured()` → chequea `ANTHROPIC_API_KEY` en env. Todos los endpoints de nutrición lo llaman primero y retornan 503 si no está configurado.
+- `claudeChat(systemPrompt, userMessage, maxTokens?)` → no-streaming, retorna texto. Para planes nutricionales (`max_tokens: 4096`).
+- `claudeVisionStream(systemPrompt, userMessage, imageBase64, mediaType, imagePath, res)` → streaming SSE. Para análisis de fotos (`max_tokens: 500`). Transforma eventos `content_block_delta` de Anthropic al formato `data: {"token":"..."}` + `data: [DONE]` que ya consume el frontend.
+
+**Formato SSE del analyze:**
+```
+data: {"image_path":"1234567890-foto.jpg"}   ← primer evento, siempre
+data: {"token":"{\n  \"meal_name\":"}         ← tokens del JSON
+data: {"token":"\"Milanesa con fritas\""}
+...
+data: [DONE]                                   ← el frontend parsea el JSON acumulado
+```
+
+### Prompts de nutrición (`server/src/ai/prompts.ts`)
+
+- `PROMPTS.food_vision` → instrucciones para análisis de foto, responde SOLO JSON con `meal_name`, `description`, `items[]`, `calories`, macros, `confidence` (low/medium/high), `notes`
+- `PROMPTS.nutrition_plan` → generación de plan, responde SOLO JSON con targets diarios, `strategy`, `rationale`, `meals[]`
+
+### Lógica de targets
+
+Si hay `user_profile` con `daily_calorie_target` → se usan esos valores.
+Si no hay perfil → defaults en `nutrition.ts`: 2000kcal / 150g prot / 250g carbs / 65g grasa.
+
+`computeMacroTargets()` en `macros.ts`: BMR Mifflin-St Jeor × activity factor (1.2 + days×0.075) ± ajuste por objetivo. Proteína = peso×2g/kg, grasa = 25% TDEE, carbs = resto.
+
+### Imágenes
+
+- Guardadas en `server/uploads/` (gitignored). En producción: `UPLOAD_PATH=/data/uploads`.
+- Servidas como estático: `app.use('/uploads', express.static(UPLOAD_DIR))`
+- Proxy en `vite.config.ts`: `'/uploads': 'http://localhost:3001'`
+- En frontend: `<img src={`/uploads/${log.image_path}`} />`
+- En DELETE de log: `fs.unlink()` borra el archivo (non-blocking, ignora errores)
+
+### Variables de entorno
+
+```
+ANTHROPIC_API_KEY=sk-ant-...   # requerido para nutrición
+CLAUDE_MODEL=claude-sonnet-4-6  # opcional, este es el default
+UPLOAD_PATH=/data/uploads       # solo producción en Render
+```
+
+### Comandos útiles
+
+```bash
+# Test análisis de foto
+curl -X POST http://localhost:3001/api/nutrition/analyze \
+  -F "image=@/path/to/foto.jpg"
+
+# Guardar log manual
+curl -X POST http://localhost:3001/api/nutrition/logs \
+  -H 'Content-Type: application/json' \
+  -d '{"date":"2026-04-14","meal_slot":"lunch","meal_name":"Ensalada","calories":450,"protein_g":30,"carbs_g":25,"fat_g":20}'
+
+# Ver logs del día
+curl "http://localhost:3001/api/nutrition/logs?date=2026-04-14"
+
+# Generar plan nutricional
+curl -X POST http://localhost:3001/api/nutrition/plans/generate \
+  -H 'Content-Type: application/json' \
+  -d '{"strategy":"maintain"}'
+
+# Guardar/ver perfil
+curl -X PUT http://localhost:3001/api/profile \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Nico","age":28,"sex":"male","weight_kg":75,"height_cm":178,"training_days_per_week":4,"primary_goal":"maintain"}'
+curl http://localhost:3001/api/profile
 ```
 
 ## Motor de Insights (inferencia local)

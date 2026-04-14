@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import activitiesRoutes from './routes/activities.js';
@@ -17,10 +16,7 @@ import trainingRoutes from './routes/training.js';
 import profileRoutes from './routes/profile.js';
 import nutritionRoutes from './routes/nutrition.js';
 import { startPeriodicSync, syncInitial } from './sync.js';
-
-// Directorio de uploads de imagenes de comida
-export const UPLOAD_DIR = process.env.UPLOAD_PATH || path.join(process.cwd(), 'server/uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+import { UPLOAD_DIR } from './lib/upload-dir.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

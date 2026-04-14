@@ -1,6 +1,5 @@
 // ai/claude.ts — Claude API provider (Anthropic)
-// Usado exclusivamente para el modulo de nutricion.
-// El resto de la app (AI Coach, training plans) sigue usando Ollama.
+// Proveedor único de AI para toda la app: nutrición, AI Coach, Training Plans y análisis.
 
 import Anthropic from '@anthropic-ai/sdk';
 import type { Response } from 'express';
@@ -58,6 +57,65 @@ export async function claudeChat(
     const { status, message } = handleAnthropicError(err);
     throw Object.assign(new Error(message), { status });
   }
+}
+
+// Streaming multi-turn — para AI Coach chat y AI Analyze
+// Emite SSE al res de Express:
+//   data: {"token":"..."}    (tokens del response)
+//   data: [DONE]             (fin del stream)
+// El callback beforeDone permite al caller inyectar eventos adicionales antes de [DONE].
+// Retorna el contenido acumulado (útil para cachear en analyze).
+export async function claudeStreamChat(
+  systemPrompt: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  res: Response,
+  options: { maxTokens?: number; beforeDone?: (fullContent: string) => void } = {}
+): Promise<string> {
+  const { maxTokens = 4096, beforeDone } = options;
+
+  if (!isClaudeConfigured()) {
+    res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en server/.env' });
+    return '';
+  }
+
+  const client = getClient();
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  let fullContent = '';
+
+  try {
+    const stream = client.messages.stream({
+      model: CLAUDE_MODEL,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages,
+    });
+
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        fullContent += event.delta.text;
+        res.write(`data: ${JSON.stringify({ token: event.delta.text })}\n\n`);
+      }
+    }
+
+    if (beforeDone) {
+      beforeDone(fullContent);
+    }
+
+    res.write('data: [DONE]\n\n');
+  } catch (err: any) {
+    console.error('[claude] Stream chat error:', err.message);
+    const { status, message } = handleAnthropicError(err);
+    res.write(`data: ${JSON.stringify({ error: message, status })}\n\n`);
+    res.write('data: [DONE]\n\n');
+  } finally {
+    res.end();
+  }
+
+  return fullContent;
 }
 
 // Streaming con vision — para analisis de fotos de comida

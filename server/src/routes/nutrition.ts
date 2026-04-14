@@ -6,7 +6,7 @@ import db from '../db.js';
 import { claudeVisionStream, claudeChat, isClaudeConfigured } from '../ai/claude.js';
 import { PROMPTS } from '../ai/prompts.js';
 import { buildNutritionPlanContext } from '../ai/nutrition-context.js';
-import { UPLOAD_DIR } from '../index.js';
+import { UPLOAD_DIR } from '../lib/upload-dir.js';
 
 const router = Router();
 
