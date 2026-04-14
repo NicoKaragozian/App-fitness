@@ -87,7 +87,7 @@ export function useNutrition(date?: string) {
   }, [fetchLogs]);
 
   // Analisis de foto con Claude Vision (streaming SSE)
-  const analyzeMeal = useCallback(async (file: File): Promise<void> => {
+  const analyzeMeal = useCallback(async (file: File, onToken?: () => void): Promise<void> => {
     setAnalyzing(true);
     setAnalysisStream('');
     setAnalysisResult(null);
@@ -147,6 +147,7 @@ export function useNutrition(date?: string) {
             } else if (json.token) {
               accumulatedText += json.token;
               setAnalysisStream(prev => prev + json.token);
+              onToken?.();
             } else if (json.error) {
               setAnalysisError(json.error);
             }

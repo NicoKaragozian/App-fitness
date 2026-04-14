@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTrainingPlans } from '../hooks/useTrainingPlans';
 import { useAssessment } from '../hooks/useAssessment';
+import { useAIProgress } from '../hooks/useAIProgress';
+import AIProgressIndicator from '../components/ui/AIProgressIndicator';
+import { TRAINING_PLAN_PROGRESS } from '../utils/aiProgressConfigs';
 import { Goals } from './Goals';
 import { STTButton } from '../components/ui/STTButton';
 
@@ -23,11 +26,12 @@ export const TrainingPlans: React.FC = () => {
 
   const { plans, loading, generatePlanStream, stopGeneration, archivePlan, deletePlan } = useTrainingPlans();
   const { assessment, loading: assessmentLoading } = useAssessment();
+  const aiProgress = useAIProgress();
+
   const [showForm, setShowForm] = useState(false);
   const [goal, setGoal] = useState('');
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-  const [thinkingText, setThinkingText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
 
   const activePlans = plans.filter(p => p.status === 'active');
@@ -36,14 +40,14 @@ export const TrainingPlans: React.FC = () => {
   const handleGenerate = async () => {
     if (!goal.trim()) return;
     setGenerating(true);
-    setThinkingText('');
     setGenError(null);
+    aiProgress.start(TRAINING_PLAN_PROGRESS);
     try {
-      const result = await generatePlanStream(goal.trim(), (text) => {
-        setThinkingText(text);
-      });
-      navigate(`/training/${result.plan.id}`);
+      const result = await generatePlanStream(goal.trim(), () => aiProgress.onToken());
+      aiProgress.complete();
+      setTimeout(() => navigate(`/training/${result.plan.id}`), 400);
     } catch (err: any) {
+      aiProgress.reset();
       if (err.name !== 'AbortError') {
         setGenError(err.message || 'Error generando el plan');
       }
@@ -177,14 +181,10 @@ export const TrainingPlans: React.FC = () => {
                   className="absolute bottom-2 right-2"
                 />
               </div>
-              {/* Texto de análisis en streaming */}
-              {generating && thinkingText && (
-                <div className="bg-surface-container rounded-lg px-4 py-3 space-y-1.5">
-                  <p className="font-label text-[10px] text-primary tracking-widest uppercase">Analizando tus datos...</p>
-                  <p className="text-on-surface-variant text-sm whitespace-pre-line leading-relaxed">
-                    {thinkingText}
-                    <span className="animate-pulse">▍</span>
-                  </p>
+              {/* Progreso de generacion */}
+              {aiProgress.isActive && (
+                <div className="bg-surface-container rounded-lg px-4 py-3">
+                  <AIProgressIndicator progress={aiProgress.progress} phase={aiProgress.phase} />
                 </div>
               )}
 
@@ -209,11 +209,11 @@ export const TrainingPlans: React.FC = () => {
                   onClick={() => {
                     if (generating) {
                       stopGeneration();
+                      aiProgress.reset();
                     } else {
                       setShowForm(false);
                       setGoal('');
                       setGenError(null);
-                      setThinkingText('');
                     }
                   }}
                   className="px-4 py-3 rounded-lg bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase hover:bg-surface-high transition-colors"

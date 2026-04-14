@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import type { FoodAnalysis } from '../hooks/useNutrition';
 import { STTButton } from './ui/STTButton';
+import AIProgressIndicator from './ui/AIProgressIndicator';
 
 const MEAL_SLOTS = [
   { value: 'breakfast', label: 'Desayuno' },
@@ -24,7 +25,8 @@ function getDefaultSlot(): string {
 interface MealLoggerProps {
   date: string;
   analyzing: boolean;
-  analysisStream: string;
+  analysisProgress: number;
+  analysisPhase: string;
   analysisResult: FoodAnalysis | null;
   analysisError: string | null;
   onAnalyze: (file: File) => void;
@@ -51,7 +53,8 @@ interface MealLoggerProps {
 export const MealLogger: React.FC<MealLoggerProps> = ({
   date,
   analyzing,
-  analysisStream,
+  analysisProgress,
+  analysisPhase,
   analysisResult,
   analysisError,
   onAnalyze,
@@ -229,14 +232,10 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
                 </div>
               )}
 
-              {/* Streaming feedback */}
-              {analyzing && analysisStream && (
+              {/* Progreso de analisis */}
+              {analyzing && (
                 <div className="bg-surface-container rounded-xl p-3">
-                  <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2">Analizando...</p>
-                  <p className="font-body text-sm text-on-surface-variant leading-relaxed">
-                    {analysisStream}
-                    <span className="inline-block w-0.5 h-3.5 bg-primary ml-0.5 animate-pulse" />
-                  </p>
+                  <AIProgressIndicator progress={analysisProgress} phase={analysisPhase} />
                 </div>
               )}
 

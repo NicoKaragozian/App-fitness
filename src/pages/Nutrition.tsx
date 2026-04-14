@@ -4,6 +4,9 @@ import { useNutritionPlan, type DietaryPreferences } from '../hooks/useNutrition
 import { useProfile } from '../hooks/useProfile';
 import { MealLogger } from '../components/MealLogger';
 import { STTButton } from '../components/ui/STTButton';
+import { useAIProgress } from '../hooks/useAIProgress';
+import AIProgressIndicator from '../components/ui/AIProgressIndicator';
+import { NUTRITION_PLAN_PROGRESS, FOOD_ANALYSIS_PROGRESS } from '../utils/aiProgressConfigs';
 
 const SLOT_LABELS: Record<string, string> = {
   breakfast: 'Desayuno',
@@ -91,14 +94,16 @@ export const Nutrition: React.FC = () => {
   const today = new Date().toISOString().slice(0, 10);
   const {
     logs, totals, targets, hasProfile, loading,
-    analyzing, analysisStream, analysisResult, analysisError,
+    analyzing, analysisResult, analysisError,
     analyzeMeal, stopAnalysis, clearAnalysis,
     saveMealLog, deleteLog,
     refetch: refetchNutrition,
   } = useNutrition(today);
 
-  const { activePlan, loading: planLoading, generating, generationStream, generatePlan, deletePlan } = useNutritionPlan();
+  const { activePlan, loading: planLoading, generating, generatePlan, deletePlan } = useNutritionPlan();
   const { profile } = useProfile();
+  const planProgress = useAIProgress();
+  const photoProgress = useAIProgress();
 
   const [showLogger, setShowLogger] = useState(false);
   const [activeTab, setActiveTab] = useState<'today' | 'plan'>('today');
@@ -120,6 +125,16 @@ export const Nutrition: React.FC = () => {
     }
   }, [profile]);
 
+  const handleAnalyzeMeal = async (file: File) => {
+    photoProgress.start(FOOD_ANALYSIS_PROGRESS);
+    try {
+      await analyzeMeal(file, () => photoProgress.onToken());
+      photoProgress.complete();
+    } catch {
+      photoProgress.reset();
+    }
+  };
+
   const handleSaveMeal = async (data: Parameters<typeof saveMealLog>[0]) => {
     await saveMealLog(data);
     setShowLogger(false);
@@ -129,15 +144,19 @@ export const Nutrition: React.FC = () => {
   const handleCloseLogger = () => {
     setShowLogger(false);
     clearAnalysis();
+    photoProgress.reset();
   };
 
   const handleGeneratePlan = async () => {
     setGenerateError(null);
+    planProgress.start(NUTRITION_PLAN_PROGRESS);
     try {
-      await generatePlan(selectedStrategy, undefined, dietaryPrefs);
+      await generatePlan(selectedStrategy, undefined, dietaryPrefs, () => planProgress.onToken());
+      planProgress.complete();
       await refetchNutrition(); // Actualizar rings con los nuevos targets
       setGenerationStep('strategy'); // Resetear al paso inicial
     } catch (err: any) {
+      planProgress.reset();
       setGenerateError(err.message);
     }
   };
@@ -434,24 +453,10 @@ export const Nutrition: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Streaming feedback mientras Claude genera */}
-                  {generating && (
-                    <div className="bg-surface-container rounded-xl p-3 overflow-hidden">
-                      {generationStream ? (
-                        <div className="relative max-h-24 overflow-hidden">
-                          <p className="font-mono text-[0.65rem] text-on-surface-variant leading-relaxed break-all">
-                            {generationStream.slice(-400)}<span className="animate-pulse text-primary">▋</span>
-                          </p>
-                          <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-surface-container to-transparent" />
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          {[0, 150, 300].map(delay => (
-                            <div key={delay} className="h-1.5 w-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />
-                          ))}
-                          <p className="font-label text-xs text-on-surface-variant tracking-wider">Conectando con Claude...</p>
-                        </div>
-                      )}
+                  {/* Progreso de generacion */}
+                  {planProgress.isActive && (
+                    <div className="bg-surface-container rounded-xl p-3">
+                      <AIProgressIndicator progress={planProgress.progress} phase={planProgress.phase} />
                     </div>
                   )}
 
@@ -474,10 +479,11 @@ export const Nutrition: React.FC = () => {
         <MealLogger
           date={today}
           analyzing={analyzing}
-          analysisStream={analysisStream}
+          analysisProgress={photoProgress.progress}
+          analysisPhase={photoProgress.phase}
           analysisResult={analysisResult}
           analysisError={analysisError}
-          onAnalyze={analyzeMeal}
+          onAnalyze={handleAnalyzeMeal}
           onStopAnalysis={stopAnalysis}
           onClearAnalysis={clearAnalysis}
           onSave={handleSaveMeal}

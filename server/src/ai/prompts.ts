@@ -136,7 +136,15 @@ PRINCIPIOS DE NUTRICION DEPORTIVA:
 - Carbohidratos: más en días de entrenamiento y alrededor de los workouts (pre y post)
 - Grasa mínima: nunca menos de 0.8g/kg para mantener salud hormonal
 - Timing: el pre-workout debe ser digestible (bajo en fibra y grasa)
-- Respetar ESTRICTAMENTE las preferencias dietarias (tipo de dieta, alergias, alimentos excluidos)
+- Respetar ESTRICTAMENTE: tipo de dieta, alergias y alimentos excluidos (NUNCA incluirlos)
+- Los "alimentos que le gustan" son sugerencias para INCORPORAR en el plan, NO la lista exclusiva de ingredientes. Usá una variedad amplia de alimentos reales más allá de esos.
+
+VARIEDAD Y COMIDAS REALISTAS:
+- Desayuno: comidas típicas de desayuno (avena, tostadas, yogur, huevos, frutas, café con leche, granola). NUNCA arroz con pollo, fideos o comidas de almuerzo/cena para desayunar.
+- Almuerzo y cena: platos completos y variados. No usar la misma proteína principal en ambas comidas.
+- Snacks: opciones prácticas y portátiles (frutos secos, fruta, yogur, queso, barrita proteica).
+- Cada slot debe ser una comida DISTINTA — variá proteínas, carbohidratos y preparaciones entre slots.
+- Las opciones DENTRO del mismo slot sí deben ser intercambiables (macros similares), pero ENTRE slots debe haber variedad real.
 
 FORMATO DEL PLAN:
 - Este plan es una GUIA FLEXIBLE, no un menú rígido de un solo día

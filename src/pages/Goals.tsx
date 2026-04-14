@@ -2,6 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGoals } from '../hooks/useGoals';
 import type { Goal } from '../hooks/useGoals';
+import { useAIProgress } from '../hooks/useAIProgress';
+import AIProgressIndicator from '../components/ui/AIProgressIndicator';
+import { GOAL_PROGRESS } from '../utils/aiProgressConfigs';
 
 const SUGGESTIONS = [
   'Hacer 10 dominadas seguidas',
@@ -49,6 +52,8 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
   const navigate = useNavigate();
   const { goals, loading, generateGoal, deleteGoal, updateGoalStatus } = useGoals();
 
+  const aiProgress = useAIProgress();
+
   const [showForm, setShowForm] = useState(false);
   const [objective, setObjective] = useState('');
   const [targetDate, setTargetDate] = useState('');
@@ -61,18 +66,23 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
     if (!objective.trim() || !targetDate) return;
     setGenerating(true);
     setGenError(null);
+    aiProgress.start(GOAL_PROGRESS);
     try {
       const data = await generateGoal(objective.trim(), targetDate);
-      setShowForm(false);
-      setObjective('');
-      setTargetDate('');
-      navigate(`/goals/${data.id}`);
+      aiProgress.complete();
+      setTimeout(() => {
+        setShowForm(false);
+        setObjective('');
+        setTargetDate('');
+        navigate(`/goals/${data.id}`);
+      }, 400);
     } catch (err: any) {
+      aiProgress.reset();
       setGenError(err.message || 'Error generando el plan');
     } finally {
       setGenerating(false);
     }
-  }, [objective, targetDate, generateGoal, navigate]);
+  }, [objective, targetDate, generateGoal, navigate, aiProgress]);
 
   const activeGoals = goals.filter(g => g.status === 'active');
   const archivedGoals = goals.filter(g => g.status !== 'active');
@@ -174,17 +184,19 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
             </div>
           )}
 
+          {/* Progreso de generacion */}
+          {aiProgress.isActive && (
+            <div className="bg-surface-container rounded-xl px-4 py-3">
+              <AIProgressIndicator progress={aiProgress.progress} phase={aiProgress.phase} />
+            </div>
+          )}
+
           <button
             onClick={handleGenerate}
             disabled={generating || !objective.trim() || !targetDate}
             className="w-full bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
           >
-            {generating ? (
-              <>
-                <span className="w-3.5 h-3.5 border-2 border-surface/30 border-t-surface rounded-full animate-spin block" />
-                Generando plan…
-              </>
-            ) : 'Generar Plan'}
+            {generating ? 'Generando plan…' : 'Generar Plan'}
           </button>
         </div>
       )}

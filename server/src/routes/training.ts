@@ -202,7 +202,11 @@ router.put('/plans/:id', (req: Request, res: Response) => {
 router.delete('/plans/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'ID inválido' }); return; }
-  db.prepare('DELETE FROM training_plans WHERE id = ?').run(id);
+  // workout_logs no tiene ON DELETE CASCADE, hay que borrarlo antes (sus sets se borran via CASCADE)
+  db.transaction(() => {
+    db.prepare('DELETE FROM workout_logs WHERE plan_id = ?').run(id);
+    db.prepare('DELETE FROM training_plans WHERE id = ?').run(id);
+  })();
   res.json({ ok: true });
 });
 

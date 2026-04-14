@@ -61,7 +61,7 @@ export function useNutritionPlan() {
     fetchPlans();
   }, [fetchPlans]);
 
-  const generatePlan = useCallback(async (strategy?: string, linkedTrainingPlanId?: number, dietaryPreferences?: DietaryPreferences) => {
+  const generatePlan = useCallback(async (strategy?: string, linkedTrainingPlanId?: number, dietaryPreferences?: DietaryPreferences, onToken?: () => void) => {
     setGenerating(true);
     setGenerationStream('');
     setError(null);
@@ -103,6 +103,7 @@ export function useNutritionPlan() {
             const json = JSON.parse(data);
             if (json.token) {
               setGenerationStream(prev => prev + json.token);
+              onToken?.();
             }
             if (json.error) {
               throw new Error(json.error);

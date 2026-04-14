@@ -22,7 +22,7 @@ export function buildNutritionPlanContext(strategy?: string): string {
         if (raw.diet_type) lines.push(`Tipo de dieta: ${raw.diet_type}`);
         if (raw.allergies?.length > 0) lines.push(`Alergias/intolerancias: ${raw.allergies.join(', ')}`);
         if (raw.excluded_foods) lines.push(`Alimentos excluidos: ${raw.excluded_foods}`);
-        if (raw.preferred_foods) lines.push(`Alimentos preferidos: ${raw.preferred_foods}`);
+        if (raw.preferred_foods) lines.push(`Alimentos que le gustan (incorporar, no usar exclusivamente): ${raw.preferred_foods}`);
         if (raw.meals_per_day) lines.push(`Comidas por día: ${raw.meals_per_day}`);
         dietPrefsText = lines.length > 0 ? '\n' + lines.map(l => `  - ${l}`).join('\n') : 'ninguna';
       }

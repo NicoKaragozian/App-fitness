@@ -33,12 +33,11 @@ export function useTrainingPlans() {
 
   useEffect(() => { fetchPlans(); }, [fetchPlans]);
 
-  // Genera un plan con streaming SSE. Llama onThinking(text) con el texto de análisis
-  // progresivo que Claude emite antes del JSON (visible al usuario).
+  // Genera un plan con streaming SSE. Llama onToken() cada vez que llega un token.
   // Resuelve con { plan, recommendations } cuando el plan está guardado en DB.
   const generatePlanStream = useCallback(async (
     goal: string,
-    onThinking: (text: string) => void,
+    onToken: () => void,
   ): Promise<{ plan: TrainingPlanSummary; recommendations: string | null }> => {
     abortRef.current = new AbortController();
 
@@ -80,7 +79,7 @@ export function useTrainingPlans() {
           }
 
           if (json.token !== undefined) {
-            // Acumular tokens hasta el delimitador; solo mostrar la parte de análisis
+            // Acumular tokens para detectar el delimitador
             const combined = accumulatedThinking + json.token;
             const delimIdx = combined.indexOf(DELIMITER);
             if (delimIdx >= 0) {
@@ -88,7 +87,7 @@ export function useTrainingPlans() {
             } else {
               accumulatedThinking = combined;
             }
-            onThinking(accumulatedThinking);
+            onToken();
           } else if (json.plan) {
             result = { plan: json.plan, recommendations: json.recommendations ?? null };
           } else if (json.error) {
