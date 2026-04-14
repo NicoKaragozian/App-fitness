@@ -240,7 +240,7 @@ router.post('/chat', async (req: Request, res: Response) => {
   const needs = detectNeeds(lastUser?.content || '');
   const context = buildContext(needs);
 
-  const systemPrompt = `You are DRIFT AI, this user's personal fitness coach. You analyze their real biometric and training data to provide concrete, direct, and personalized recommendations. You respond in English. You use kilometers for distances, km/h for speeds, and Xh Xm format for durations. When data doesn't support a conclusion, you say so clearly.
+  const systemPrompt = `You are DRIFT AI, this user's personal fitness coach. You analyze their real biometric and training data to provide concrete, direct, and personalized recommendations. CRITICAL: Always respond in English only — never use Spanish or any other language, regardless of the language used in the user's message or in the profile data. You use kilometers for distances, km/h for speeds, and Xh Xm format for durations. When data doesn't support a conclusion, you say so clearly.
 
 ${context ? `User data:\n${context}` : 'No data available yet in the database.'}`;
 
