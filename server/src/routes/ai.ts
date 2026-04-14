@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import db from '../db.js';
 import { handleAnalyze } from '../ai/index.js';
+import { getAssessmentContext } from '../ai/context.js';
 
 const router = Router();
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e2b';
@@ -28,6 +29,9 @@ function detectNeeds(message: string): { activities: boolean; sleep: boolean; we
 function buildContext(needs: ReturnType<typeof detectNeeds>): string {
   const sections: string[] = [];
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const assessmentCtx = getAssessmentContext();
+  if (assessmentCtx) sections.push(assessmentCtx);
 
   if (needs.activities) {
     const rows = (db.prepare(`

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTrainingPlan } from '../hooks/useTrainingPlan';
 import { useWorkout } from '../hooks/useWorkout';
 import { useExerciseHistory } from '../hooks/useExerciseHistory';
 import { apiFetch } from '../api/client';
+import { TTSButton } from '../components/ui/TTSButton';
 import type { TrainingExercise, TrainingSession, TrainingPlanDetail } from '../hooks/useTrainingPlan';
 
 const DAYS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
@@ -110,6 +111,20 @@ export const PlanDetail: React.FC = () => {
     setEditFields({});
   };
 
+  const planTTSText = useMemo(() => {
+    if (!plan) return '';
+    const lines: string[] = [plan.title];
+    if (plan.objective) lines.push(plan.objective);
+    for (const s of plan.sessions) {
+      lines.push(s.name + (s.notes ? `. ${s.notes}` : ''));
+      for (const ex of s.exercises) {
+        const target = ex.target_sets && ex.target_reps ? `, ${ex.target_sets} series de ${ex.target_reps}` : '';
+        lines.push(`${ex.name}${target}${ex.notes ? `. ${ex.notes}` : ''}`);
+      }
+    }
+    return lines.join('\n');
+  }, [plan]);
+
   if (loading) {
     return (
       <div className="p-6 space-y-4">
@@ -146,12 +161,15 @@ export const PlanDetail: React.FC = () => {
             <span className="font-label text-label-sm text-primary tracking-widest uppercase">Plan activo</span>
             <h1 className="font-display text-2xl text-on-surface mt-1">{plan.title}</h1>
           </div>
-          <button
-            onClick={() => setShowAddToWeekly(true)}
-            className="shrink-0 bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase px-3 py-2 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors text-xs"
-          >
-            + Weekly Plan
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <TTSButton text={planTTSText} />
+            <button
+              onClick={() => setShowAddToWeekly(true)}
+              className="bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase px-3 py-2 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors text-xs"
+            >
+              + Weekly Plan
+            </button>
+          </div>
         </div>
         {plan.objective && (
           <p className="text-on-surface-variant text-sm">{plan.objective}</p>

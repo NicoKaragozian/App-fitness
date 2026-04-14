@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useWorkout, useLastWeights } from '../hooks/useWorkout';
+import { useTTS } from '../hooks/useTTS';
 import type { TrainingSession, TrainingExercise } from '../hooks/useTrainingPlan';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -55,6 +56,13 @@ export const ActiveWorkout: React.FC = () => {
   const { logSet, updateSet, finishWorkout } = useWorkout();
   const lastWeights = useLastWeights(session?.id ?? null);
   const timer = useTimer(!!workoutId);
+  const { speak } = useTTS();
+
+  // Flat ordered list of exercises for next-exercise announcements
+  const allExercises = useMemo(
+    () => groupExercises(session?.exercises ?? []).flatMap(g => g.exercises),
+    [session?.exercises]
+  );
 
   // sets[exerciseId][setIndex] = SetState
   const [sets, setSets] = useState<Record<number, SetState[]>>({});
@@ -108,10 +116,26 @@ export const ActiveWorkout: React.FC = () => {
     const reps = set.reps ? parseInt(set.reps) : null;
     const weight = set.weight ? parseFloat(set.weight) : null;
 
+    // Check if completing this set finishes all sets for this exercise
+    const willFinishExercise = !toggling &&
+      sets[exId].every((s, i) => i === setIdx ? true : s.completed);
+
     setSets(prev => ({
       ...prev,
       [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, completed: !toggling } : s),
     }));
+
+    // Announce next exercise when current one is fully completed
+    if (willFinishExercise) {
+      const idx = allExercises.findIndex(e => e.id === exId);
+      const next = allExercises[idx + 1];
+      if (next) {
+        const target = next.target_sets && next.target_reps
+          ? `. ${next.target_sets} series de ${next.target_reps}`
+          : '';
+        speak(`Siguiente: ${next.name}${target}`);
+      }
+    }
 
     try {
       if (set.savedId != null) {
@@ -131,7 +155,7 @@ export const ActiveWorkout: React.FC = () => {
         [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, completed: toggling } : s),
       }));
     }
-  }, [workoutId, sets, logSet, updateSet]);
+  }, [workoutId, sets, logSet, updateSet, allExercises, speak]);
 
   const handleAddSet = useCallback((exId: number) => {
     setSets(prev => ({

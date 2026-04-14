@@ -165,6 +165,62 @@ try {
   db.exec('ALTER TABLE weekly_plan ADD COLUMN session_id INTEGER');
 } catch { /* ya existe */ }
 
+// Goals tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    target_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    ai_model TEXT,
+    raw_ai_response TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS goal_milestones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    week_number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    target TEXT,
+    workouts TEXT DEFAULT '[]',
+    completed INTEGER DEFAULT 0,
+    completed_at TEXT,
+    sort_order INTEGER DEFAULT 0
+  );
+`);
+
+// User assessment table (single-row, id always = 1)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_assessment (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    name TEXT,
+    age INTEGER,
+    height REAL,
+    weight REAL,
+    fitness_level TEXT,
+    goals TEXT,
+    goals_other TEXT,
+    sport_practice TEXT,
+    sport_name TEXT,
+    available_days TEXT,
+    session_duration INTEGER,
+    equipment TEXT,
+    equipment_other TEXT,
+    injuries_limitations TEXT,
+    training_preferences TEXT,
+    past_injuries_detail TEXT,
+    time_constraints TEXT,
+    short_term_goals TEXT,
+    long_term_goals TEXT,
+    special_considerations TEXT,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
 // Seed default sport groups if table is empty
 const groupCount = (db.prepare('SELECT COUNT(*) as c FROM sport_groups').get() as { c: number }).c;
 if (groupCount === 0) {

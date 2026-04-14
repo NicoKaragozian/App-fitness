@@ -13,6 +13,8 @@ import insightsRoutes from './routes/insights.js';
 import sportGroupsRoutes from './routes/sport-groups.js';
 import aiRoutes from './routes/ai.js';
 import trainingRoutes from './routes/training.js';
+import goalsRoutes from './routes/goals.js';
+import assessmentRoutes from './routes/assessment.js';
 import { startPeriodicSync, syncInitial } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +37,8 @@ app.use('/api/insights', insightsRoutes);
 app.use('/api/sport-groups', sportGroupsRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/training', trainingRoutes);
+app.use('/api/goals', goalsRoutes);
+app.use('/api/assessment', assessmentRoutes);
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {
