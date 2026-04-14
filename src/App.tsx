@@ -4,8 +4,6 @@ import { Header } from './components/layout/Header';
 import { Dashboard } from './pages/Dashboard';
 import { Sports } from './pages/Sports';
 import { SportDetail } from './pages/SportDetail';
-import { Sleep } from './pages/Sleep';
-import { Wellness } from './pages/Wellness';
 import { AICoach } from './pages/AICoach';
 import { TrainingPlans } from './pages/TrainingPlans';
 import { PlanDetail } from './pages/PlanDetail';
@@ -24,8 +22,8 @@ function AuthenticatedLayout() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/sports" element={<Sports />} />
             <Route path="/sports/:category" element={<SportDetail />} />
-            <Route path="/sleep" element={<Sleep />} />
-            <Route path="/wellness" element={<Wellness />} />
+            <Route path="/sleep" element={<Navigate to="/" replace />} />
+            <Route path="/wellness" element={<Navigate to="/" replace />} />
             <Route path="/coach" element={<AICoach />} />
             <Route path="/training" element={<TrainingPlans />} />
             <Route path="/training/workout/:id" element={<ActiveWorkout />} />

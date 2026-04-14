@@ -3,12 +3,10 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const navItems = [
-  { path: '/', label: 'Performance', icon: '◈' },
+  { path: '/', label: 'Dashboard', icon: '◉' },
   { path: '/sports', label: 'Sports', icon: '⚡' },
-  { path: '/sleep', label: 'Sleep', icon: '◐' },
-  { path: '/wellness', label: 'Wellness', icon: '∿' },
-  { path: '/coach', label: 'AI Coach', icon: '◎' },
   { path: '/training', label: 'Training', icon: '▣' },
+  { path: '/coach', label: 'AI Coach', icon: '◎' },
 ];
 
 export const Sidebar: React.FC = () => {
@@ -21,7 +19,7 @@ export const Sidebar: React.FC = () => {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex fixed left-0 top-0 h-full w-48 bg-surface-low flex-col py-8 px-5 z-50">
         <div className="mb-10">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">Performance</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">Dashboard</p>
           <h1 className="font-display text-primary text-lg font-bold tracking-tight">DRIFT</h1>
         </div>
         <nav className="flex flex-col gap-1">

@@ -3,10 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: 'PERFORMANCE', subtitle: 'FLOW GENERAL' },
+  '/': { title: 'DASHBOARD', subtitle: 'DRIFT OVERVIEW' },
   '/sports': { title: 'ANÁLISIS DE DEPORTES', subtitle: 'BIOMETRIC PERFORMANCE OVERVIEW' },
-  '/sleep': { title: 'SLEEP INTELLIGENCE', subtitle: "LAST NIGHT'S ANALYSIS" },
-  '/wellness': { title: 'WELLNESS', subtitle: 'HOME / SPORTS / SLEEP / WELLNESS' },
   '/training': { title: 'TRAINING PLANS', subtitle: 'PLANES PERSONALIZADOS' },
   '/coach': { title: 'AI COACH', subtitle: 'DRIFT AI' },
 };
