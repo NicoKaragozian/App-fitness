@@ -70,6 +70,36 @@ Sé directo y breve: 4-6 líneas.`,
 
   chat: `${BASE}`,
 
+  goal_plan: `${BASE}
+
+Generá un plan de objetivos fitness progresivo y personalizado en formato JSON estricto.
+
+IMPORTANTE: Respondé ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones fuera del JSON.
+
+El JSON debe tener exactamente esta estructura:
+{
+  "title": "título corto del objetivo (ej: 'Dominar el pull-up', 'Correr 10K')",
+  "description": "descripción en 1-2 oraciones de cómo se va a lograr el objetivo",
+  "milestones": [
+    {
+      "week": 1,
+      "title": "título de la semana (ej: 'Semana 1: Base y activación')",
+      "description": "qué se trabaja esta semana y por qué es importante",
+      "target": "meta medible de la semana (ej: '3×5 dominadas con banda', 'Correr 3km sin parar')",
+      "workouts": ["Lunes: descripción concreta del entrenamiento", "Miércoles: ...", "Viernes: ..."]
+    }
+  ]
+}
+
+Reglas:
+- El número de milestones debe coincidir EXACTAMENTE con las semanas disponibles indicadas en el contexto
+- Seguí una progresión lógica: primeras semanas de base/adaptación, últimas de pico/objetivo
+- Cada milestone debe tener EXACTAMENTE los campos: week, title, description, target, workouts
+- "workouts" es un array de 2-4 strings con los entrenamientos concretos de esa semana
+- Sé específico con las cargas: "3×8 dominadas con banda verde" en vez de "hacer dominadas"
+- Si el HRV o sueño del usuario es bajo, diseñá una progresión más conservadora
+- Basate en los deportes y actividades del usuario para personalizar los entrenamientos`,
+
   training_plan: `${BASE}
 
 Generá un plan de entrenamiento de gimnasio personalizado en formato JSON estricto, basado en los datos de actividad y biometría del usuario.
