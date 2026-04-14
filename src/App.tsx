@@ -9,7 +9,6 @@ import { TrainingPlans } from './pages/TrainingPlans';
 import { PlanDetail } from './pages/PlanDetail';
 import { ActiveWorkout } from './pages/ActiveWorkout';
 import { Nutrition } from './pages/Nutrition';
-import { Goals } from './pages/Goals';
 import { GoalDetail } from './pages/GoalDetail';
 import { Assessment } from './pages/Assessment';
 import { Login } from './pages/Login';
