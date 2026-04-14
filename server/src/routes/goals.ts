@@ -2,52 +2,35 @@ import express from 'express';
 import db from '../db.js';
 import { buildGoalContext } from '../ai/context.js';
 import { PROMPTS } from '../ai/prompts.js';
+import { claudeChat, isClaudeConfigured } from '../ai/claude.js';
 
 const router = express.Router();
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e2b';
+const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 
 // POST /api/goals/generate
 router.post('/generate', async (req, res) => {
-  const { objective, targetDate, model } = req.body;
+  const { objective, targetDate } = req.body;
   if (!objective?.trim()) return res.status(400).json({ error: 'objective requerido' });
   if (!targetDate) return res.status(400).json({ error: 'targetDate requerido' });
 
-  const modelToUse = model && /^[a-zA-Z0-9._:\-/]+$/.test(model) ? model : OLLAMA_MODEL;
+  if (!isClaudeConfigured()) {
+    return res.status(503).json({ error: 'Claude API no configurada. Agregá ANTHROPIC_API_KEY en el .env' });
+  }
+
   const context = buildGoalContext(objective, targetDate);
   const systemPrompt = PROMPTS.goal_plan;
 
   try {
-    const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: modelToUse,
-        format: 'json',
-        stream: false,
-        messages: [
-          { role: 'system', content: `${systemPrompt}\n\n${context}` },
-          { role: 'user', content: `Objetivo: ${objective}\nFecha límite: ${targetDate}` },
-        ],
-      }),
-    });
-
-    if (!ollamaRes.ok) {
-      const text = await ollamaRes.text();
-      if (ollamaRes.status === 404) {
-        return res.status(502).json({ error: `Modelo ${modelToUse} no encontrado. Instalalo con: ollama pull ${modelToUse}` });
-      }
-      return res.status(502).json({ error: text });
-    }
-
-    const ollamaData = await ollamaRes.json() as any;
-    const raw = ollamaData.message?.content ?? '';
+    const raw = await claudeChat(
+      `${systemPrompt}\n\n${context}`,
+      `Objetivo: ${objective}\nFecha límite: ${targetDate}`
+    );
 
     let parsed: any;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return res.status(502).json({ error: 'El modelo no generó JSON válido. Intentá con otro modelo.' });
+      return res.status(502).json({ error: 'Claude no generó JSON válido. Intentá de nuevo.' });
     }
 
     if (!parsed.title || !Array.isArray(parsed.milestones) || parsed.milestones.length === 0) {
@@ -58,7 +41,7 @@ router.post('/generate', async (req, res) => {
       const goalResult = db.prepare(`
         INSERT INTO goals (title, description, target_date, ai_model, raw_ai_response)
         VALUES (?, ?, ?, ?, ?)
-      `).run(parsed.title, parsed.description ?? null, targetDate, modelToUse, raw);
+      `).run(parsed.title, parsed.description ?? null, targetDate, CLAUDE_MODEL, raw);
 
       const goalId = goalResult.lastInsertRowid as number;
       const insertMilestone = db.prepare(`
@@ -88,9 +71,6 @@ router.post('/generate', async (req, res) => {
 
     res.json({ ...goal, milestones });
   } catch (err: any) {
-    if (err.cause?.code === 'ECONNREFUSED') {
-      return res.status(503).json({ error: 'Ollama no está corriendo. Inicialo con: ollama serve' });
-    }
     res.status(500).json({ error: err.message });
   }
 });

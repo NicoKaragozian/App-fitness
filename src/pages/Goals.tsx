@@ -3,13 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useGoals } from '../hooks/useGoals';
 import type { Goal } from '../hooks/useGoals';
 
-const MODELS = [
-  { id: 'gemma3:4b', label: 'G3 · 4B', badge: 'Rápido' },
-  { id: 'gemma3:12b', label: 'G3 · 12B', badge: 'Potente' },
-  { id: 'gemma4:26b', label: 'G4 · 26B', badge: 'Top Local' },
-  { id: 'gemma4:e2b', label: 'G4 · E2B', badge: 'Mobile' },
-];
-
 const SUGGESTIONS = [
   'Hacer 10 dominadas seguidas',
   'Correr 10km en menos de 50 minutos',
@@ -59,7 +52,6 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
   const [showForm, setShowForm] = useState(false);
   const [objective, setObjective] = useState('');
   const [targetDate, setTargetDate] = useState('');
-  const [selectedModel, setSelectedModel] = useState(MODELS[0].id);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
@@ -70,7 +62,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
     setGenerating(true);
     setGenError(null);
     try {
-      const data = await generateGoal(objective.trim(), targetDate, selectedModel);
+      const data = await generateGoal(objective.trim(), targetDate);
       setShowForm(false);
       setObjective('');
       setTargetDate('');
@@ -80,7 +72,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
     } finally {
       setGenerating(false);
     }
-  }, [objective, targetDate, selectedModel, generateGoal, navigate]);
+  }, [objective, targetDate, generateGoal, navigate]);
 
   const activeGoals = goals.filter(g => g.status === 'active');
   const archivedGoals = goals.filter(g => g.status !== 'active');
@@ -173,26 +165,6 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
               onChange={e => setTargetDate(e.target.value)}
               className="bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary w-full sm:w-auto"
             />
-          </div>
-
-          {/* Model selector */}
-          <div className="flex items-center gap-1 bg-surface-container rounded-xl p-1 border border-outline-variant/20 w-fit">
-            {MODELS.map(m => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedModel(m.id)}
-                disabled={generating}
-                title={m.id}
-                className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg transition-all text-xs disabled:opacity-50 ${
-                  selectedModel === m.id
-                    ? 'bg-primary/20 text-primary'
-                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high'
-                }`}
-              >
-                <span className="font-label font-semibold tracking-wide leading-none text-[0.7rem]">{m.label}</span>
-                <span className={`hidden sm:block font-label text-[0.55rem] tracking-widest uppercase mt-0.5 ${selectedModel === m.id ? 'text-primary/70' : 'text-on-surface-variant/50'}`}>{m.badge}</span>
-              </button>
-            ))}
           </div>
 
           {genError && (
