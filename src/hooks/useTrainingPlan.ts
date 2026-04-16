@@ -5,9 +5,13 @@ export interface TrainingExercise {
   id: number;
   session_id: number;
   name: string;
-  category: 'warmup' | 'main' | 'core' | 'cooldown';
+  type: 'strength' | 'cardio' | 'timed';
+  category: string;
   target_sets: number | null;
   target_reps: string | null;
+  target_duration_seconds: number | null;
+  target_distance_meters: number | null;
+  target_pace: string | null;
   notes: string | null;
   description: string | null;
   sort_order: number;
@@ -17,6 +21,7 @@ export interface TrainingSession {
   id: number;
   plan_id: number;
   name: string;
+  type: string | null;
   sort_order: number;
   notes: string | null;
   exercises: TrainingExercise[];
@@ -52,7 +57,7 @@ export function useTrainingPlan(id: number | null) {
 
   useEffect(() => { fetchPlan(); }, [fetchPlan]);
 
-  const updateExercise = useCallback(async (exerciseId: number, fields: Partial<Pick<TrainingExercise, 'name' | 'target_sets' | 'target_reps' | 'notes' | 'category'>>) => {
+  const updateExercise = useCallback(async (exerciseId: number, fields: Partial<Pick<TrainingExercise, 'name' | 'type' | 'target_sets' | 'target_reps' | 'target_duration_seconds' | 'target_distance_meters' | 'target_pace' | 'notes' | 'category'>>) => {
     await apiFetch(`/training/exercises/${exerciseId}`, { method: 'PUT', body: JSON.stringify(fields) });
     setPlan(prev => {
       if (!prev) return prev;

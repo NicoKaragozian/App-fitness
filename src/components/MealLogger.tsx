@@ -1,16 +1,8 @@
 import React, { useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { FoodAnalysis } from '../hooks/useNutrition';
 import { STTButton } from './ui/STTButton';
 import AIProgressIndicator from './ui/AIProgressIndicator';
-
-const MEAL_SLOTS = [
-  { value: 'breakfast', label: 'Breakfast' },
-  { value: 'lunch', label: 'Lunch' },
-  { value: 'snack', label: 'Snack' },
-  { value: 'dinner', label: 'Dinner' },
-  { value: 'pre_workout', label: 'Pre-workout' },
-  { value: 'post_workout', label: 'Post-workout' },
-];
 
 function getDefaultSlot(): string {
   const h = new Date().getHours();
@@ -48,6 +40,8 @@ interface MealLoggerProps {
     raw_ai_response?: string;
   }) => void;
   onClose: () => void;
+  activeProvider?: string;
+  onReanalyzeWithClaude?: () => void;
 }
 
 export const MealLogger: React.FC<MealLoggerProps> = ({
@@ -62,7 +56,18 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
   onClearAnalysis,
   onSave,
   onClose,
+  activeProvider = 'gemma',
+  onReanalyzeWithClaude,
 }) => {
+  const { t } = useTranslation();
+  const MEAL_SLOTS = [
+    { value: 'breakfast', label: t('nutrition.slotLabels.breakfast') },
+    { value: 'lunch', label: t('nutrition.slotLabels.lunch') },
+    { value: 'snack', label: t('nutrition.slotLabels.snack') },
+    { value: 'dinner', label: t('nutrition.slotLabels.dinner') },
+    { value: 'pre_workout', label: t('nutrition.slotLabels.pre_workout') },
+    { value: 'post_workout', label: t('nutrition.slotLabels.post_workout') },
+  ];
   const [mode, setMode] = useState<'photo' | 'manual'>('photo');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -119,7 +124,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
       fat_g: Number(fatG) || 0,
       fiber_g: fiberG ? Number(fiberG) : undefined,
       image_path: analysisResult?.image_path,
-      ai_model: analysisResult ? 'claude-sonnet-4-6' : undefined,
+      ai_model: analysisResult ? (activeProvider === 'claude' ? 'claude-sonnet-4-6' : 'gemma4:e2b') : undefined,
       ai_confidence: analysisResult?.confidence,
     });
   };
@@ -138,7 +143,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-outline-variant/20">
-          <h2 className="font-display text-on-surface font-semibold">Log Meal</h2>
+          <h2 className="font-display text-on-surface font-semibold">{t('mealLogger.title')}</h2>
           <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface text-xl leading-none">×</button>
         </div>
 
@@ -154,7 +159,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
-              {m === 'photo' ? 'With photo' : 'Manual'}
+              {m === 'photo' ? t('mealLogger.tabPhoto') : t('mealLogger.tabManual')}
             </button>
           ))}
         </div>
@@ -162,7 +167,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
         <div className="overflow-y-auto flex-1 px-5 py-4 flex flex-col gap-4">
           {/* Selector de slot */}
           <div>
-            <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1.5 block">Time of day</label>
+            <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1.5 block">{t('mealLogger.timeOfDay')}</label>
             <div className="flex flex-wrap gap-1.5">
               {MEAL_SLOTS.map(s => (
                 <button
@@ -189,7 +194,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
                   className="w-full h-36 rounded-xl border-2 border-dashed border-outline-variant flex flex-col items-center justify-center gap-2 text-on-surface-variant hover:text-on-surface hover:border-primary/50 transition-all"
                 >
                   <span className="text-3xl">📷</span>
-                  <span className="font-body text-sm">Take photo or select image</span>
+                  <span className="font-body text-sm">{t('mealLogger.takePhoto')}</span>
                 </button>
               ) : (
                 <div className="relative">
@@ -219,14 +224,14 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
                       onClick={handleAnalyze}
                       className="flex-1 py-3 rounded-xl bg-primary text-surface font-label text-sm tracking-wider uppercase font-medium"
                     >
-                      Analyze with Claude AI
+                      {t('mealLogger.analyzeWithAI')}
                     </button>
                   ) : (
                     <button
                       onClick={onStopAnalysis}
                       className="flex-1 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label text-sm tracking-wider uppercase"
                     >
-                      Stop
+                      {t('mealLogger.stop')}
                     </button>
                   )}
                 </div>
@@ -248,15 +253,28 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
 
               {/* Resultado editable */}
               {showAnalysisResult && analysisResult && (
-                <div className="flex items-center gap-2">
-                  <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Confidence:</span>
-                  <span className={`font-label text-label-sm tracking-wider uppercase font-semibold ${confidenceColor[analysisResult.confidence] || 'text-on-surface-variant'}`}>
-                    {analysisResult.confidence}
-                  </span>
-                  {analysisResult.notes && (
-                    <span className="font-body text-xs text-on-surface-variant ml-auto max-w-48 text-right truncate" title={analysisResult.notes}>
-                      {analysisResult.notes}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('mealLogger.confidence')}</span>
+                    <span className={`font-label text-label-sm tracking-wider uppercase font-semibold ${confidenceColor[analysisResult.confidence] || 'text-on-surface-variant'}`}>
+                      {analysisResult.confidence}
                     </span>
+                    <span className="font-label text-[0.6rem] text-on-surface-variant tracking-wide uppercase ml-1 opacity-60">
+                      via {activeProvider === 'claude' ? 'Claude' : 'Gemma'}
+                    </span>
+                    {analysisResult.notes && (
+                      <span className="font-body text-xs text-on-surface-variant ml-auto max-w-48 text-right truncate" title={analysisResult.notes}>
+                        {analysisResult.notes}
+                      </span>
+                    )}
+                  </div>
+                  {onReanalyzeWithClaude && !analyzing && (
+                    <button
+                      onClick={onReanalyzeWithClaude}
+                      className="self-start px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 font-label text-[0.65rem] tracking-widest uppercase transition-colors hover:bg-blue-500/20"
+                    >
+                      {t('mealLogger.reanalyzeWithClaude')}
+                    </button>
                   )}
                 </div>
               )}
@@ -267,12 +285,12 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
           {(mode === 'manual' || showAnalysisResult) && (
             <>
               <div>
-                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">Name</label>
+                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">{t('mealLogger.fieldName')}</label>
                 <div className="relative">
                   <input
                     value={mealName}
                     onChange={e => setMealName(e.target.value)}
-                    placeholder="E.g.: Chicken with salad"
+                    placeholder={t('mealLogger.fieldNamePlaceholder')}
                     className="w-full bg-surface-container text-on-surface font-body text-sm px-3 py-2.5 pr-9 rounded-xl outline-none border border-transparent focus:border-primary/40 placeholder:text-on-surface-variant"
                   />
                   <STTButton
@@ -284,12 +302,12 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
               </div>
 
               <div>
-                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">Description</label>
+                <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">{t('mealLogger.fieldDescription')}</label>
                 <div className="relative">
                   <textarea
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    placeholder="Optional description..."
+                    placeholder={t('mealLogger.fieldDescriptionPlaceholder')}
                     rows={2}
                     className="w-full bg-surface-container text-on-surface font-body text-sm px-3 py-2.5 pr-9 rounded-xl outline-none border border-transparent focus:border-primary/40 placeholder:text-on-surface-variant resize-none"
                   />
@@ -303,10 +321,10 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Calories', value: calories, set: setCalories, unit: 'kcal' },
-                  { label: 'Protein', value: proteinG, set: setProteinG, unit: 'g' },
-                  { label: 'Carbs', value: carbsG, set: setCarbsG, unit: 'g' },
-                  { label: 'Fat', value: fatG, set: setFatG, unit: 'g' },
+                  { label: t('mealLogger.fieldCalories'), value: calories, set: setCalories, unit: 'kcal' },
+                  { label: t('mealLogger.fieldProtein'), value: proteinG, set: setProteinG, unit: 'g' },
+                  { label: t('mealLogger.fieldCarbs'), value: carbsG, set: setCarbsG, unit: 'g' },
+                  { label: t('mealLogger.fieldFat'), value: fatG, set: setFatG, unit: 'g' },
                 ].map(({ label, value, set, unit }) => (
                   <div key={label}>
                     <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1 block">
@@ -331,7 +349,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
             onClick={onClose}
             className="flex-1 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label text-sm tracking-wider uppercase"
           >
-            Cancel
+            {t('mealLogger.cancel')}
           </button>
           {(mode === 'manual' || showAnalysisResult) && (
             <button
@@ -339,7 +357,7 @@ export const MealLogger: React.FC<MealLoggerProps> = ({
               disabled={!mealName && !calories}
               className="flex-1 py-3 rounded-xl bg-primary text-surface font-label text-sm tracking-wider uppercase font-medium disabled:opacity-40"
             >
-              Save
+              {t('mealLogger.save')}
             </button>
           )}
         </div>

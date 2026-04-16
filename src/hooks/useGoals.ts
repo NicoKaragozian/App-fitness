@@ -34,10 +34,10 @@ export function useGoals() {
 
   useEffect(() => { fetchGoals(); }, [fetchGoals]);
 
-  const generateGoal = useCallback(async (objective: string, targetDate?: string) => {
+  const generateGoal = useCallback(async (objective: string, targetDate?: string, provider?: string) => {
     const data = await apiFetch<Goal & { milestones: any[] }>('/goals/generate', {
       method: 'POST',
-      body: JSON.stringify({ objective, targetDate }),
+      body: JSON.stringify({ objective, targetDate, provider }),
     });
     const newGoal: Goal = {
       ...data,

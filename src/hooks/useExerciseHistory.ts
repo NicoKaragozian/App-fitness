@@ -3,9 +3,14 @@ import { apiFetch } from '../api/client';
 
 export interface ExerciseHistoryEntry {
   date: string;
-  sets: { set: number; reps: number | null; weight: number | null }[];
+  type?: 'strength' | 'cardio' | 'timed';
+  sets: { set: number; reps: number | null; weight: number | null; duration_seconds?: number | null; distance_meters?: number | null }[];
   maxWeight: number;
   totalReps: number;
+  totalDistance?: number;
+  totalDuration?: number;
+  bestPace?: string | null;
+  setsCompleted?: number;
 }
 
 export function useExerciseHistory(exerciseId: number | null) {

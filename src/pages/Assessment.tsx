@@ -1,45 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAssessment } from '../hooks/useAssessment';
-
-const FITNESS_LEVELS = [
-  { value: 'beginner', label: 'Beginner' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'advanced', label: 'Advanced' },
-  { value: 'athlete', label: 'Athlete' },
-];
-
-const GOAL_OPTIONS = [
-  { value: 'strength', label: 'Strength' },
-  { value: 'hypertrophy', label: 'Hypertrophy' },
-  { value: 'endurance', label: 'Endurance' },
-  { value: 'flexibility', label: 'Flexibility' },
-  { value: 'weight_loss', label: 'Weight loss' },
-  { value: 'sports_performance', label: 'Sports performance' },
-  { value: 'general_health', label: 'General health' },
-  { value: 'other', label: 'Other' },
-];
-
-const DAYS = [
-  { value: 'Mon', label: 'MON' },
-  { value: 'Tue', label: 'TUE' },
-  { value: 'Wed', label: 'WED' },
-  { value: 'Thu', label: 'THU' },
-  { value: 'Fri', label: 'FRI' },
-  { value: 'Sat', label: 'SAT' },
-  { value: 'Sun', label: 'SUN' },
-];
-
-const EQUIPMENT_OPTIONS = [
-  { value: 'full_gym', label: 'Full gym' },
-  { value: 'dumbbells', label: 'Dumbbells' },
-  { value: 'barbells', label: 'Barbells & plates' },
-  { value: 'resistance_bands', label: 'Resistance bands' },
-  { value: 'bodyweight', label: 'Bodyweight' },
-  { value: 'trx', label: 'TRX / Rings' },
-  { value: 'machines', label: 'Machines' },
-  { value: 'kettlebells', label: 'Kettlebells' },
-];
 
 interface FormState {
   name: string;
@@ -109,7 +71,47 @@ function ToggleButton({ selected, onClick, children }: { selected: boolean; onCl
 
 export const Assessment: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { assessment, loading, save } = useAssessment();
+
+  const FITNESS_LEVELS = [
+    { value: 'beginner', label: t('assessment.fitnessLevels.beginner') },
+    { value: 'intermediate', label: t('assessment.fitnessLevels.intermediate') },
+    { value: 'advanced', label: t('assessment.fitnessLevels.advanced') },
+    { value: 'athlete', label: t('assessment.fitnessLevels.athlete') },
+  ];
+
+  const GOAL_OPTIONS = [
+    { value: 'strength', label: t('assessment.goalOptions.strength') },
+    { value: 'hypertrophy', label: t('assessment.goalOptions.hypertrophy') },
+    { value: 'endurance', label: t('assessment.goalOptions.endurance') },
+    { value: 'flexibility', label: t('assessment.goalOptions.flexibility') },
+    { value: 'weight_loss', label: t('assessment.goalOptions.weight_loss') },
+    { value: 'sports_performance', label: t('assessment.goalOptions.sports_performance') },
+    { value: 'general_health', label: t('assessment.goalOptions.general_health') },
+    { value: 'other', label: t('assessment.goalOptions.other') },
+  ];
+
+  const DAYS = [
+    { value: 'Mon', label: t('assessment.days.Mon') },
+    { value: 'Tue', label: t('assessment.days.Tue') },
+    { value: 'Wed', label: t('assessment.days.Wed') },
+    { value: 'Thu', label: t('assessment.days.Thu') },
+    { value: 'Fri', label: t('assessment.days.Fri') },
+    { value: 'Sat', label: t('assessment.days.Sat') },
+    { value: 'Sun', label: t('assessment.days.Sun') },
+  ];
+
+  const EQUIPMENT_OPTIONS = [
+    { value: 'full_gym', label: t('assessment.equipmentOptions.full_gym') },
+    { value: 'dumbbells', label: t('assessment.equipmentOptions.dumbbells') },
+    { value: 'barbells', label: t('assessment.equipmentOptions.barbells') },
+    { value: 'resistance_bands', label: t('assessment.equipmentOptions.resistance_bands') },
+    { value: 'bodyweight', label: t('assessment.equipmentOptions.bodyweight') },
+    { value: 'trx', label: t('assessment.equipmentOptions.trx') },
+    { value: 'machines', label: t('assessment.equipmentOptions.machines') },
+    { value: 'kettlebells', label: t('assessment.equipmentOptions.kettlebells') },
+  ];
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -158,15 +160,15 @@ export const Assessment: React.FC = () => {
   const validateStep = (s: number): boolean => {
     const errs: Record<string, string> = {};
     if (s === 1) {
-      if (!form.name.trim()) errs.name = 'Name is required';
-      if (!form.age || isNaN(Number(form.age)) || Number(form.age) < 1 || Number(form.age) > 120) errs.age = 'Enter a valid age';
+      if (!form.name.trim()) errs.name = t('assessment.validationName');
+      if (!form.age || isNaN(Number(form.age)) || Number(form.age) < 1 || Number(form.age) > 120) errs.age = t('assessment.validationAge');
     }
     if (s === 2) {
-      if (!form.fitness_level) errs.fitness_level = 'Select your fitness level';
-      if (form.goals.length === 0) errs.goals = 'Select at least one goal';
+      if (!form.fitness_level) errs.fitness_level = t('assessment.validationFitnessLevel');
+      if (form.goals.length === 0) errs.goals = t('assessment.validationGoals');
     }
     if (s === 3) {
-      if (form.available_days.length === 0) errs.available_days = 'Select at least one day';
+      if (form.available_days.length === 0) errs.available_days = t('assessment.validationDays');
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -232,14 +234,14 @@ export const Assessment: React.FC = () => {
         onClick={handleBack}
         className="flex items-center gap-1 text-on-surface-variant text-sm hover:text-on-surface transition-colors"
       >
-        ← Training
+        {t('assessment.backToTraining')}
       </button>
 
       {/* Progress */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-            Step {step} of 3
+            {t('assessment.step', { step })}
           </p>
           <div className="flex gap-1.5">
             {[1, 2, 3].map(s => (
@@ -257,17 +259,17 @@ export const Assessment: React.FC = () => {
       {/* Step 1 — Basic Info */}
       {step === 1 && (
         <div className="bg-surface-low rounded-xl p-5 space-y-5">
-          <p className="font-display text-on-surface text-lg">Basic Info</p>
+          <p className="font-display text-on-surface text-lg">{t('assessment.step1Title')}</p>
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-              Name <span className="text-primary">*</span>
+              {t('assessment.fieldName')} <span className="text-primary">*</span>
             </label>
             <input
               type="text"
               value={form.name}
               onChange={e => set('name', e.target.value)}
-              placeholder="Your name"
+              placeholder={t('assessment.namePlaceholder')}
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
             {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
@@ -275,14 +277,14 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-              Age <span className="text-primary">*</span>
+              {t('assessment.fieldAge')} <span className="text-primary">*</span>
             </label>
             <input
               type="number"
               inputMode="numeric"
               value={form.age}
               onChange={e => set('age', e.target.value)}
-              placeholder="30"
+              placeholder={t('assessment.agePlaceholder')}
               min={1}
               max={120}
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
@@ -293,27 +295,27 @@ export const Assessment: React.FC = () => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Height (cm)
+                {t('assessment.fieldHeight')}
               </label>
               <input
                 type="number"
                 inputMode="decimal"
                 value={form.height}
                 onChange={e => set('height', e.target.value)}
-                placeholder="175"
+                placeholder={t('assessment.heightPlaceholder')}
                 className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Weight (kg)
+                {t('assessment.fieldWeight')}
               </label>
               <input
                 type="number"
                 inputMode="decimal"
                 value={form.weight}
                 onChange={e => set('weight', e.target.value)}
-                placeholder="70"
+                placeholder={t('assessment.weightPlaceholder')}
                 className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -324,11 +326,11 @@ export const Assessment: React.FC = () => {
       {/* Step 2 — Training Profile */}
       {step === 2 && (
         <div className="bg-surface-low rounded-xl p-5 space-y-5">
-          <p className="font-display text-on-surface text-lg">Training Profile</p>
+          <p className="font-display text-on-surface text-lg">{t('assessment.step2Title')}</p>
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Fitness level <span className="text-primary">*</span>
+              {t('assessment.fitnessLevel')} <span className="text-primary">*</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {FITNESS_LEVELS.map(l => (
@@ -346,7 +348,7 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Training goals <span className="text-primary">*</span>
+              {t('assessment.trainingGoals')} <span className="text-primary">*</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {GOAL_OPTIONS.map(g => (
@@ -365,13 +367,13 @@ export const Assessment: React.FC = () => {
           {form.goals.includes('other') && (
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Specify goal
+                {t('assessment.specifyGoal')}
               </label>
               <input
                 type="text"
                 value={form.goals_other}
                 onChange={e => set('goals_other', e.target.value)}
-                placeholder="Describe your specific goal"
+                placeholder={t('assessment.specifyGoalPlaceholder')}
                 className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -379,10 +381,10 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Do you practice any sport?
+              {t('assessment.practicesSport')}
             </label>
             <div className="flex gap-2">
-              {[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }].map(opt => (
+              {[{ value: 'yes', label: t('assessment.yesNo.yes') }, { value: 'no', label: t('assessment.yesNo.no') }].map(opt => (
                 <ToggleButton
                   key={opt.value}
                   selected={form.sport_practice === opt.value}
@@ -397,13 +399,13 @@ export const Assessment: React.FC = () => {
           {form.sport_practice === 'yes' && (
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Which one(s)?
+                {t('assessment.specifySport')}
               </label>
               <input
                 type="text"
                 value={form.sport_name}
                 onChange={e => set('sport_name', e.target.value)}
-                placeholder="E.g.: kitesurfing, tennis, soccer"
+                placeholder={t('assessment.sportNamePlaceholder')}
                 className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -414,11 +416,11 @@ export const Assessment: React.FC = () => {
       {/* Step 3 — Availability and Details */}
       {step === 3 && (
         <div className="bg-surface-low rounded-xl p-5 space-y-5">
-          <p className="font-display text-on-surface text-lg">Availability and Details</p>
+          <p className="font-display text-on-surface text-lg">{t('assessment.step3Title')}</p>
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Available training days <span className="text-primary">*</span>
+              {t('assessment.availableDays')} <span className="text-primary">*</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {DAYS.map(d => (
@@ -436,21 +438,21 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-              Available session duration (minutes)
+              {t('assessment.sessionDuration')}
             </label>
             <input
               type="number"
               inputMode="numeric"
               value={form.session_duration}
               onChange={e => set('session_duration', e.target.value)}
-              placeholder="60"
+              placeholder={t('assessment.sessionDurationPlaceholder')}
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-2">
-              Available equipment
+              {t('assessment.availableEquipment')}
             </label>
             <div className="flex flex-wrap gap-2">
               {EQUIPMENT_OPTIONS.map(e => (
@@ -468,13 +470,13 @@ export const Assessment: React.FC = () => {
           {form.equipment.length > 0 && (
             <div>
               <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                Additional equipment (optional)
+                {t('assessment.additionalEquipment')}
               </label>
               <input
                 type="text"
                 value={form.equipment_other}
                 onChange={e => set('equipment_other', e.target.value)}
-                placeholder="E.g.: treadmill, stationary bike"
+                placeholder={t('assessment.additionalEquipmentPlaceholder')}
                 className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -482,13 +484,13 @@ export const Assessment: React.FC = () => {
 
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-              Current injuries or limitations
+              {t('assessment.injuries')}
             </label>
             <textarea
               value={form.injuries_limitations}
               onChange={e => set('injuries_limitations', e.target.value)}
               rows={2}
-              placeholder="E.g.: knee pain, lumbar hernia, nothing at the moment"
+              placeholder={t('assessment.injuriesPlaceholder')}
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             />
           </div>
@@ -500,72 +502,72 @@ export const Assessment: React.FC = () => {
             className="text-on-surface-variant text-xs hover:text-on-surface transition-colors flex items-center gap-1"
           >
             <span>{showAdvanced ? '▲' : '▼'}</span>
-            {showAdvanced ? 'Hide additional details' : 'Show additional details'}
+            {showAdvanced ? t('assessment.hideAdvanced') : t('assessment.showAdvanced')}
           </button>
 
           {showAdvanced && (
             <div className="space-y-4 pt-2 border-t border-outline-variant/20">
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Training preferences
+                  {t('assessment.trainingPreferences')}
                 </label>
                 <textarea
                   value={form.training_preferences}
                   onChange={e => set('training_preferences', e.target.value)}
                   rows={2}
-                  placeholder="E.g.: I prefer functional training, I don't like machines"
+                  placeholder={t('assessment.trainingPreferencesPlaceholder')}
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
               </div>
 
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Injury history
+                  {t('assessment.injuryHistory')}
                 </label>
                 <textarea
                   value={form.past_injuries_detail}
                   onChange={e => set('past_injuries_detail', e.target.value)}
                   rows={2}
-                  placeholder="E.g.: ligament tear in 2022, shoulder surgery"
+                  placeholder={t('assessment.injuryHistoryPlaceholder')}
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
               </div>
 
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Short-term goals
+                  {t('assessment.shortTermGoals')}
                 </label>
                 <input
                   type="text"
                   value={form.short_term_goals}
                   onChange={e => set('short_term_goals', e.target.value)}
-                  placeholder="In the next 1-3 months"
+                  placeholder={t('assessment.shortTermGoalsPlaceholder')}
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Long-term goals
+                  {t('assessment.longTermGoals')}
                 </label>
                 <input
                   type="text"
                   value={form.long_term_goals}
                   onChange={e => set('long_term_goals', e.target.value)}
-                  placeholder="In the next 6-12 months"
+                  placeholder={t('assessment.longTermGoalsPlaceholder')}
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
 
               <div>
                 <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1.5">
-                  Special considerations
+                  {t('assessment.specialConsiderations')}
                 </label>
                 <textarea
                   value={form.special_considerations}
                   onChange={e => set('special_considerations', e.target.value)}
                   rows={2}
-                  placeholder="Any additional information relevant to your training"
+                  placeholder={t('assessment.specialConsiderationsPlaceholder')}
                   className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none"
                 />
               </div>
@@ -589,7 +591,7 @@ export const Assessment: React.FC = () => {
             onClick={() => setStep(s => s - 1)}
             className="px-5 py-3 rounded-xl bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase hover:bg-surface-high transition-colors"
           >
-            Back
+            {t('common.back')}
           </button>
         )}
         {step < 3 ? (
@@ -598,7 +600,7 @@ export const Assessment: React.FC = () => {
             onClick={handleNext}
             className="flex-1 bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl hover:opacity-90 transition-opacity"
           >
-            Next
+            {t('common.next')}
           </button>
         ) : (
           <button
@@ -610,9 +612,9 @@ export const Assessment: React.FC = () => {
             {saving ? (
               <>
                 <span className="w-3.5 h-3.5 border-2 border-surface/30 border-t-surface rounded-full animate-spin block" />
-                Saving...
+                {t('common.saving')}
               </>
-            ) : (assessment ? 'Update profile' : 'Save profile')}
+            ) : (assessment ? t('assessment.updateProfile') : t('assessment.saveProfile'))}
           </button>
         )}
       </div>

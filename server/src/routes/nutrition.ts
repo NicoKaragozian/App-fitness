@@ -4,8 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import db from '../db.js';
-import { claudeVisionStream, claudeStreamGenerate, claudeStreamChat, isClaudeConfigured } from '../ai/claude.js';
-import { PROMPTS } from '../ai/prompts.js';
+import { pickProviderFromReq, pickLanguageFromReq, isAIConfigured } from '../ai/providers/index.js';
+import { modelNameFor } from '../ai/config.js';
+import { getPrompt } from '../ai/prompts.js';
 import { buildNutritionPlanContext, buildNutritionChatContext } from '../ai/nutrition-context.js';
 import { UPLOAD_DIR } from '../lib/upload-dir.js';
 
@@ -65,16 +66,18 @@ async function toClaudeCompatible(filePath: string, mimetype: string): Promise<{
   return { base64: jpegBuffer.toString('base64'), mediaType: 'image/jpeg' };
 }
 
-// POST /api/nutrition/analyze — Photo analysis with Claude Vision (streaming SSE)
+// POST /api/nutrition/analyze — Photo analysis with Vision AI (streaming SSE)
 router.post('/analyze', upload.single('image'), async (req: Request, res: Response) => {
   if (!req.file) {
     res.status(400).json({ error: 'No image received' });
     return;
   }
 
-  if (!isClaudeConfigured()) {
+  const provider = pickProviderFromReq(req);
+  if (!(await isAIConfigured(provider.name))) {
     fs.unlink(req.file.path, () => {});
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
+    const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
+    res.status(503).json({ error: `${label} is not available. Check your setup.` });
     return;
   }
 
@@ -82,8 +85,9 @@ router.post('/analyze', upload.single('image'), async (req: Request, res: Respon
     const { base64: imageBase64, mediaType } = await toClaudeCompatible(req.file.path, req.file.mimetype);
     const imagePath = path.basename(req.file.path);
 
-    await claudeVisionStream(
-      PROMPTS.food_vision,
+    const langAnalyze = pickLanguageFromReq(req);
+    await provider.visionStream(
+      getPrompt('food_vision', langAnalyze),
       'Analyze this food image and return the JSON with estimated macronutrients.',
       imageBase64,
       mediaType,
@@ -220,16 +224,17 @@ router.delete('/logs/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// POST /api/nutrition/plans/generate — Generate nutrition plan with Claude (streaming SSE)
+// POST /api/nutrition/plans/generate — Generate nutrition plan (streaming SSE)
 router.post('/plans/generate', async (req: Request, res: Response) => {
-  if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
+  const provider = pickProviderFromReq(req);
+  if (!(await isAIConfigured(provider.name))) {
+    const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
+    res.status(503).json({ error: `${label} is not available. Check your setup.` });
     return;
   }
 
   const { strategy, linkedTrainingPlanId, dietaryPreferences } = req.body;
 
-  // UPSERT dietary preferences — creates row if it doesn't exist, updates if it does
   if (dietaryPreferences && typeof dietaryPreferences === 'object') {
     db.prepare(`
       INSERT INTO user_profile (id, dietary_preferences, updated_at)
@@ -240,12 +245,12 @@ router.post('/plans/generate', async (req: Request, res: Response) => {
     `).run(JSON.stringify(dietaryPreferences), new Date().toISOString());
   }
 
+  const langPlan = pickLanguageFromReq(req);
   const context = buildNutritionPlanContext(strategy);
-  const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+  const modelName = modelNameFor(provider.name);
 
-  // Streaming with beforeDone: parse + save + send plan on completion
-  await claudeStreamGenerate(
-    PROMPTS.nutrition_plan,
+  await provider.streamGenerate(
+    getPrompt('nutrition_plan', langPlan),
     `Generate a flexible nutrition plan with this data:\n\n${context}`,
     res,
     {
@@ -287,7 +292,7 @@ router.post('/plans/generate', async (req: Request, res: Response) => {
               plan.daily_fat_g || null,
               plan.strategy || strategy || 'maintain',
               plan.rationale || null,
-              CLAUDE_MODEL,
+              modelName,
               rawResponse,
             );
 
@@ -384,20 +389,24 @@ router.post('/chat', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'messages required' });
     return;
   }
-  if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured' });
+
+  const provider = pickProviderFromReq(req);
+  if (!(await isAIConfigured(provider.name))) {
+    const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
+    res.status(503).json({ error: `${label} is not available. Check your setup.` });
     return;
   }
 
+  const langChat = pickLanguageFromReq(req);
   const targetDate = date || new Date().toISOString().slice(0, 10);
   const context = buildNutritionChatContext(targetDate);
-  const systemPrompt = `${PROMPTS.nutrition_chat}\n\nUser data:\n${context}`;
+  const systemPrompt = `${getPrompt('nutrition_chat', langChat)}\n\nUser data:\n${context}`;
 
-  const claudeMessages = (messages as any[])
+  const aiMessages = (messages as any[])
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-  await claudeStreamChat(systemPrompt, claudeMessages, res);
+  await provider.streamChat({ systemPrompt, messages: aiMessages, res });
 });
 
 export default router;

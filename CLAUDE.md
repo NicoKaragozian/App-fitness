@@ -194,14 +194,19 @@ Browser Web Speech API, no backend. `useSTT` (lang: 'en-US', continuous, auto-re
 
 ## Nutrition
 
-Claude API (claude-sonnet-4-6). Photo analysis with `claudeVisionStream`, plans with `claudeStreamGenerate`.
+Provider-agnostic. Photo analysis with `provider.visionStream`, plans with `provider.streamGenerate`.
+Default provider: Gemma 3n E2B via Ollama. Toggle in UI to use Claude instead.
 
-### Claude Provider (`server/src/ai/claude.ts`)
-- `isClaudeConfigured()` → all endpoints call it, return 503 if not configured
-- `claudeChat()` → non-streaming (used in describe and goals)
-- `claudeStreamGenerate()` → streaming SSE, single user message, `beforeDone(fullContent)` callback
-- `claudeStreamChat()` → same but multi-turn (AI Coach)
-- `claudeVisionStream()` → streaming with image, max_tokens: 500
+### AI Provider Architecture (`server/src/ai/providers/`)
+- `config.ts` → `AI_CONFIG` (model names, URLs). `modelNameFor(provider)` for DB columns.
+- `providers/types.ts` → `Provider` interface: `chat`, `chatJSON`, `streamChat`, `streamGenerate`, `visionStream`, `streamAgent`
+- `providers/gemma.ts` → Gemma 3n via Ollama. Vision via `images:[base64]`. Agent via ReAct loop.
+- `providers/claude.ts` → Claude via Anthropic SDK. Agent via native tool_use.
+- `providers/ollama.ts` → Low-level Ollama `/api/chat` client (streaming + JSON mode).
+- `providers/react-agent.ts` → ReAct loop for models without native tool_use. Uses fenced `` ```tool_call `` blocks.
+- `providers/index.ts` → `getProvider(name?)`, `pickProviderFromReq(req)`, `isAIConfigured(name?)`
+- All routes use `pickProviderFromReq(req)` to pick provider from `body.provider` / `query.provider` / `x-ai-provider` header / `AI_PROVIDER` env.
+- `ANTHROPIC_API_KEY` is **optional** — only needed if `provider=claude` is requested.
 
 ### SSE Formats
 **Photo analyze**: `{"image_path":"..."}` first, then `{"token":"..."}` tokens, then `[DONE]`
@@ -232,7 +237,7 @@ Each slot can have rows with `option_number` 1/2/3 (interchangeable options). Ad
 ### Images
 Saved in `server/uploads/`. Served as static files. Vite proxy: `'/uploads': 'http://localhost:3001'`. DELETE of log deletes the file with `fs.unlink()` (non-blocking).
 
-Env vars: `ANTHROPIC_API_KEY=sk-ant-...`, `CLAUDE_MODEL=claude-sonnet-4-6`, `UPLOAD_PATH=/data/uploads`
+Env vars: `AI_PROVIDER=gemma|claude` (default: gemma), `OLLAMA_URL=http://localhost:11434`, `GEMMA_MODEL=gemma4:e2b`, `GEMMA_VISION_MODEL=gemma4:e2b`, `ANTHROPIC_API_KEY=sk-ant-...` (optional, for Claude toggle), `CLAUDE_MODEL=claude-sonnet-4-6`, `UPLOAD_PATH=/data/uploads`
 
 ### Routes `/api/nutrition`
 POST `/analyze` (photo SSE), POST/GET `/logs`, GET `/logs/range`, PUT/DELETE `/logs/:id`, POST/GET `/plans/generate`, GET/DELETE `/plans/:id`
@@ -256,6 +261,11 @@ If a metric is 0, its weight is redistributed. Calculated in `health.ts` and `ac
 
 ## Dev Commands
 ```bash
+# Local AI (Gemma) — required for default operation
+ollama serve
+ollama pull gemma4:e2b        # main model (~2GB)
+# ollama pull gemma3:4b        # fallback if gemma4:e2b vision fails
+
 npx tsx server/src/index.ts   # backend :3001
 npm run dev                    # frontend :5175
 curl -X POST http://localhost:3001/api/sync

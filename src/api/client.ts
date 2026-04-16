@@ -1,9 +1,19 @@
 const BASE = '/api';
 
+function getLang(): string {
+  try { return localStorage.getItem('drift_language') || 'en'; } catch { return 'en'; }
+}
+
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Language': getLang(),
+  };
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: baseHeaders,
     ...options,
+    // Merge caller headers over base headers (preserves Content-Type override from callers)
+    ...(options?.headers ? { headers: { ...baseHeaders, ...(options.headers as Record<string, string>) } } : {}),
   });
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}));

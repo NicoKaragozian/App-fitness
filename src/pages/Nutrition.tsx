@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNutrition } from '../hooks/useNutrition';
 import { useNutritionPlan, type DietaryPreferences } from '../hooks/useNutritionPlan';
 import { useProfile } from '../hooks/useProfile';
@@ -8,43 +9,9 @@ import { STTButton } from '../components/ui/STTButton';
 import { useAIProgress } from '../hooks/useAIProgress';
 import AIProgressIndicator from '../components/ui/AIProgressIndicator';
 import { NUTRITION_PLAN_PROGRESS, FOOD_ANALYSIS_PROGRESS } from '../utils/aiProgressConfigs';
-
-const SLOT_LABELS: Record<string, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  snack: 'Snack',
-  dinner: 'Dinner',
-  pre_workout: 'Pre-workout',
-  post_workout: 'Post-workout',
-};
+import { useAIProvider } from '../hooks/useAIProvider';
 
 const SLOT_ORDER = ['breakfast', 'pre_workout', 'lunch', 'snack', 'post_workout', 'dinner'];
-
-const STRATEGY_OPTIONS = [
-  { value: 'maintain', label: 'Maintenance' },
-  { value: 'cut', label: 'Cut (Deficit)' },
-  { value: 'bulk', label: 'Bulk (Surplus)' },
-  { value: 'recomp', label: 'Recomposition' },
-  { value: 'endurance', label: 'Endurance' },
-];
-
-const DIET_TYPES = [
-  { value: 'omnivore', label: 'Omnivore' },
-  { value: 'vegetarian', label: 'Vegetarian' },
-  { value: 'vegan', label: 'Vegan' },
-  { value: 'pescatarian', label: 'Pescatarian' },
-  { value: 'keto', label: 'Keto' },
-  { value: 'paleo', label: 'Paleo' },
-];
-
-const ALLERGY_OPTIONS = [
-  { value: 'lactose', label: 'Lactose' },
-  { value: 'gluten', label: 'Gluten' },
-  { value: 'nuts', label: 'Tree nuts' },
-  { value: 'shellfish', label: 'Shellfish' },
-  { value: 'eggs', label: 'Egg' },
-  { value: 'soy', label: 'Soy' },
-];
 
 const DEFAULT_DIETARY_PREFS: DietaryPreferences = {
   diet_type: 'omnivore',
@@ -92,7 +59,34 @@ function MacroRing({
 }
 
 export const Nutrition: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const todayStr = new Date().toISOString().slice(0, 10);
+
+  const STRATEGY_OPTIONS = [
+    { value: 'maintain', label: t('nutrition.strategyOptions.maintain') },
+    { value: 'cut', label: t('nutrition.strategyOptions.cut') },
+    { value: 'bulk', label: t('nutrition.strategyOptions.bulk') },
+    { value: 'recomp', label: t('nutrition.strategyOptions.recomp') },
+    { value: 'endurance', label: t('nutrition.strategyOptions.endurance') },
+  ];
+
+  const DIET_TYPES = [
+    { value: 'omnivore', label: t('nutrition.dietTypes.omnivore') },
+    { value: 'vegetarian', label: t('nutrition.dietTypes.vegetarian') },
+    { value: 'vegan', label: t('nutrition.dietTypes.vegan') },
+    { value: 'pescatarian', label: t('nutrition.dietTypes.pescatarian') },
+    { value: 'keto', label: t('nutrition.dietTypes.keto') },
+    { value: 'paleo', label: t('nutrition.dietTypes.paleo') },
+  ];
+
+  const ALLERGY_OPTIONS = [
+    { value: 'lactose', label: t('nutrition.allergyOptions.lactose') },
+    { value: 'gluten', label: t('nutrition.allergyOptions.gluten') },
+    { value: 'nuts', label: t('nutrition.allergyOptions.nuts') },
+    { value: 'shellfish', label: t('nutrition.allergyOptions.shellfish') },
+    { value: 'eggs', label: t('nutrition.allergyOptions.eggs') },
+    { value: 'soy', label: t('nutrition.allergyOptions.soy') },
+  ];
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const isToday = selectedDate === todayStr;
 
@@ -142,13 +136,23 @@ export const Nutrition: React.FC = () => {
     }
   }, [profile]);
 
-  const handleAnalyzeMeal = async (file: File) => {
+  const { provider } = useAIProvider();
+  const lastAnalysisFileRef = useRef<File | null>(null);
+
+  const handleAnalyzeMeal = async (file: File, forceProvider?: string) => {
+    lastAnalysisFileRef.current = file;
     photoProgress.start(FOOD_ANALYSIS_PROGRESS);
     try {
-      await analyzeMeal(file, () => photoProgress.onToken());
+      await analyzeMeal(file, () => photoProgress.onToken(), forceProvider ?? provider);
       photoProgress.complete();
     } catch {
       photoProgress.reset();
+    }
+  };
+
+  const handleReanalyzeWithClaude = () => {
+    if (lastAnalysisFileRef.current) {
+      handleAnalyzeMeal(lastAnalysisFileRef.current, 'claude');
     }
   };
 
@@ -168,7 +172,7 @@ export const Nutrition: React.FC = () => {
     setGenerateError(null);
     planProgress.start(NUTRITION_PLAN_PROGRESS);
     try {
-      await generatePlan(selectedStrategy, undefined, dietaryPrefs, () => planProgress.onToken());
+      await generatePlan(selectedStrategy, undefined, dietaryPrefs, () => planProgress.onToken(), provider);
       planProgress.complete();
       await refetchNutrition(); // Update rings with new targets
       setGenerationStep('strategy'); // Reset to initial step
@@ -197,7 +201,7 @@ export const Nutrition: React.FC = () => {
     );
   }
 
-  const formattedDate = new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+  const formattedDate = new Date(selectedDate + 'T12:00:00').toLocaleDateString(i18n.language === 'es' ? 'es-AR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <div className="p-4 lg:p-6 max-w-2xl mx-auto space-y-5 pb-24 lg:pb-6">
@@ -217,8 +221,8 @@ export const Nutrition: React.FC = () => {
             className={`text-center ${!isToday ? 'cursor-pointer' : 'cursor-default'}`}
           >
             {isToday
-              ? <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">TODAY</p>
-              : <p className="font-label text-label-sm text-primary tracking-widest uppercase">← Back to today</p>
+              ? <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('nutrition.today')}</p>
+              : <p className="font-label text-label-sm text-primary tracking-widest uppercase">{t('nutrition.backToToday')}</p>
             }
             <p className="font-body text-sm text-on-surface capitalize">{formattedDate}</p>
           </button>
@@ -234,14 +238,14 @@ export const Nutrition: React.FC = () => {
         </div>
         {!hasProfile && (
           <div className="text-center mb-3">
-            <p className="font-label text-[0.6rem] text-on-surface-variant tracking-wider">Default targets · <span className="text-primary">Complete your profile</span></p>
+            <p className="font-label text-[0.6rem] text-on-surface-variant tracking-wider">{t('nutrition.defaultTargets')}<span className="text-primary">{t('nutrition.completeProfile')}</span></p>
           </div>
         )}
         <div className="flex justify-around">
-          <MacroRing value={totals.calories} target={targets.daily_calorie_target} label="Calories" unit="kcal" color="#f3ffca" />
-          <MacroRing value={totals.protein_g} target={targets.daily_protein_g} label="Protein" unit="g" color="#6a9cff" />
-          <MacroRing value={totals.carbs_g} target={targets.daily_carbs_g} label="Carbs" unit="g" color="#ff7439" />
-          <MacroRing value={totals.fat_g} target={targets.daily_fat_g} label="Fat" unit="g" color="#22d3a5" />
+          <MacroRing value={totals.calories} target={targets.daily_calorie_target} label={t('nutrition.macros.calories')} unit="kcal" color="#f3ffca" />
+          <MacroRing value={totals.protein_g} target={targets.daily_protein_g} label={t('nutrition.macros.protein')} unit="g" color="#6a9cff" />
+          <MacroRing value={totals.carbs_g} target={targets.daily_carbs_g} label={t('nutrition.macros.carbs')} unit="g" color="#ff7439" />
+          <MacroRing value={totals.fat_g} target={targets.daily_fat_g} label={t('nutrition.macros.fat')} unit="g" color="#22d3a5" />
         </div>
       </div>
 
@@ -251,7 +255,7 @@ export const Nutrition: React.FC = () => {
         className="w-full py-4 rounded-2xl bg-primary text-surface font-label text-sm tracking-widest uppercase font-semibold flex items-center justify-center gap-2"
       >
         <span className="text-lg">+</span>
-        Log Meal
+        {t('nutrition.logMeal')}
       </button>
 
       {/* Tabs */}
@@ -266,7 +270,7 @@ export const Nutrition: React.FC = () => {
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            {tab === 'today' ? 'Today' : tab === 'plan' ? 'Plan' : 'AI Chat'}
+            {tab === 'today' ? t('nutrition.tabToday') : tab === 'plan' ? t('nutrition.tabPlan') : t('nutrition.tabChat')}
           </button>
         ))}
       </div>
@@ -277,8 +281,8 @@ export const Nutrition: React.FC = () => {
           {logs.length === 0 ? (
             <div className="bg-surface-low rounded-2xl p-8 text-center">
               <p className="text-3xl mb-3">🥗</p>
-              <p className="font-body text-on-surface-variant">No meals logged {isToday ? 'today' : 'this day'}.</p>
-              {isToday && <p className="font-body text-sm text-on-surface-variant mt-1">Use the button above to add your first meal.</p>}
+              <p className="font-body text-on-surface-variant">{t('nutrition.noMealsLogged', { day: isToday ? t('nutrition.noMealsToday') : t('nutrition.noMealsThisDay') })}</p>
+              {isToday && <p className="font-body text-sm text-on-surface-variant mt-1">{t('nutrition.addFirstMeal')}</p>}
             </div>
           ) : (
             logs.map(log => (
@@ -335,7 +339,7 @@ export const Nutrition: React.FC = () => {
                 onClick={() => deletePlan(activePlan.id)}
                 className="w-full py-2.5 rounded-xl bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase hover:text-on-surface transition-all"
               >
-                Delete plan
+                {t('nutrition.deletePlan')}
               </button>
             </div>
           ) : (
@@ -343,12 +347,12 @@ export const Nutrition: React.FC = () => {
               {generationStep === 'strategy' ? (
                 <>
                   <div>
-                    <p className="font-display text-on-surface font-semibold mb-1">Generate Nutrition Plan</p>
-                    <p className="font-body text-sm text-on-surface-variant">Claude will analyze your profile and physical activity to create a flexible plan with ingredient options.</p>
+                    <p className="font-display text-on-surface font-semibold mb-1">{t('nutrition.generatePlan')}</p>
+                    <p className="font-body text-sm text-on-surface-variant">{t('nutrition.generatePlanDesc')}</p>
                   </div>
 
                   <div>
-                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Strategy</label>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">{t('nutrition.strategyLabel')}</label>
                     <div className="flex flex-wrap gap-2">
                       {STRATEGY_OPTIONS.map(opt => (
                         <button
@@ -370,7 +374,7 @@ export const Nutrition: React.FC = () => {
                     onClick={() => setGenerationStep('preferences')}
                     className="w-full py-3.5 rounded-xl bg-primary text-surface font-label text-sm tracking-widest uppercase font-semibold"
                   >
-                    Next →
+                    {t('nutrition.nextStep')}
                   </button>
                 </>
               ) : (
@@ -383,14 +387,14 @@ export const Nutrition: React.FC = () => {
                       ←
                     </button>
                     <div>
-                      <p className="font-display text-on-surface font-semibold">Dietary Preferences</p>
-                      <p className="font-body text-xs text-on-surface-variant">Strategy: {STRATEGY_OPTIONS.find(o => o.value === selectedStrategy)?.label}</p>
+                      <p className="font-display text-on-surface font-semibold">{t('nutrition.dietaryPreferences')}</p>
+                      <p className="font-body text-xs text-on-surface-variant">{t('nutrition.strategyLabel')}: {STRATEGY_OPTIONS.find(o => o.value === selectedStrategy)?.label}</p>
                     </div>
                   </div>
 
                   {/* Diet type */}
                   <div>
-                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Diet type</label>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">{t('nutrition.dietType')}</label>
                     <div className="flex flex-wrap gap-2">
                       {DIET_TYPES.map(dt => (
                         <button
@@ -410,7 +414,7 @@ export const Nutrition: React.FC = () => {
 
                   {/* Allergies */}
                   <div>
-                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Allergies / Intolerances</label>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">{t('nutrition.allergies')}</label>
                     <div className="flex flex-wrap gap-2">
                       {ALLERGY_OPTIONS.map(al => (
                         <button
@@ -430,13 +434,13 @@ export const Nutrition: React.FC = () => {
 
                   {/* Foods to avoid */}
                   <div>
-                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Foods to avoid</label>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">{t('nutrition.excludedFoods')}</label>
                     <div className="relative">
                       <input
                         type="text"
                         value={dietaryPrefs.excluded_foods}
                         onChange={e => setDietaryPrefs(p => ({ ...p, excluded_foods: e.target.value }))}
-                        placeholder="E.g.: liver, broccoli, canned tuna"
+                        placeholder={t('nutrition.excludedFoodsPlaceholder')}
                         className="w-full bg-surface-container rounded-xl px-3 py-2.5 pr-9 font-body text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-1 focus:ring-primary/50"
                       />
                       <STTButton
@@ -449,13 +453,13 @@ export const Nutrition: React.FC = () => {
 
                   {/* Preferred foods */}
                   <div>
-                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Preferred foods</label>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">{t('nutrition.preferredFoods')}</label>
                     <div className="relative">
                       <input
                         type="text"
                         value={dietaryPrefs.preferred_foods}
                         onChange={e => setDietaryPrefs(p => ({ ...p, preferred_foods: e.target.value }))}
-                        placeholder="E.g.: chicken, brown rice, banana, oats"
+                        placeholder={t('nutrition.preferredFoodsPlaceholder')}
                         className="w-full bg-surface-container rounded-xl px-3 py-2.5 pr-9 font-body text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-1 focus:ring-primary/50"
                       />
                       <STTButton
@@ -468,7 +472,7 @@ export const Nutrition: React.FC = () => {
 
                   {/* Meals per day */}
                   <div>
-                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">Meals per day</label>
+                    <label className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2 block">{t('nutrition.mealsPerDay')}</label>
                     <div className="flex gap-2">
                       {[3, 4, 5, 6].map(n => (
                         <button
@@ -504,7 +508,7 @@ export const Nutrition: React.FC = () => {
                     disabled={generating}
                     className="w-full py-3.5 rounded-xl bg-primary text-surface font-label text-sm tracking-widest uppercase font-semibold disabled:opacity-60"
                   >
-                    {generating ? 'Generating...' : 'Generate Plan with AI'}
+                    {generating ? t('nutrition.generatingPlan') : t('nutrition.generateWithAI')}
                   </button>
                 </>
               )}
@@ -537,6 +541,8 @@ export const Nutrition: React.FC = () => {
           onClearAnalysis={clearAnalysis}
           onSave={handleSaveMeal}
           onClose={handleCloseLogger}
+          activeProvider={provider}
+          onReanalyzeWithClaude={provider !== 'claude' && analysisResult ? handleReanalyzeWithClaude : undefined}
         />
       )}
     </div>
@@ -545,7 +551,16 @@ export const Nutrition: React.FC = () => {
 
 // Individual log card
 function MealCard({ log, onDelete }: { log: any; onDelete: () => void }) {
-  const time = log.logged_at ? new Date(log.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+  const { t, i18n } = useTranslation();
+  const SLOT_LABELS: Record<string, string> = {
+    breakfast: t('nutrition.slotLabels.breakfast'),
+    lunch: t('nutrition.slotLabels.lunch'),
+    snack: t('nutrition.slotLabels.snack'),
+    dinner: t('nutrition.slotLabels.dinner'),
+    pre_workout: t('nutrition.slotLabels.pre_workout'),
+    post_workout: t('nutrition.slotLabels.post_workout'),
+  };
+  const time = log.logged_at ? new Date(log.logged_at).toLocaleTimeString(i18n.language === 'es' ? 'es-AR' : 'en-US', { hour: '2-digit', minute: '2-digit' }) : '';
 
   return (
     <div className="bg-surface-low rounded-2xl overflow-hidden flex">
@@ -559,7 +574,7 @@ function MealCard({ log, onDelete }: { log: any; onDelete: () => void }) {
       <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-body text-sm text-on-surface font-medium truncate">{log.meal_name || 'Unnamed'}</p>
+            <p className="font-body text-sm text-on-surface font-medium truncate">{log.meal_name || t('nutrition.mealCard.unnamed')}</p>
             <div className="flex items-center gap-2 mt-0.5">
               {log.meal_slot && (
                 <span className="font-label text-[0.6rem] text-on-surface-variant tracking-wider uppercase">
@@ -615,6 +630,15 @@ function PlanMealOption({ meal }: { meal: any }) {
 
 // Slot with tabs for each option
 function PlanSlotOptions({ slot, meals }: { slot: string; meals: any[] }) {
+  const { t } = useTranslation();
+  const SLOT_LABELS: Record<string, string> = {
+    breakfast: t('nutrition.slotLabels.breakfast'),
+    lunch: t('nutrition.slotLabels.lunch'),
+    snack: t('nutrition.slotLabels.snack'),
+    dinner: t('nutrition.slotLabels.dinner'),
+    pre_workout: t('nutrition.slotLabels.pre_workout'),
+    post_workout: t('nutrition.slotLabels.post_workout'),
+  };
   const options = [...new Set(meals.map(m => m.option_number || 1))].sort((a, b) => a - b);
   const [activeOption, setActiveOption] = useState(options[0] || 1);
   const activeMeal = meals.find(m => (m.option_number || 1) === activeOption);
@@ -637,7 +661,7 @@ function PlanSlotOptions({ slot, meals }: { slot: string; meals: any[] }) {
                     : 'bg-surface-container text-on-surface-variant hover:text-on-surface'
                 }`}
               >
-                Op. {n}
+                {t('nutrition.option')} {n}
               </button>
             ))}
           </div>

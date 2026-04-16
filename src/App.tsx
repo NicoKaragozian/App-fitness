@@ -11,6 +11,7 @@ import { ActiveWorkout } from './pages/ActiveWorkout';
 import { Nutrition } from './pages/Nutrition';
 import { GoalDetail } from './pages/GoalDetail';
 import { Assessment } from './pages/Assessment';
+import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -36,6 +37,7 @@ function AuthenticatedLayout() {
             <Route path="/training/workout/:id" element={<ActiveWorkout />} />
             <Route path="/training/:id" element={<PlanDetail />} />
             <Route path="/nutrition" element={<Nutrition />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

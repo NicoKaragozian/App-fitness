@@ -61,7 +61,7 @@ export function useNutritionPlan() {
     fetchPlans();
   }, [fetchPlans]);
 
-  const generatePlan = useCallback(async (strategy?: string, linkedTrainingPlanId?: number, dietaryPreferences?: DietaryPreferences, onToken?: () => void) => {
+  const generatePlan = useCallback(async (strategy?: string, linkedTrainingPlanId?: number, dietaryPreferences?: DietaryPreferences, onToken?: () => void, provider?: string) => {
     setGenerating(true);
     setGenerationStream('');
     setError(null);
@@ -70,10 +70,11 @@ export function useNutritionPlan() {
     abortRef.current = ctrl;
 
     try {
+      const language = (() => { try { return localStorage.getItem('drift_language') || 'en'; } catch { return 'en'; } })();
       const response = await fetch('/api/nutrition/plans/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strategy, linkedTrainingPlanId, dietaryPreferences }),
+        headers: { 'Content-Type': 'application/json', 'X-Language': language },
+        body: JSON.stringify({ strategy, linkedTrainingPlanId, dietaryPreferences, provider, language }),
         signal: ctrl.signal,
       });
 

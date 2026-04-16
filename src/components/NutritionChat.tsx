@@ -66,10 +66,11 @@ export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targ
     abortRef.current = new AbortController();
 
     try {
+      const language = (() => { try { return localStorage.getItem('drift_language') || 'en'; } catch { return 'en'; } })();
       const res = await fetch('/api/nutrition/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages, date }),
+        headers: { 'Content-Type': 'application/json', 'X-Language': language },
+        body: JSON.stringify({ messages: newMessages, date, language }),
         signal: abortRef.current.signal,
       });
 

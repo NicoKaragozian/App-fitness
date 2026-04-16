@@ -1,43 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useGoals } from '../hooks/useGoals';
 import type { Goal } from '../hooks/useGoals';
+import { useAIProvider } from '../hooks/useAIProvider';
 import { useAIProgress } from '../hooks/useAIProgress';
 import AIProgressIndicator from '../components/ui/AIProgressIndicator';
 import { GOAL_PROGRESS } from '../utils/aiProgressConfigs';
 
-const SUGGESTIONS = [
-  'Achieve my first muscle-up',
-  'Do 10 pull-ups in a row',
-  'Run 10km in under 50 minutes',
-  'Improve flexibility with yoga 3 times a week',
-  'Increase max speed in kitesurfing to 40 km/h',
-];
-
 const TODAY = new Date().toISOString().slice(0, 10);
-
-function formatCountdown(targetDate: string): { label: string; urgent: boolean } {
-  const target = new Date(targetDate + 'T12:00:00');
-  const now = new Date();
-  const diffDays = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) return { label: 'Overdue', urgent: true };
-  if (diffDays === 0) return { label: 'Today!', urgent: true };
-  if (diffDays === 1) return { label: 'Tomorrow', urgent: false };
-  if (diffDays < 14) return { label: `${diffDays} days`, urgent: diffDays < 7 };
-  const weeks = Math.ceil(diffDays / 7);
-  return { label: `${weeks} weeks`, urgent: false };
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  active: 'ACTIVE',
-  completed: 'COMPLETED',
-  abandoned: 'ABANDONED',
-};
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'text-primary bg-primary/10',
@@ -51,9 +22,39 @@ interface GoalsProps {
 
 export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const { goals, loading, generateGoal, deleteGoal, updateGoalStatus } = useGoals();
-
+  const { provider } = useAIProvider();
   const aiProgress = useAIProgress();
+
+  const SUGGESTIONS = [
+    t('goals.suggestions.1'),
+    t('goals.suggestions.2'),
+    t('goals.suggestions.3'),
+    t('goals.suggestions.4'),
+    t('goals.suggestions.5'),
+  ];
+
+  const STATUS_LABELS: Record<string, string> = {
+    active: t('goals.statusLabels.active'),
+    completed: t('goals.statusLabels.completed'),
+    abandoned: t('goals.statusLabels.abandoned'),
+  };
+
+  const formatCountdown = (targetDate: string): { label: string; urgent: boolean } => {
+    const target = new Date(targetDate + 'T12:00:00');
+    const now = new Date();
+    const diffDays = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return { label: t('goals.countdown.overdue'), urgent: true };
+    if (diffDays === 0) return { label: t('goals.countdown.today'), urgent: true };
+    if (diffDays === 1) return { label: t('goals.countdown.tomorrow'), urgent: false };
+    if (diffDays < 14) return { label: t('goals.countdown.days', { count: diffDays }), urgent: diffDays < 7 };
+    const weeks = Math.ceil(diffDays / 7);
+    return { label: t('goals.countdown.weeks', { count: weeks }), urgent: false };
+  };
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(i18n.language === 'es' ? 'es-AR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
   const [showForm, setShowForm] = useState(false);
   const [objective, setObjective] = useState('');
@@ -69,7 +70,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
     setGenError(null);
     aiProgress.start(GOAL_PROGRESS);
     try {
-      const data = await generateGoal(objective.trim(), targetDate || undefined);
+      const data = await generateGoal(objective.trim(), targetDate || undefined, provider);
       aiProgress.complete();
       setTimeout(() => {
         setShowForm(false);
@@ -83,7 +84,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
     } finally {
       setGenerating(false);
     }
-  }, [objective, targetDate, generateGoal, navigate, aiProgress]);
+  }, [objective, targetDate, generateGoal, navigate, aiProgress, provider]);
 
   const activeGoals = goals.filter(g => g.status === 'active');
   const archivedGoals = goals.filter(g => g.status !== 'active');
@@ -104,14 +105,14 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {!isEmbedded && (
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Fitness</p>
-            <h1 className="font-display text-2xl text-on-surface">My Goals</h1>
+            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('goals.subtitle')}</p>
+            <h1 className="font-display text-2xl text-on-surface">{t('goals.title')}</h1>
           </div>
           <button
             onClick={e => { e.stopPropagation(); setShowForm(f => !f); setGenError(null); }}
             className="bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2 rounded-xl hover:opacity-90 transition-opacity"
           >
-            {showForm ? 'Cancel' : 'New Goal'}
+            {showForm ? t('common.cancel') : t('goals.newGoal')}
           </button>
         </div>
       )}
@@ -123,7 +124,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
             onClick={e => { e.stopPropagation(); setShowForm(f => !f); setGenError(null); }}
             className="bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2 rounded-xl hover:opacity-90 transition-opacity"
           >
-            {showForm ? 'Cancel' : 'New Goal'}
+            {showForm ? t('common.cancel') : t('goals.newGoal')}
           </button>
         </div>
       )}
@@ -132,10 +133,9 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {showForm && (
         <div className="bg-surface-low rounded-xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
           <div>
-            <p className="font-label text-label-sm text-primary tracking-widest uppercase">New goal</p>
+            <p className="font-label text-label-sm text-primary tracking-widest uppercase">{t('goals.newGoalTitle')}</p>
             <p className="text-xs text-on-surface-variant mt-1">
-              Goals are progression guides: what to work on, in what order, and how to advance.
-              If you want a training plan with sets and reps, use the <span className="text-primary">Training Plans</span> section.
+              {t('goals.newGoalDesc')} <span className="text-primary">{t('goals.newGoalDescLink')}</span> {t('goals.newGoalDescEnd')}
             </p>
           </div>
 
@@ -159,13 +159,13 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
           {/* Objective textarea */}
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1.5 block">
-              What goal do you want to achieve?
+              {t('goals.objectiveLabel')}
             </label>
             <textarea
               value={objective}
               onChange={e => setObjective(e.target.value)}
               rows={3}
-              placeholder="Describe your goal in detail. For example: I want to achieve my first muscle-up on the bar."
+              placeholder={t('goals.objectivePlaceholder')}
               className="w-full bg-surface-container rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-on-surface-variant/40"
             />
           </div>
@@ -173,7 +173,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
           {/* Target date (optional) */}
           <div>
             <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase mb-1.5 block">
-              Target date <span className="normal-case text-on-surface-variant/60">(optional)</span>
+              {t('goals.targetDate')} <span className="normal-case text-on-surface-variant/60">{t('goals.targetDateOptional')}</span>
             </label>
             <input
               type="date"
@@ -203,7 +203,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
             disabled={generating || !objective.trim()}
             className="w-full bg-primary text-surface font-label text-label-sm tracking-widest uppercase py-3 rounded-xl disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
           >
-            {generating ? 'Generating guide...' : 'Generate Guide'}
+            {generating ? t('goals.generatingGuide') : t('goals.generateGuide')}
           </button>
         </div>
       )}
@@ -212,8 +212,8 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {activeGoals.length === 0 && !showForm && (
         <div className="bg-surface-low rounded-xl p-10 text-center space-y-3">
           <div className="text-4xl opacity-30">◎</div>
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">No active goals</p>
-          <p className="text-sm text-on-surface-variant">Create your first goal and AI will generate a progression guide with phases, key exercises, and tips to achieve it.</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('goals.noActiveGoals')}</p>
+          <p className="text-sm text-on-surface-variant">{t('goals.noActiveGoalsDesc')}</p>
         </div>
       )}
 
@@ -229,6 +229,10 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
               onComplete={async () => { setMenuOpen(null); await updateGoalStatus(goal.id, 'completed'); }}
               onAbandon={async () => { setMenuOpen(null); await updateGoalStatus(goal.id, 'abandoned'); }}
               onDelete={() => { setMenuOpen(null); setConfirmDelete(goal.id); }}
+              statusLabels={STATUS_LABELS}
+              formatCountdown={formatCountdown}
+              formatDate={formatDate}
+              t={t}
             />
           ))}
         </div>
@@ -237,7 +241,7 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {/* Archived goals */}
       {archivedGoals.length > 0 && (
         <div className="space-y-2">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase px-1">Previous</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase px-1">{t('goals.previous')}</p>
           {archivedGoals.map(goal => (
             <GoalCard
               key={goal.id}
@@ -249,6 +253,10 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
               onAbandon={async () => { setMenuOpen(null); await updateGoalStatus(goal.id, 'abandoned'); }}
               onDelete={() => { setMenuOpen(null); setConfirmDelete(goal.id); }}
               archived
+              statusLabels={STATUS_LABELS}
+              formatCountdown={formatCountdown}
+              formatDate={formatDate}
+              t={t}
             />
           ))}
         </div>
@@ -258,20 +266,20 @@ export const Goals: React.FC<GoalsProps> = ({ isEmbedded = false }) => {
       {confirmDelete !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="bg-surface-low rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-xl">
-            <p className="font-display text-lg text-on-surface">Delete goal?</p>
-            <p className="text-sm text-on-surface-variant">The goal and all its phases will be deleted. This action cannot be undone.</p>
+            <p className="font-display text-lg text-on-surface">{t('goals.deleteGoal')}</p>
+            <p className="text-sm text-on-surface-variant">{t('goals.deleteGoalDesc')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
                 className="flex-1 bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:opacity-80"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={async () => { await deleteGoal(confirmDelete); setConfirmDelete(null); }}
                 className="flex-1 bg-red-500/20 text-red-400 font-label text-label-sm tracking-widest uppercase py-2.5 rounded-xl hover:bg-red-500/30"
               >
-                Delete
+                {t('common.delete')}
               </button>
             </div>
           </div>
@@ -290,9 +298,13 @@ interface GoalCardProps {
   onAbandon: () => void;
   onDelete: () => void;
   archived?: boolean;
+  statusLabels: Record<string, string>;
+  formatCountdown: (d: string) => { label: string; urgent: boolean };
+  formatDate: (iso: string) => string;
+  t: (key: string) => string;
 }
 
-function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon, onDelete, archived }: GoalCardProps) {
+function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon, onDelete, archived, statusLabels, formatCountdown, formatDate, t }: GoalCardProps) {
   const countdown = goal.target_date ? formatCountdown(goal.target_date) : null;
   const progress = goal.milestone_count > 0 ? (goal.completed_count / goal.milestone_count) * 100 : 0;
 
@@ -307,7 +319,7 @@ function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon,
             <p className="font-medium text-on-surface text-sm">{goal.title}</p>
             {goal.status !== 'active' && (
               <span className={`font-label text-[10px] tracking-widest uppercase px-2 py-0.5 rounded ${STATUS_COLORS[goal.status]}`}>
-                {STATUS_LABELS[goal.status]}
+                {statusLabels[goal.status]}
               </span>
             )}
           </div>
@@ -324,7 +336,7 @@ function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon,
               />
             </div>
             <span className="font-label text-[10px] text-on-surface-variant tracking-widest shrink-0">
-              {goal.completed_count}/{goal.milestone_count} phases
+              {goal.completed_count}/{goal.milestone_count} {t('goals.phases')}
             </span>
           </div>
 
@@ -362,21 +374,21 @@ function GoalCard({ goal, menuOpen, onMenuToggle, onOpen, onComplete, onAbandon,
                 onClick={onComplete}
                 className="w-full text-left px-4 py-2.5 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors font-body"
               >
-                {goal.status === 'active' ? '✓ Mark completed' : '↺ Reactivate'}
+                {goal.status === 'active' ? t('goals.markCompleted') : t('goals.reactivate')}
               </button>
               {goal.status === 'active' && (
                 <button
                   onClick={onAbandon}
                   className="w-full text-left px-4 py-2.5 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors font-body"
                 >
-                  Abandon
+                  {t('goals.abandon')}
                 </button>
               )}
               <button
                 onClick={onDelete}
                 className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors font-body"
               >
-                Delete
+                {t('common.delete')}
               </button>
             </div>
           )}

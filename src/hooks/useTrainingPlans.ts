@@ -38,13 +38,15 @@ export function useTrainingPlans() {
   const generatePlanStream = useCallback(async (
     goal: string,
     onToken: () => void,
+    provider?: string,
   ): Promise<{ plan: TrainingPlanSummary; recommendations: string | null }> => {
     abortRef.current = new AbortController();
 
+    const language = (() => { try { return localStorage.getItem('drift_language') || 'en'; } catch { return 'en'; } })();
     const response = await fetch('/api/training/generate', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ goal }),
+      headers: { 'Content-Type': 'application/json', 'X-Language': language },
+      body: JSON.stringify({ goal, provider, language }),
       signal: abortRef.current.signal,
     });
 

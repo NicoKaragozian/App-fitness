@@ -4,7 +4,7 @@ export const TRAINING_PLAN_PROGRESS: AIProgressConfig = {
   mode: 'streaming',
   expectedTokens: 2500,
   phases: [
-    { at: 0,  label: 'Connecting to Claude...' },
+    { at: 0,  label: 'Connecting to AI...' },
     { at: 5,  label: 'Analyzing your data...' },
     { at: 25, label: 'Designing sessions...' },
     { at: 50, label: 'Building your plan...' },
@@ -17,7 +17,7 @@ export const NUTRITION_PLAN_PROGRESS: AIProgressConfig = {
   mode: 'streaming',
   expectedTokens: 4000,
   phases: [
-    { at: 0,  label: 'Connecting to Claude...' },
+    { at: 0,  label: 'Connecting to AI...' },
     { at: 5,  label: 'Calculating your macros...' },
     { at: 20, label: 'Selecting foods...' },
     { at: 45, label: 'Building meal options...' },
@@ -30,13 +30,15 @@ export const GOAL_PROGRESS: AIProgressConfig = {
   mode: 'timed',
   estimatedDurationMs: 12000,
   phases: [
-    { at: 0,  label: 'Connecting to Claude...' },
+    { at: 0,  label: 'Connecting to AI...' },
     { at: 10, label: 'Analyzing your goal...' },
     { at: 30, label: 'Defining progression phases...' },
     { at: 55, label: 'Identifying key exercises...' },
     { at: 80, label: 'Finalizing guide...' },
   ],
 };
+
+export const AGENT_PLAN_PROGRESS: AIProgressConfig = TRAINING_PLAN_PROGRESS;
 
 export const FOOD_ANALYSIS_PROGRESS: AIProgressConfig = {
   mode: 'streaming',

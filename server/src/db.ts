@@ -228,6 +228,29 @@ try {
   db.exec('ALTER TABLE training_exercises ADD COLUMN description TEXT');
 } catch { /* ya existe, ignorar */ }
 
+// Migration: soporte multi-deporte en training
+try {
+  db.exec("ALTER TABLE training_exercises ADD COLUMN type TEXT DEFAULT 'strength'");
+} catch { /* ya existe */ }
+try {
+  db.exec('ALTER TABLE training_exercises ADD COLUMN target_duration_seconds INTEGER');
+} catch { /* ya existe */ }
+try {
+  db.exec('ALTER TABLE training_exercises ADD COLUMN target_distance_meters REAL');
+} catch { /* ya existe */ }
+try {
+  db.exec('ALTER TABLE training_exercises ADD COLUMN target_pace TEXT');
+} catch { /* ya existe */ }
+try {
+  db.exec('ALTER TABLE training_sessions ADD COLUMN type TEXT');
+} catch { /* ya existe */ }
+try {
+  db.exec('ALTER TABLE workout_sets ADD COLUMN duration_seconds REAL');
+} catch { /* ya existe */ }
+try {
+  db.exec('ALTER TABLE workout_sets ADD COLUMN distance_meters REAL');
+} catch { /* ya existe */ }
+
 // Migration: vincular weekly_plan con training_plans/sessions
 try {
   db.exec('ALTER TABLE weekly_plan ADD COLUMN plan_id INTEGER');

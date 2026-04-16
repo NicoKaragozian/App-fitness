@@ -5,7 +5,10 @@ import { TTSButton } from '../components/ui/TTSButton';
 import { STTButton } from '../components/ui/STTButton';
 import AIProgressIndicator from '../components/ui/AIProgressIndicator';
 import { useAIProgress } from '../hooks/useAIProgress';
-import type { AIProgressConfig } from '../hooks/useAIProgress';
+import { AGENT_PLAN_PROGRESS } from '../utils/aiProgressConfigs';
+import { useAIProvider } from '../hooks/useAIProvider';
+import { useLanguage } from '../hooks/useLanguage';
+import { useTranslation } from 'react-i18next';
 
 interface ToolEvent {
   type: 'call' | 'result';
@@ -31,41 +34,13 @@ interface ChatSession {
   createdAt: string;
 }
 
-const SUGGESTIONS = [
-  'Give me my daily briefing',
-  'Create a training plan for me',
-  'How did I sleep last night?',
-  'Log a meal',
-];
+// Suggestions are resolved at render time via t() — see component body
 
-const AGENT_PLAN_PROGRESS: AIProgressConfig = {
-  mode: 'timed',
-  estimatedDurationMs: 15000,
-  phases: [
-    { at: 0, label: 'Connecting to Claude...' },
-    { at: 8, label: 'Analyzing your profile...' },
-    { at: 25, label: 'Designing sessions...' },
-    { at: 50, label: 'Building your plan...' },
-    { at: 75, label: 'Adjusting exercises...' },
-    { at: 90, label: 'Saving plan...' },
-  ],
-};
+// Progress phases are resolved at runtime via t() — see sendMessage
 
-const TOOL_LABELS: Record<string, string> = {
-  update_profile: 'Updating profile...',
-  generate_training_plan: 'Generating training plan...',
-  log_meal: 'Logging meal...',
-  get_daily_briefing: 'Loading daily briefing...',
-  navigate_to: 'Navigating...',
-};
+// TOOL_LABELS resolved via t() at render time — see ToolPendingLabel component
 
 const GREETING_KEY = 'drift_ai_greeted';
-
-const INITIAL_GREETING = `Hi! I'm DRIFT AI, your personal sports coach. I have access to your training, sleep, HRV, stress, and nutrition data to give you personalized recommendations.
-
-You can ask me about your recovery, sports performance, sleep patterns, nutritional analysis, or any aspect of your training. I'll use your real data to interpret and give you actionable advice.
-
-What would you like to work on today?`;
 
 const CHATS_KEY = 'drift_ai_chats';
 const CURRENT_KEY = 'drift_ai_current_chat';
@@ -102,6 +77,7 @@ function formatRelativeDate(dateStr: string): string {
 // ── Inline tool result cards ─────────────────────────────────────────
 
 const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
+  const { t } = useTranslation();
   const r = event.result;
   if (!r || r.error) {
     return r?.error ? (
@@ -117,7 +93,7 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
         <div className="mt-2 px-3 py-2.5 rounded-xl bg-primary/10 border border-primary/20">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-primary text-sm">▣</span>
-            <span className="font-label text-xs font-semibold text-primary tracking-wide uppercase">Plan created</span>
+            <span className="font-label text-xs font-semibold text-primary tracking-wide uppercase">{t('aiCoach.toolResults.planCreated')}</span>
           </div>
           <p className="font-body text-sm font-semibold text-on-surface">{r.title}</p>
           {r.objective && <p className="font-body text-xs text-on-surface-variant mt-0.5">{r.objective}</p>}
@@ -125,13 +101,13 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
             <div className="flex flex-wrap gap-1.5 mt-2">
               {r.sessions.map((s: any, i: number) => (
                 <span key={i} className="px-2 py-0.5 rounded-lg bg-surface-container text-xs font-label text-on-surface-variant">
-                  {s.name} · {s.exercise_count} ej.
+                  {s.name} · {s.exercise_count} {t('aiCoach.toolResults.exercises')}
                 </span>
               ))}
             </div>
           )}
           <a href={`/training/${r.plan_id}`} className="inline-block mt-2 font-label text-xs text-primary hover:text-primary/80 tracking-wide">
-            View full plan →
+            {t('aiCoach.toolResults.viewFullPlan')}
           </a>
         </div>
       );
@@ -141,7 +117,7 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
         <div className="mt-2 px-3 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-green-400 text-sm">✓</span>
-            <span className="font-label text-xs font-semibold text-green-400 tracking-wide uppercase">Meal logged</span>
+            <span className="font-label text-xs font-semibold text-green-400 tracking-wide uppercase">{t('aiCoach.toolResults.mealLogged')}</span>
           </div>
           <p className="font-body text-sm text-on-surface">{r.meal_name}</p>
           <div className="flex flex-wrap gap-2 mt-1.5">
@@ -158,11 +134,11 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
         <div className="mt-2 px-3 py-2 rounded-xl bg-blue-500/10 border border-blue-500/20">
           <div className="flex items-center gap-2">
             <span className="text-blue-400 text-sm">✓</span>
-            <span className="font-label text-xs font-semibold text-blue-400 tracking-wide uppercase">Profile updated</span>
+            <span className="font-label text-xs font-semibold text-blue-400 tracking-wide uppercase">{t('aiCoach.toolResults.profileUpdated')}</span>
           </div>
           {r.updated_fields?.length > 0 && (
             <p className="font-body text-xs text-on-surface-variant mt-1">
-              Fields: {r.updated_fields.join(', ')}
+              {t('aiCoach.toolResults.fields')}: {r.updated_fields.join(', ')}
             </p>
           )}
         </div>
@@ -173,29 +149,29 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
         <div className="mt-2 px-3 py-2.5 rounded-xl bg-primary/10 border border-primary/20">
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-primary text-sm">◉</span>
-            <span className="font-label text-xs font-semibold text-primary tracking-wide uppercase">Daily Briefing</span>
+            <span className="font-label text-xs font-semibold text-primary tracking-wide uppercase">{t('aiCoach.toolResults.dailyBriefing')}</span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs font-body">
             <div className="px-2 py-1.5 rounded-lg bg-surface-container">
-              <span className="text-on-surface-variant">Readiness</span>
+              <span className="text-on-surface-variant">{t('aiCoach.toolResults.readiness')}</span>
               <p className="font-semibold text-on-surface">{r.readiness?.score ?? '-'} — {r.readiness?.label ?? '-'}</p>
             </div>
             <div className="px-2 py-1.5 rounded-lg bg-surface-container">
-              <span className="text-on-surface-variant">Sleep</span>
-              <p className="font-semibold text-on-surface">{r.sleep?.score ?? 'no data'}</p>
+              <span className="text-on-surface-variant">{t('aiCoach.toolResults.sleep')}</span>
+              <p className="font-semibold text-on-surface">{r.sleep?.score ?? t('aiCoach.toolResults.noData')}</p>
             </div>
             <div className="px-2 py-1.5 rounded-lg bg-surface-container">
-              <span className="text-on-surface-variant">HRV</span>
-              <p className="font-semibold text-on-surface">{r.hrv?.current ? `${r.hrv.current}ms` : 'no data'}</p>
+              <span className="text-on-surface-variant">{t('aiCoach.toolResults.hrv')}</span>
+              <p className="font-semibold text-on-surface">{r.hrv?.current ? `${r.hrv.current}ms` : t('aiCoach.toolResults.noData')}</p>
             </div>
             <div className="px-2 py-1.5 rounded-lg bg-surface-container">
-              <span className="text-on-surface-variant">Stress</span>
-              <p className="font-semibold text-on-surface">{r.stress?.current ?? 'no data'}</p>
+              <span className="text-on-surface-variant">{t('aiCoach.toolResults.stress')}</span>
+              <p className="font-semibold text-on-surface">{r.stress?.current ?? t('aiCoach.toolResults.noData')}</p>
             </div>
           </div>
           {r.recommendations?.length > 0 && (
             <div className="mt-2 px-2 py-1.5 rounded-lg bg-surface-container">
-              <p className="text-xs text-on-surface-variant font-label uppercase tracking-wide mb-0.5">Top recommendation</p>
+              <p className="text-xs text-on-surface-variant font-label uppercase tracking-wide mb-0.5">{t('aiCoach.toolResults.topRecommendation')}</p>
               <p className="text-xs text-on-surface">{r.recommendations[0].title}: {r.recommendations[0].description}</p>
             </div>
           )}
@@ -205,7 +181,7 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
     case 'navigate_to':
       return (
         <div className="mt-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
-          <span className="font-label text-xs text-primary tracking-wide">Navegando a {r.route}...</span>
+          <span className="font-label text-xs text-primary tracking-wide">{t('aiCoach.toolLabels.navigate_to')} {r.route}</span>
         </div>
       );
 
@@ -215,6 +191,7 @@ const ToolResultCard: React.FC<{ event: ToolEvent }> = ({ event }) => {
 };
 
 export const AICoach: React.FC = () => {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const preseeded = (location.state as any)?.preseeded;
@@ -222,6 +199,15 @@ export const AICoach: React.FC = () => {
   const preseededResponse = (location.state as any)?.aiResponse;
 
   const aiProgress = useAIProgress();
+  const { provider, setProvider } = useAIProvider();
+  const { language } = useLanguage();
+
+  const SUGGESTIONS = [
+    t('aiCoach.suggestions.briefing'),
+    t('aiCoach.suggestions.plan'),
+    t('aiCoach.suggestions.sleep'),
+    t('aiCoach.suggestions.meal'),
+  ];
 
   const [chats, setChats] = useState<ChatSession[]>(() => loadChats());
   const [currentChatId, setCurrentChatId] = useState<string | null>(() => {
@@ -263,7 +249,7 @@ export const AICoach: React.FC = () => {
   // Initial greeting if the user has never opened the coach
   useEffect(() => {
     if (!preseeded && messages.length === 0 && !localStorage.getItem(GREETING_KEY)) {
-      setMessages([{ role: 'assistant', content: INITIAL_GREETING }]);
+      setMessages([{ role: 'assistant', content: t('aiCoach.initialGreeting') }]);
       localStorage.setItem(GREETING_KEY, '1');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -284,7 +270,7 @@ export const AICoach: React.FC = () => {
           id: chatId || Date.now().toString(),
           title: firstUser ? generateTitle(firstUser.content) : 'New conversation',
           messages: cleanMsgs,
-          model: 'claude',
+          model: provider,
           createdAt: new Date().toISOString(),
         };
         updated = [newChat, ...prev];
@@ -371,15 +357,18 @@ export const AICoach: React.FC = () => {
       const fetchHeaders: Record<string, string> = {};
 
       if (currentImage) {
-        // Multipart: send image + messages as form data
+        // Multipart: send image + messages + provider as form data
         const formData = new FormData();
         formData.append('image', currentImage);
         formData.append('messages', JSON.stringify(newMessages));
+        formData.append('provider', provider);
+        formData.append('language', language);
         fetchBody = formData;
         // Don't set Content-Type — browser sets multipart boundary automatically
       } else {
         fetchHeaders['Content-Type'] = 'application/json';
-        fetchBody = JSON.stringify({ messages: newMessages });
+        fetchHeaders['X-Language'] = language;
+        fetchBody = JSON.stringify({ messages: newMessages, provider, language });
       }
 
       const res = await fetch('/api/ai/agent', {
@@ -398,15 +387,16 @@ export const AICoach: React.FC = () => {
       const decoder = new TextDecoder();
       let assistantContent = '';
       const toolEvents: ToolEvent[] = [];
+      let streamError: string | null = null;
 
-      while (true) {
+      outer: while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         for (const line of chunk.split('\n')) {
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6);
-          if (data === '[DONE]') break;
+          if (data === '[DONE]') break outer;
           try {
             const parsed = JSON.parse(data);
             if (parsed.token) {
@@ -451,9 +441,21 @@ export const AICoach: React.FC = () => {
                 };
                 return updated;
               });
+            } else if (parsed.error) {
+              streamError = parsed.error;
+              break outer;
             }
           } catch { /* skip non-JSON lines */ }
         }
+      }
+
+      if (streamError) {
+        throw new Error(streamError);
+      }
+
+      // If we got [DONE] but no content and no tool events, the AI returned nothing
+      if (!assistantContent && toolEvents.length === 0) {
+        throw new Error('The AI returned an empty response. Please try again.');
       }
 
       const finalMessages: Message[] = [
@@ -537,7 +539,7 @@ export const AICoach: React.FC = () => {
             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/15 hover:bg-primary/25 disabled:opacity-40 disabled:cursor-not-allowed text-primary font-label font-semibold text-sm tracking-wide transition-colors"
           >
             <span className="text-lg leading-none">+</span>
-            New conversation
+            {t('aiCoach.newConversation')}
           </button>
         </div>
 
@@ -545,7 +547,7 @@ export const AICoach: React.FC = () => {
         <div className="flex-1 overflow-y-auto py-2">
           {chats.length === 0 ? (
             <p className="text-center text-on-surface-variant/40 font-label text-xs tracking-wider uppercase mt-6 px-3">
-              No conversations
+              {t('aiCoach.noConversations')}
             </p>
           ) : (
             chats.map(chat => (
@@ -615,17 +617,29 @@ export const AICoach: React.FC = () => {
 
             {/* Title */}
             <div className="shrink-0">
-              <p className="hidden sm:block font-label text-[0.6rem] text-on-surface-variant tracking-widest uppercase leading-none mb-0.5">Assistant</p>
+              <p className="hidden sm:block font-label text-[0.6rem] text-on-surface-variant tracking-widest uppercase leading-none mb-0.5">{t('aiCoach.subtitle')}</p>
               <h1 className="font-display text-base sm:text-xl font-bold text-on-surface tracking-tight whitespace-nowrap leading-tight">
-                DRIFT AI <span className="text-primary">COACH</span>
+                {t('aiCoach.title')} <span className="text-primary">{t('aiCoach.titleSuffix')}</span>
               </h1>
             </div>
 
-            {/* Claude badge */}
-            <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20">
-              <span className="text-primary text-[0.6rem]">◈</span>
-              <span className="font-label text-[0.6rem] text-primary tracking-widest uppercase font-semibold">Claude</span>
-            </div>
+            {/* Provider toggle */}
+            <button
+              onClick={() => setProvider(provider === 'gemma' ? 'claude' : 'gemma')}
+              className={`ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-colors ${
+                provider === 'gemma'
+                  ? 'bg-primary/10 border-primary/20 text-primary'
+                  : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+              }`}
+              title={provider === 'gemma' ? t('aiCoach.providerGemma') : t('aiCoach.providerClaude')}
+            >
+              <span className={`text-[0.6rem] ${provider === 'gemma' ? 'text-primary' : 'text-blue-400'}`}>
+                {provider === 'gemma' ? '◉' : '◈'}
+              </span>
+              <span className="font-label text-[0.6rem] tracking-widest uppercase font-semibold">
+                {provider === 'gemma' ? 'Gemma' : 'Claude'}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -636,17 +650,17 @@ export const AICoach: React.FC = () => {
               <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center pb-8">
                 <div>
                   <div className="text-4xl mb-3 opacity-60">◈</div>
-                  <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">DRIFT AI Coach</p>
+                  <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-1">{t('aiCoach.emptyStateTitle')}</p>
                   <p className="font-body text-sm text-on-surface-variant max-w-sm">
-                    Your sports coach with the power to act. I can generate plans, log meals, update your profile, and analyze your data.
+                    {t('aiCoach.emptyStateDesc')}
                   </p>
                 </div>
                 {/* Featured briefing button */}
                 <button
-                  onClick={() => sendMessage('Give me my daily briefing')}
+                  onClick={() => sendMessage(t('aiCoach.suggestions.briefing'))}
                   className="px-5 py-3 rounded-2xl bg-primary/20 hover:bg-primary/30 text-primary font-label text-sm font-semibold tracking-wide transition-all border border-primary/30"
                 >
-                  ◉ Today's Briefing
+                  {t('aiCoach.todaysBriefing')}
                 </button>
                 {/* Other suggestions */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
@@ -700,7 +714,7 @@ export const AICoach: React.FC = () => {
                           <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl bg-primary/10 border border-primary/20">
                             <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                             <span className="font-label text-xs text-primary tracking-wide">
-                              {TOOL_LABELS[msg.pendingTool] || 'Procesando...'}
+                              {t(`aiCoach.toolLabels.${msg.pendingTool}`) || t('aiCoach.toolLabels.processing')}
                             </span>
                           </div>
                         )
@@ -746,7 +760,7 @@ export const AICoach: React.FC = () => {
                     ×
                   </button>
                 </div>
-                <span className="font-label text-xs text-on-surface-variant tracking-wide">Image attached</span>
+                <span className="font-label text-xs text-on-surface-variant tracking-wide">{t('aiCoach.imageAttached')}</span>
               </div>
             )}
             <div className="flex gap-2 items-end bg-surface-container rounded-2xl px-4 py-3 border border-outline-variant/20 focus-within:border-primary/40 transition-colors">
@@ -774,7 +788,7 @@ export const AICoach: React.FC = () => {
                   resizeTextarea();
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder={imageFile ? "Describe the food or send directly..." : "Ask me about your data..."}
+                placeholder={imageFile ? t('aiCoach.inputPlaceholderWithImage') : t('aiCoach.inputPlaceholder')}
                 rows={1}
                 disabled={isStreaming}
                 className="flex-1 bg-transparent resize-none outline-none text-sm font-body text-on-surface placeholder:text-on-surface-variant/50 leading-relaxed overflow-hidden"
@@ -822,7 +836,7 @@ export const AICoach: React.FC = () => {
               )}
             </div>
             <p className="text-center font-label text-[0.6rem] text-on-surface-variant/40 tracking-wider uppercase mt-2">
-              Enter to send · Shift+Enter for new line · Microphone to dictate
+              {t('aiCoach.sendHint')}
             </p>
           </div>
         </div>

@@ -1,32 +1,37 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useWorkout, useLastWeights } from '../hooks/useWorkout';
+import { useWorkout, useLastValues } from '../hooks/useWorkout';
 import { useTTS } from '../hooks/useTTS';
 import type { TrainingSession, TrainingExercise } from '../hooks/useTrainingPlan';
 
 const CATEGORY_LABELS: Record<string, string> = {
-  warmup: 'Calentamiento',
-  main: 'Principal',
+  warmup: 'Warm-up',
+  main: 'Main',
   core: 'Core',
-  cooldown: 'Vuelta a la calma',
+  cooldown: 'Cool-down',
+  recovery: 'Recovery',
 };
 
 interface SetState {
   reps: string;
   weight: string;
+  duration_seconds: string;
+  distance_meters: string;
   completed: boolean;
   savedId: number | null;
 }
 
 function groupExercises(exercises: TrainingExercise[]) {
-  const order = ['warmup', 'main', 'core', 'cooldown'];
+  const order = ['warmup', 'main', 'core', 'cooldown', 'recovery'];
   const groups: Record<string, TrainingExercise[]> = {};
   for (const ex of exercises) {
     const cat = ex.category ?? 'main';
     if (!groups[cat]) groups[cat] = [];
     groups[cat].push(ex);
   }
-  return order.filter(k => groups[k]?.length > 0).map(k => ({ category: k, exercises: groups[k] }));
+  // Unknown categories go at the end
+  const allCats = [...new Set([...order, ...Object.keys(groups)])];
+  return allCats.filter(k => groups[k]?.length > 0).map(k => ({ category: k, exercises: groups[k] }));
 }
 
 function useTimer(started: boolean) {
@@ -54,7 +59,7 @@ export const ActiveWorkout: React.FC = () => {
   const planId = (location.state as any)?.planId as number | undefined;
 
   const { logSet, updateSet, finishWorkout } = useWorkout();
-  const lastWeights = useLastWeights(session?.id ?? null);
+  const lastValues = useLastValues(session?.id ?? null);
   const timer = useTimer(!!workoutId);
   const { speak } = useTTS();
 
@@ -69,15 +74,20 @@ export const ActiveWorkout: React.FC = () => {
   const [finishing, setFinishing] = useState(false);
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
 
-  // Initialize sets based on target_sets
+  // Initialize sets based on target_sets (cardio defaults to 1 set, others to 3)
   useEffect(() => {
     if (!session) return;
     const initial: Record<number, SetState[]> = {};
     for (const ex of session.exercises) {
-      const count = ex.target_sets ?? 3;
+      const defaultSets = ex.type === 'cardio' ? 1 : 3;
+      const count = ex.target_sets ?? defaultSets;
+      const initDuration = ex.target_duration_seconds ? String(ex.target_duration_seconds) : '';
+      const initDistance = ex.target_distance_meters ? String(ex.target_distance_meters) : '';
       initial[ex.id] = Array.from({ length: count }, () => ({
         reps: '',
         weight: '',
+        duration_seconds: initDuration,
+        distance_meters: initDistance,
         completed: false,
         savedId: null,
       }));
@@ -85,22 +95,27 @@ export const ActiveWorkout: React.FC = () => {
     setSets(initial);
   }, [session]);
 
-  // Auto-fill weights from last workout
+  // Auto-fill last values from previous workout
   useEffect(() => {
-    if (Object.keys(lastWeights).length === 0) return;
+    if (Object.keys(lastValues).length === 0) return;
     setSets(prev => {
       const next = { ...prev };
-      for (const [exIdStr, w] of Object.entries(lastWeights)) {
+      for (const [exIdStr, v] of Object.entries(lastValues)) {
         const exId = parseInt(exIdStr);
         if (next[exId]) {
-          next[exId] = next[exId].map(s => s.completed ? s : { ...s, weight: w > 0 ? String(w) : '' });
+          next[exId] = next[exId].map(s => s.completed ? s : {
+            ...s,
+            weight: v.weight != null && v.weight > 0 ? String(v.weight) : s.weight,
+            duration_seconds: v.duration_seconds != null ? String(v.duration_seconds) : s.duration_seconds,
+            distance_meters: v.distance_meters != null ? String(v.distance_meters) : s.distance_meters,
+          });
         }
       }
       return next;
     });
-  }, [lastWeights]);
+  }, [lastValues]);
 
-  const handleSetChange = useCallback((exId: number, setIdx: number, field: 'reps' | 'weight', value: string) => {
+  const handleSetChange = useCallback((exId: number, setIdx: number, field: 'reps' | 'weight' | 'duration_seconds' | 'distance_meters', value: string) => {
     setSets(prev => ({
       ...prev,
       [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, [field]: value } : s),
@@ -112,11 +127,12 @@ export const ActiveWorkout: React.FC = () => {
     const set = sets[exId]?.[setIdx];
     if (!set) return;
 
-    const toggling = set.completed; // true = desmarcar, false = marcar
+    const toggling = set.completed;
     const reps = set.reps ? parseInt(set.reps) : null;
     const weight = set.weight ? parseFloat(set.weight) : null;
+    const duration_seconds = set.duration_seconds ? parseInt(set.duration_seconds) : null;
+    const distance_meters = set.distance_meters ? parseFloat(set.distance_meters) : null;
 
-    // Check if completing this set finishes all sets for this exercise
     const willFinishExercise = !toggling &&
       sets[exId].every((s, i) => i === setIdx ? true : s.completed);
 
@@ -130,26 +146,32 @@ export const ActiveWorkout: React.FC = () => {
       const idx = allExercises.findIndex(e => e.id === exId);
       const next = allExercises[idx + 1];
       if (next) {
-        const target = next.target_sets && next.target_reps
-          ? `. ${next.target_sets} sets of ${next.target_reps}`
-          : '';
+        let target = '';
+        if (next.type === 'cardio') {
+          if (next.target_distance_meters) target = `. ${(next.target_distance_meters / 1000).toFixed(1)} km`;
+          else if (next.target_duration_seconds) target = `. ${Math.round(next.target_duration_seconds / 60)} minutes`;
+        } else if (next.type === 'timed') {
+          target = next.target_duration_seconds
+            ? `. ${next.target_sets ? `${next.target_sets} sets, ` : ''}${next.target_duration_seconds} seconds`
+            : '';
+        } else {
+          target = next.target_sets && next.target_reps ? `. ${next.target_sets} sets of ${next.target_reps}` : '';
+        }
         speak(`Next: ${next.name}${target}`);
       }
     }
 
     try {
       if (set.savedId != null) {
-        await updateSet(set.savedId, reps, weight, !toggling);
+        await updateSet(set.savedId, reps, weight, !toggling, duration_seconds, distance_meters);
       } else if (!toggling) {
-        // only log if we're marking (don't unmark something that isn't saved)
-        const savedId = await logSet(workoutId, exId, setIdx + 1, reps, weight);
+        const savedId = await logSet(workoutId, exId, setIdx + 1, reps, weight, duration_seconds, distance_meters);
         setSets(prev => ({
           ...prev,
           [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, savedId } : s),
         }));
       }
     } catch {
-      // revert
       setSets(prev => ({
         ...prev,
         [exId]: prev[exId].map((s, i) => i === setIdx ? { ...s, completed: toggling } : s),
@@ -160,7 +182,7 @@ export const ActiveWorkout: React.FC = () => {
   const handleAddSet = useCallback((exId: number) => {
     setSets(prev => ({
       ...prev,
-      [exId]: [...(prev[exId] ?? []), { reps: '', weight: '', completed: false, savedId: null }],
+      [exId]: [...(prev[exId] ?? []), { reps: '', weight: '', duration_seconds: '', distance_meters: '', completed: false, savedId: null }],
     }));
   }, []);
 
@@ -235,12 +257,26 @@ export const ActiveWorkout: React.FC = () => {
                       <p className={`font-medium text-sm ${allCompleted ? 'line-through text-on-surface-variant' : 'text-on-surface'}`}>
                         {ex.name}
                       </p>
-                      {(ex.target_sets || ex.target_reps) && (
-                        <p className="text-xs text-on-surface-variant mt-0.5">
-                          Target: {ex.target_sets ? `${ex.target_sets}×` : ''}{ex.target_reps ?? ''}
-                          {ex.notes ? ` · ${ex.notes}` : ''}
-                        </p>
-                      )}
+                      <p className="text-xs text-on-surface-variant mt-0.5">
+                        {ex.type === 'cardio' && (
+                          <>
+                            {ex.target_distance_meters ? `${(ex.target_distance_meters / 1000).toFixed(1)} km` : ''}
+                            {ex.target_distance_meters && ex.target_duration_seconds ? ' · ' : ''}
+                            {ex.target_duration_seconds ? `${Math.floor(ex.target_duration_seconds / 60)}min` : ''}
+                            {ex.target_pace ? ` @ ${ex.target_pace}` : ''}
+                          </>
+                        )}
+                        {ex.type === 'timed' && (
+                          <>
+                            {ex.target_sets ? `${ex.target_sets} × ` : ''}
+                            {ex.target_duration_seconds ? `${ex.target_duration_seconds}s` : ''}
+                          </>
+                        )}
+                        {(!ex.type || ex.type === 'strength') && (ex.target_sets || ex.target_reps) && (
+                          <>{ex.target_sets ? `${ex.target_sets} × ` : ''}{ex.target_reps ?? ''}</>
+                        )}
+                        {ex.notes ? <span className="text-on-surface-variant/70"> · {ex.notes}</span> : null}
+                      </p>
                     </div>
                     {allCompleted && <span className="text-primary text-lg">✓</span>}
                   </div>
@@ -252,8 +288,11 @@ export const ActiveWorkout: React.FC = () => {
                         key={si}
                         setIndex={si}
                         set={set}
+                        exerciseType={ex.type ?? 'strength'}
                         onChangeReps={v => handleSetChange(ex.id, si, 'reps', v)}
                         onChangeWeight={v => handleSetChange(ex.id, si, 'weight', v)}
+                        onChangeDuration={v => handleSetChange(ex.id, si, 'duration_seconds', v)}
+                        onChangeDistance={v => handleSetChange(ex.id, si, 'distance_meters', v)}
                         onComplete={() => handleCompleteSet(ex.id, si)}
                       />
                     ))}
@@ -328,60 +367,123 @@ export const ActiveWorkout: React.FC = () => {
 interface SetRowProps {
   setIndex: number;
   set: SetState;
+  exerciseType: 'strength' | 'cardio' | 'timed';
   onChangeReps: (v: string) => void;
   onChangeWeight: (v: string) => void;
+  onChangeDuration: (v: string) => void;
+  onChangeDistance: (v: string) => void;
   onComplete: () => void;
 }
 
-function SetRow({ setIndex, set, onChangeReps, onChangeWeight, onComplete }: SetRowProps) {
+const INPUT_CLASS = 'w-full bg-surface-container rounded-lg px-3 py-2.5 text-on-surface text-center text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed';
+const LABEL_CLASS = 'font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1';
+
+function SetRow({ setIndex, set, exerciseType, onChangeReps, onChangeWeight, onChangeDuration, onChangeDistance, onComplete }: SetRowProps) {
+  const checkbox = (
+    <button
+      onClick={onComplete}
+      className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all active:scale-90 ${
+        set.completed
+          ? 'bg-primary border-primary text-surface'
+          : 'border-outline-variant bg-transparent hover:border-primary/60'
+      }`}
+      title={set.completed ? 'Unmark set' : 'Mark set as completed'}
+    >
+      {set.completed && (
+        <svg viewBox="0 0 12 10" className="w-3 h-3 fill-none stroke-current stroke-2">
+          <polyline points="1,5 4.5,8.5 11,1" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </button>
+  );
+
+  const setNum = (
+    <span className="font-label text-label-sm text-on-surface-variant tracking-widest w-4 shrink-0 text-center">
+      {setIndex + 1}
+    </span>
+  );
+
+  if (exerciseType === 'cardio') {
+    return (
+      <div className={`flex items-center gap-3 px-4 py-3 transition-colors ${set.completed ? 'bg-primary/5' : ''}`}>
+        {checkbox}
+        {setNum}
+        <div className="flex-1">
+          <label className={LABEL_CLASS}>min</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={set.duration_seconds ? String(Math.round(parseInt(set.duration_seconds) / 60)) : ''}
+            onChange={e => onChangeDuration(e.target.value ? String(parseInt(e.target.value) * 60) : '')}
+            disabled={set.completed}
+            className={INPUT_CLASS}
+            placeholder="—"
+          />
+        </div>
+        <div className="flex-1">
+          <label className={LABEL_CLASS}>km</label>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            value={set.distance_meters ? String(parseFloat(set.distance_meters) / 1000) : ''}
+            onChange={e => onChangeDistance(e.target.value ? String(parseFloat(e.target.value) * 1000) : '')}
+            disabled={set.completed}
+            className={INPUT_CLASS}
+            placeholder="—"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (exerciseType === 'timed') {
+    return (
+      <div className={`flex items-center gap-3 px-4 py-3 transition-colors ${set.completed ? 'bg-primary/5' : ''}`}>
+        {checkbox}
+        {setNum}
+        <div className="flex-1">
+          <label className={LABEL_CLASS}>seconds</label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={set.duration_seconds}
+            onChange={e => onChangeDuration(e.target.value)}
+            disabled={set.completed}
+            className={INPUT_CLASS}
+            placeholder="—"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // strength (default)
   return (
     <div className={`flex items-center gap-3 px-4 py-3 transition-colors ${set.completed ? 'bg-primary/5' : ''}`}>
-      {/* Checkbox */}
-      <button
-        onClick={onComplete}
-        className={`shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all active:scale-90 ${
-          set.completed
-            ? 'bg-primary border-primary text-surface'
-            : 'border-outline-variant bg-transparent hover:border-primary/60'
-        }`}
-        title={set.completed ? 'Unmark set' : 'Mark set as completed'}
-      >
-        {set.completed && (
-          <svg viewBox="0 0 12 10" className="w-3 h-3 fill-none stroke-current stroke-2">
-            <polyline points="1,5 4.5,8.5 11,1" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        )}
-      </button>
-
-      {/* Set number */}
-      <span className="font-label text-label-sm text-on-surface-variant tracking-widest w-4 shrink-0 text-center">
-        {setIndex + 1}
-      </span>
-
-      {/* Weight input */}
+      {checkbox}
+      {setNum}
       <div className="flex-1">
-        <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1">kg</label>
+        <label className={LABEL_CLASS}>kg</label>
         <input
           type="number"
           inputMode="decimal"
           value={set.weight}
           onChange={e => onChangeWeight(e.target.value)}
           disabled={set.completed}
-          className="w-full bg-surface-container rounded-lg px-3 py-2.5 text-on-surface text-center text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
+          className={INPUT_CLASS}
           placeholder="—"
         />
       </div>
-
-      {/* Reps input */}
       <div className="flex-1">
-        <label className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase block mb-1">reps</label>
+        <label className={LABEL_CLASS}>reps</label>
         <input
           type="number"
           inputMode="numeric"
           value={set.reps}
           onChange={e => onChangeReps(e.target.value)}
           disabled={set.completed}
-          className="w-full bg-surface-container rounded-lg px-3 py-2.5 text-on-surface text-center text-base font-medium focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed"
+          className={INPUT_CLASS}
           placeholder="—"
         />
       </div>

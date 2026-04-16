@@ -1,33 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useTrainingPlans } from '../hooks/useTrainingPlans';
 import { useAssessment } from '../hooks/useAssessment';
+import { useAIProvider } from '../hooks/useAIProvider';
 import { useAIProgress } from '../hooks/useAIProgress';
 import AIProgressIndicator from '../components/ui/AIProgressIndicator';
 import { TRAINING_PLAN_PROGRESS } from '../utils/aiProgressConfigs';
 import { Goals } from './Goals';
 import { STTButton } from '../components/ui/STTButton';
 
-const PRESETS = [
-  'Functional strength plan to complement water and racket sports',
-  'Hypertrophy plan with 3 weekly sessions',
-  'Core and stability to improve balance in the water',
-  'General strength plan for gym beginners',
-];
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
 export const TrainingPlans: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') ?? 'plans';
 
   const { plans, loading, generatePlanStream, stopGeneration, archivePlan, deletePlan } = useTrainingPlans();
   const { assessment, loading: assessmentLoading } = useAssessment();
+  const { provider } = useAIProvider();
   const aiProgress = useAIProgress();
+
+  const PRESETS = [
+    t('training.presets.1'),
+    t('training.presets.2'),
+    t('training.presets.3'),
+    t('training.presets.4'),
+  ];
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(i18n.language === 'es' ? 'es-AR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
   const [showForm, setShowForm] = useState(false);
   const [goal, setGoal] = useState('');
@@ -55,7 +58,7 @@ export const TrainingPlans: React.FC = () => {
     setGenError(null);
     aiProgress.start(TRAINING_PLAN_PROGRESS);
     try {
-      const result = await generatePlanStream(goal.trim(), () => aiProgress.onToken());
+      const result = await generatePlanStream(goal.trim(), () => aiProgress.onToken(), provider);
       aiProgress.complete();
       setTimeout(() => navigate(`/training/${result.plan.id}`), 400);
     } catch (err: any) {
@@ -84,15 +87,15 @@ export const TrainingPlans: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Training Plans</span>
-          <p className="font-display text-xl text-on-surface mt-0.5">Personalized Plans</p>
+          <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('training.title')}</span>
+          <p className="font-display text-xl text-on-surface mt-0.5">{t('training.subtitle')}</p>
         </div>
         {activeTab === 'plans' && !showForm && (
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-2 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
           >
-            <span>+</span> New Plan
+            {t('training.newPlan')}
           </button>
         )}
       </div>
@@ -107,7 +110,7 @@ export const TrainingPlans: React.FC = () => {
               : 'text-on-surface-variant hover:text-on-surface'
           }`}
         >
-          Plans
+          {t('training.tabPlans')}
         </button>
         <button
           onClick={() => setSearchParams({ tab: 'goals' })}
@@ -117,7 +120,7 @@ export const TrainingPlans: React.FC = () => {
               : 'text-on-surface-variant hover:text-on-surface'
           }`}
         >
-          Goals
+          {t('training.tabGoals')}
         </button>
       </div>
 
@@ -132,14 +135,14 @@ export const TrainingPlans: React.FC = () => {
             <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-center gap-4">
               <div className="text-2xl shrink-0">◈</div>
               <div className="flex-1 min-w-0">
-                <p className="font-label text-label-sm text-primary tracking-widest uppercase mb-0.5">Profile incomplete</p>
-                <p className="text-on-surface-variant text-xs">Complete your profile so AI plans are personalized with your data.</p>
+                <p className="font-label text-label-sm text-primary tracking-widest uppercase mb-0.5">{t('training.profileIncomplete')}</p>
+                <p className="text-on-surface-variant text-xs">{t('training.profileIncompleteDesc')}</p>
               </div>
               <button
                 onClick={() => navigate('/training/profile')}
                 className="shrink-0 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-3 py-2 rounded-lg hover:opacity-90 transition-opacity text-xs"
               >
-                Complete
+                {t('training.completeProfile')}
               </button>
             </div>
           )}
@@ -151,15 +154,15 @@ export const TrainingPlans: React.FC = () => {
               className="flex items-center gap-2 bg-surface-container border border-outline-variant/20 rounded-xl px-3 py-2 hover:bg-surface-high transition-colors w-fit"
             >
               <span className="text-xs">◈</span>
-              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">My Profile</span>
-              <span className="font-label text-[10px] text-primary tracking-widest uppercase bg-primary/10 px-1.5 py-0.5 rounded">Completed</span>
+              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('training.myProfile')}</span>
+              <span className="font-label text-[10px] text-primary tracking-widest uppercase bg-primary/10 px-1.5 py-0.5 rounded">{t('training.completed')}</span>
             </button>
           )}
 
           {/* Generation form */}
           {showForm && (
             <div className="bg-surface-low rounded-xl p-5 space-y-4 border border-primary/20">
-              <p className="font-label text-label-sm text-primary tracking-widest uppercase">Generate Plan with AI</p>
+              <p className="font-label text-label-sm text-primary tracking-widest uppercase">{t('training.generateWithAI')}</p>
 
               {/* Presets */}
               <div className="flex flex-wrap gap-2">
@@ -183,7 +186,7 @@ export const TrainingPlans: React.FC = () => {
                 <textarea
                   value={goal}
                   onChange={e => setGoal(e.target.value)}
-                  placeholder="Describe your goal (e.g.: strength plan to complement surfing and tennis, 3 days a week)..."
+                  placeholder={t('training.goalInputPlaceholder')}
                   rows={3}
                   className="w-full bg-surface-container rounded-lg px-4 py-3 pr-10 text-on-surface text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder-on-surface-variant"
                 />
@@ -213,9 +216,9 @@ export const TrainingPlans: React.FC = () => {
                   {generating ? (
                     <span className="flex items-center justify-center gap-2">
                       <span className="w-4 h-4 border-2 border-surface/30 border-t-surface rounded-full animate-spin" />
-                      Generating plan...
+                      {t('training.generatingPlan')}
                     </span>
-                  ) : 'Generate Plan'}
+                  ) : t('training.generatePlan')}
                 </button>
                 <button
                   onClick={() => {
@@ -230,7 +233,7 @@ export const TrainingPlans: React.FC = () => {
                   }}
                   className="px-4 py-3 rounded-lg bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase hover:bg-surface-high transition-colors"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
@@ -239,7 +242,7 @@ export const TrainingPlans: React.FC = () => {
           {/* Active plans */}
           {activePlans.length > 0 && (
             <div className="space-y-3">
-              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Active</span>
+              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('training.activePlans')}</span>
               {activePlans.map(plan => (
                 <PlanCard
                   key={plan.id}
@@ -247,6 +250,8 @@ export const TrainingPlans: React.FC = () => {
                   onOpen={() => navigate(`/training/${plan.id}`)}
                   onArchive={() => archivePlan(plan.id)}
                   onDelete={() => setConfirmDelete(plan.id)}
+                  formatDate={formatDate}
+                  t={t}
                 />
               ))}
             </div>
@@ -256,13 +261,13 @@ export const TrainingPlans: React.FC = () => {
           {activePlans.length === 0 && !showForm && (
             <div className="bg-surface-low rounded-xl p-8 text-center space-y-3">
               <p className="text-3xl">▣</p>
-              <p className="font-display text-on-surface">No active plans</p>
-              <p className="text-on-surface-variant text-sm">Generate a personalized plan based on your biometric and sports data.</p>
+              <p className="font-display text-on-surface">{t('training.noActivePlans')}</p>
+              <p className="text-on-surface-variant text-sm">{t('training.noActivePlansDesc')}</p>
               <button
                 onClick={() => setShowForm(true)}
                 className="mt-2 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
               >
-                Create my first plan
+                {t('training.createFirstPlan')}
               </button>
             </div>
           )}
@@ -270,7 +275,7 @@ export const TrainingPlans: React.FC = () => {
           {/* Archived plans */}
           {archivedPlans.length > 0 && (
             <div className="space-y-3">
-              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Archived</span>
+              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('training.archivedPlans')}</span>
               {archivedPlans.map(plan => (
                 <PlanCard
                   key={plan.id}
@@ -279,6 +284,8 @@ export const TrainingPlans: React.FC = () => {
                   onArchive={() => {}}
                   onDelete={() => setConfirmDelete(plan.id)}
                   archived
+                  formatDate={formatDate}
+                  t={t}
                 />
               ))}
             </div>
@@ -288,20 +295,20 @@ export const TrainingPlans: React.FC = () => {
           {confirmDelete != null && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
               <div className="bg-surface-low rounded-xl p-6 max-w-sm w-full space-y-4">
-                <p className="font-display text-on-surface">Delete plan</p>
-                <p className="text-on-surface-variant text-sm">The plan, all sessions, and workout history will be deleted. This action cannot be undone.</p>
+                <p className="font-display text-on-surface">{t('training.deletePlan')}</p>
+                <p className="text-on-surface-variant text-sm">{t('training.deletePlanDesc')}</p>
                 <div className="flex gap-3">
                   <button
                     onClick={async () => { await deletePlan(confirmDelete); setConfirmDelete(null); }}
                     className="flex-1 bg-red-600 text-white font-label text-label-sm tracking-widest uppercase px-4 py-2.5 rounded-lg hover:bg-red-700 transition-colors"
                   >
-                    Delete
+                    {t('common.delete')}
                   </button>
                   <button
                     onClick={() => setConfirmDelete(null)}
                     className="flex-1 bg-surface-container text-on-surface-variant font-label text-label-sm tracking-widest uppercase px-4 py-2.5 rounded-lg"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                 </div>
               </div>
@@ -319,9 +326,11 @@ interface PlanCardProps {
   onArchive: () => void;
   onDelete: () => void;
   archived?: boolean;
+  formatDate: (iso: string) => string;
+  t: (key: string) => string;
 }
 
-function PlanCard({ plan, onOpen, onArchive, onDelete, archived }: PlanCardProps) {
+function PlanCard({ plan, onOpen, onArchive, onDelete, archived, formatDate, t }: PlanCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -334,7 +343,7 @@ function PlanCard({ plan, onOpen, onArchive, onDelete, archived }: PlanCardProps
           <div className="flex items-center gap-2 mb-1">
             {archived && (
               <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase bg-surface-container px-2 py-0.5 rounded">
-                Archived
+                {t('training.archived')}
               </span>
             )}
           </div>
@@ -349,14 +358,14 @@ function PlanCard({ plan, onOpen, onArchive, onDelete, archived }: PlanCardProps
               </span>
             )}
             <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-              {plan.sessionCount} sessions
+              {plan.sessionCount} {t('training.sessions')}
             </span>
             <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-              {plan.workoutCount} completed
+              {plan.workoutCount} {t('training.completed').toLowerCase()}
             </span>
             {plan.lastWorkout && (
               <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-                Last: {formatDate(plan.lastWorkout)}
+                {t('training.lastWorkout')}: {formatDate(plan.lastWorkout)}
               </span>
             )}
           </div>
@@ -377,14 +386,14 @@ function PlanCard({ plan, onOpen, onArchive, onDelete, archived }: PlanCardProps
                   onClick={() => { setMenuOpen(false); onArchive(); }}
                   className="w-full px-4 py-3 text-left text-sm text-on-surface-variant hover:bg-surface-high transition-colors"
                 >
-                  Archive
+                  {t('training.archive')}
                 </button>
               )}
               <button
                 onClick={() => { setMenuOpen(false); onDelete(); }}
                 className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-surface-high transition-colors"
               >
-                Delete
+                {t('common.delete')}
               </button>
             </div>
           )}

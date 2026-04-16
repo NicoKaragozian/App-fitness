@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSportGroups } from '../hooks/useSportGroups';
 import type { SportGroupConfig, CreateGroupPayload } from '../hooks/useSportGroups';
 import { apiFetch } from '../api/client';
-import type { ChartMetricConfig } from '../hooks/useActivities';
 
 const VALID_METRICS: { key: string; label: string }[] = [
   { key: 'sessions',  label: 'Sessions' },
@@ -68,9 +67,6 @@ const SPORT_TYPE_GROUPS: { label: string; types: string[] }[] = [
 // Todos los sport types de Garmin (derivado de SPORT_TYPE_GROUPS para evitar duplicados)
 const ALL_GARMIN_SPORT_TYPES = SPORT_TYPE_GROUPS.flatMap((g) => g.types);
 
-function slugify(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/, '') || 'group';
-}
 
 const EMPTY_FORM: CreateGroupPayload = {
   name: '',
@@ -92,7 +88,7 @@ interface GroupFormProps {
   error: string | null;
 }
 
-const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, existingGroupId, onSave, onCancel, saving, error }) => {
+const GroupForm: React.FC<GroupFormProps> = ({ initial, availableSportTypes, onSave, onCancel, saving, error }) => {
   const [form, setForm] = useState<CreateGroupPayload>(initial);
 
   // Open by default the categories that already have selected types

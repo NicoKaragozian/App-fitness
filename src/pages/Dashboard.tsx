@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useDailySummary } from '../hooks/useDailySummary';
 import { useActivities } from '../hooks/useActivities';
 import { usePlan, type PlanItem } from '../hooks/usePlan';
@@ -14,7 +15,7 @@ import { LoadingSkeleton } from '../components/ui/LoadingSkeleton';
 import { ActivityRing } from '../components/ui/ActivityRing';
 import { apiFetch } from '../api/client';
 
-const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+// Day labels resolved via t() in component
 
 function formatHours(h: number) {
   return `${Math.floor(h)}h ${Math.round((h % 1) * 60)}m`;
@@ -27,12 +28,7 @@ function getStressColor(avg: number) {
   return '#ff4444';
 }
 
-function getStressLabel(avg: number) {
-  if (avg < 26) return 'LOW';
-  if (avg < 51) return 'OPTIMAL';
-  if (avg < 76) return 'ELEVATED';
-  return 'HIGH';
-}
+// Stress labels resolved via t() in component
 
 function getReadinessColor(score: number) {
   if (score >= 85) return '#f3ffca';
@@ -42,7 +38,20 @@ function getReadinessColor(score: number) {
 }
 
 export const Dashboard: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const DAYS = [
+    t('dashboard.dayLabels.MON'), t('dashboard.dayLabels.TUE'), t('dashboard.dayLabels.WED'),
+    t('dashboard.dayLabels.THU'), t('dashboard.dayLabels.FRI'), t('dashboard.dayLabels.SAT'), t('dashboard.dayLabels.SUN'),
+  ];
+
+  const getStressLabel = (avg: number) => {
+    if (avg < 26) return t('dashboard.stressLabels.LOW');
+    if (avg < 51) return t('dashboard.stressLabels.OPTIMAL');
+    if (avg < 76) return t('dashboard.stressLabels.ELEVATED');
+    return t('dashboard.stressLabels.HIGH');
+  };
   const { data: summary, loading: summaryLoading } = useDailySummary();
   const { data: activities, loading: activitiesLoading } = useActivities('daily');
   const { data: weeklyPlan, loading: planLoading, addPlanItem, updatePlanItem, deletePlanItem } = usePlan();
@@ -145,25 +154,25 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="flex gap-4 relative z-10 justify-between mr-8">
-              <ActivityRing value={rScore} color={heroColor} label="GLOBAL" subLabel={`${rScore}/100`} size={70} />
-              <ActivityRing value={sleepScoreValue} color="#22d3a5" label="SLEEP" subLabel={sleepScoreValue > 0 ? `${sleepScoreValue}` : '--'} size={70} />
-              <ActivityRing value={stressInverse} color="#f3ffca" label="RELAX" subLabel={stressInverse > 0 ? `${stressInverse}` : '--'} size={70} />
-              <ActivityRing value={hrvScoreValue} color="#6a9cff" label="HRV" subLabel={hrvRawValue > 0 ? `${hrvRawValue}ms` : '--'} size={70} />
+              <ActivityRing value={rScore} color={heroColor} label={t('dashboard.rings.global')} subLabel={`${rScore}/100`} size={70} />
+              <ActivityRing value={sleepScoreValue} color="#22d3a5" label={t('dashboard.rings.sleep')} subLabel={sleepScoreValue > 0 ? `${sleepScoreValue}` : '--'} size={70} />
+              <ActivityRing value={stressInverse} color="#f3ffca" label={t('dashboard.rings.relax')} subLabel={stressInverse > 0 ? `${stressInverse}` : '--'} size={70} />
+              <ActivityRing value={hrvScoreValue} color="#6a9cff" label={t('dashboard.rings.hrv')} subLabel={hrvRawValue > 0 ? `${hrvRawValue}ms` : '--'} size={70} />
             </div>
           </div>
           <div className="mt-8 flex items-center gap-6">
             <div>
-              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">RESTING HR</p>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">{t('dashboard.restingHR')}</p>
               <p className="font-display font-semibold text-lg text-white mt-1">{restingHRValue ?? '--'} BPM</p>
             </div>
             <div className="w-px h-8 bg-surface-container"></div>
             <div>
-              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">CALORIES</p>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">{t('dashboard.calories')}</p>
               <p className="font-display font-semibold text-lg text-[#ff7439] mt-1">{caloriesValue}</p>
             </div>
             <div className="w-px h-8 bg-surface-container"></div>
             <div>
-              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">STEPS</p>
+              <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase">{t('dashboard.steps')}</p>
               <p className="font-display font-semibold text-lg text-[#f3ffca] mt-1">{stepsValue}</p>
             </div>
           </div>
@@ -174,7 +183,7 @@ export const Dashboard: React.FC = () => {
           {/* Sleep tile */}
           <div className="flex-1 bg-surface-low rounded-xl p-4 flex flex-col justify-between">
             <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22d3a5]"></span> SLEEP — LAST NIGHT
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22d3a5]"></span> {t('dashboard.sleepLastNight')}
             </p>
             {lastSleep ? (
               <div>
@@ -193,7 +202,7 @@ export const Dashboard: React.FC = () => {
           {/* Stress tile */}
           <div className="flex-1 bg-surface-low rounded-xl p-4 flex flex-col justify-between">
             <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stressColor }}></span> STRESS — 7D
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: stressColor }}></span> {t('dashboard.stress7d')}
             </p>
             {stressAvg > 0 ? (
               <div>
@@ -212,7 +221,7 @@ export const Dashboard: React.FC = () => {
           {/* HRV tile */}
           <div className="flex-1 bg-surface-low rounded-xl p-4 flex flex-col justify-between">
             <p className="font-label text-[10px] tracking-widest text-on-surface-variant uppercase flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span> HRV — NIGHT
+              <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span> {t('dashboard.hrvNight')}
             </p>
             {hrvNightly > 0 ? (
               <div>
@@ -232,8 +241,8 @@ export const Dashboard: React.FC = () => {
         {/* Weekly Plan */}
         <div className="lg:col-span-4 bg-surface-low rounded-xl p-5 lg:p-6 flex flex-col max-h-[500px] overflow-y-auto">
           <div className="flex items-center justify-between mb-6 sticky top-0 bg-surface-low pb-2 z-10">
-            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">WEEKLY PLAN</p>
-            <p className="font-label text-label-sm text-primary">{weeklyPlan.filter(i => i.completed).length}/{weeklyPlan.length} DAYS</p>
+            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">{t('dashboard.weeklyPlan')}</p>
+            <p className="font-label text-label-sm text-primary">{weeklyPlan.filter(i => i.completed).length}/{weeklyPlan.length} {t('dashboard.days')}</p>
           </div>
 
           <div className="space-y-3 flex-1 pb-4">
@@ -279,8 +288,8 @@ export const Dashboard: React.FC = () => {
                         placeholder="E.g. Leg session"
                       />
                       <div className="flex justify-end gap-2 mt-2">
-                        <button onClick={() => setEditingId(null)} className="text-[10px] text-on-surface-variant font-label px-2 py-1">CANCEL</button>
-                        <button onClick={() => saveEdit(item.id)} className="text-[10px] text-black bg-primary rounded px-2 py-1 font-label font-bold">SAVE</button>
+                        <button onClick={() => setEditingId(null)} className="text-[10px] text-on-surface-variant font-label px-2 py-1">{t('common.cancel').toUpperCase()}</button>
+                        <button onClick={() => saveEdit(item.id)} className="text-[10px] text-black bg-primary rounded px-2 py-1 font-label font-bold">{t('common.save').toUpperCase()}</button>
                       </div>
                     </div>
                   ) : (
@@ -295,7 +304,7 @@ export const Dashboard: React.FC = () => {
                           disabled={startingId === item.id}
                           className="mt-1.5 font-label text-[10px] tracking-widest uppercase text-primary hover:opacity-70 transition-opacity disabled:opacity-40"
                         >
-                          {startingId === item.id ? 'starting...' : '▶ Start'}
+                          {startingId === item.id ? t('dashboard.startingWorkout') : t('dashboard.startWorkout')}
                         </button>
                       )}
                     </div>
@@ -340,8 +349,8 @@ export const Dashboard: React.FC = () => {
                   placeholder="Details"
                 />
                 <div className="flex justify-end gap-2 mt-2">
-                  <button onClick={() => setIsAdding(false)} className="text-[10px] text-on-surface-variant font-label px-2 py-1">CANCEL</button>
-                  <button onClick={handleAddSubmit} disabled={!addForm.sport.trim()} className="text-[10px] text-black bg-primary rounded px-2 py-1 font-label font-bold disabled:opacity-50">ADD</button>
+                  <button onClick={() => setIsAdding(false)} className="text-[10px] text-on-surface-variant font-label px-2 py-1">{t('common.cancel').toUpperCase()}</button>
+                  <button onClick={handleAddSubmit} disabled={!addForm.sport.trim()} className="text-[10px] text-black bg-primary rounded px-2 py-1 font-label font-bold disabled:opacity-50">{t('common.add').toUpperCase()}</button>
                 </div>
               </div>
             ) : (

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 
 export const Login: React.FC = () => {
+  const { t } = useTranslation();
   const { enterDemoMode } = useAuth();
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState('');
@@ -29,26 +31,26 @@ export const Login: React.FC = () => {
     <div className="min-h-screen bg-surface flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2">Performance Dashboard</p>
+          <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase mb-2">{t('login.subtitle')}</p>
           <h1 className="font-display text-4xl font-bold text-primary tracking-tight">DRIFT</h1>
         </div>
 
         {/* Instructions */}
         <div className="bg-surface-container border border-outline-variant/30 rounded-xl p-5 mb-5 space-y-3">
           <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-            Connect Garmin
+            {t('login.connectGarmin')}
           </p>
           <ol className="space-y-2">
             <li className="flex gap-3">
               <span className="font-display font-bold text-primary text-sm w-5 shrink-0">1</span>
               <p className="font-body text-sm text-on-surface-variant">
-                Open a terminal in the project root
+                {t('login.step1')}
               </p>
             </li>
             <li className="flex gap-3">
               <span className="font-display font-bold text-primary text-sm w-5 shrink-0">2</span>
               <p className="font-body text-sm text-on-surface-variant">
-                Run:{' '}
+                {t('login.step2')}{' '}
                 <code className="text-primary bg-surface px-1.5 py-0.5 rounded text-xs">
                   npx tsx server/src/get-tokens.ts
                 </code>
@@ -57,7 +59,7 @@ export const Login: React.FC = () => {
             <li className="flex gap-3">
               <span className="font-display font-bold text-primary text-sm w-5 shrink-0">3</span>
               <p className="font-body text-sm text-on-surface-variant">
-                Log in on the browser that opens — the dashboard loads automatically
+                {t('login.step3')}
               </p>
             </li>
           </ol>
@@ -67,7 +69,7 @@ export const Login: React.FC = () => {
         <div className="flex items-center gap-3 mb-5 px-1">
           <span className="w-2 h-2 rounded-full bg-primary/50 animate-pulse shrink-0" />
           <p className="font-label text-label-sm text-on-surface-variant/60">
-            Waiting for tokens...
+            {t('login.waitingTokens')}
           </p>
         </div>
 
@@ -80,10 +82,10 @@ export const Login: React.FC = () => {
           {connecting ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              CONNECTING...
+              {t('login.connecting')}
             </span>
           ) : (
-            'I ALREADY RAN THE SCRIPT'
+            t('login.alreadyRanScript')
           )}
         </button>
 
@@ -95,7 +97,7 @@ export const Login: React.FC = () => {
 
         <div className="flex items-center gap-3 mb-4 mt-2">
           <div className="flex-1 h-px bg-outline-variant/30" />
-          <span className="font-label text-label-sm text-on-surface-variant/50">OR</span>
+          <span className="font-label text-label-sm text-on-surface-variant/50">{t('common.or')}</span>
           <div className="flex-1 h-px bg-outline-variant/30" />
         </div>
 
@@ -103,10 +105,10 @@ export const Login: React.FC = () => {
           onClick={enterDemoMode}
           className="w-full bg-surface-container border border-outline-variant/20 text-on-surface-variant font-display font-bold text-sm py-3 rounded-xl tracking-widest uppercase hover:text-on-surface hover:border-outline-variant/50 transition-colors"
         >
-          DEMO MODE
+          {t('login.demoMode')}
         </button>
         <p className="font-label text-label-sm text-on-surface-variant/40 mt-2 text-center">
-          Demo data without Garmin connection
+          {t('login.demoModeDesc')}
         </p>
       </div>
     </div>

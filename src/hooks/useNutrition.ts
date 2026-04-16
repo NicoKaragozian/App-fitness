@@ -86,8 +86,8 @@ export function useNutrition(date?: string) {
     fetchLogs();
   }, [fetchLogs]);
 
-  // Analisis de foto con Claude Vision (streaming SSE)
-  const analyzeMeal = useCallback(async (file: File, onToken?: () => void): Promise<void> => {
+  // Analisis de foto con Vision AI (streaming SSE)
+  const analyzeMeal = useCallback(async (file: File, onToken?: () => void, provider?: string): Promise<void> => {
     setAnalyzing(true);
     setAnalysisStream('');
     setAnalysisResult(null);
@@ -95,8 +95,11 @@ export function useNutrition(date?: string) {
 
     abortRef.current = new AbortController();
 
+    const language = (() => { try { return localStorage.getItem('drift_language') || 'en'; } catch { return 'en'; } })();
     const formData = new FormData();
     formData.append('image', file);
+    if (provider) formData.append('provider', provider);
+    formData.append('language', language);
 
     let imagePath = '';
     let accumulatedText = '';
@@ -104,6 +107,7 @@ export function useNutrition(date?: string) {
     try {
       const response = await fetch('/api/nutrition/analyze', {
         method: 'POST',
+        headers: { 'X-Language': language },
         body: formData,
         signal: abortRef.current.signal,
       });

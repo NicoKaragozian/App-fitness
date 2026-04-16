@@ -4,7 +4,7 @@ import { Request, Response } from 'express';
 import db from '../db.js';
 import { buildAnalyzeContext, getCacheKey, type AnalyzeMode } from './context.js';
 import { PROMPTS } from './prompts.js';
-import { claudeStreamChat, isClaudeConfigured } from './claude.js';
+import { pickProviderFromReq, isAIConfigured } from './providers/index.js';
 
 const VALID_MODES: AnalyzeMode[] = ['session', 'sleep', 'wellness', 'sport', 'monthly', 'daily'];
 
@@ -20,8 +20,11 @@ export async function handleAnalyze(req: Request, res: Response) {
     return;
   }
 
-  if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
+  const provider = pickProviderFromReq(req);
+
+  if (!(await isAIConfigured(provider.name))) {
+    const providerLabel = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
+    res.status(503).json({ error: `${providerLabel} is not available. Check your setup.` });
     return;
   }
 
@@ -48,17 +51,19 @@ export async function handleAnalyze(req: Request, res: Response) {
   const systemPrompt = `${PROMPTS[analyzeMode] || PROMPTS.chat}\n\nUser data:\n${context || 'No data available.'}`;
   const userMessage = getDefaultUserMessage(analyzeMode, payload);
 
-  console.log(`[ai] Analyze mode=${analyzeMode} cacheKey=${cacheKey}`);
+  console.log(`[ai] Analyze mode=${analyzeMode} provider=${provider.name} cacheKey=${cacheKey}`);
 
   res.setHeader('X-AI-Mode', analyzeMode);
 
-  await claudeStreamChat(systemPrompt, [{ role: 'user', content: userMessage }], res, {
+  await provider.streamChat({
+    systemPrompt,
+    messages: [{ role: 'user', content: userMessage }],
+    res,
     beforeDone: (fullContent) => {
-      // Save to cache
       if (fullContent.length > 0) {
         db.prepare(
           'INSERT OR REPLACE INTO ai_cache (cache_key, mode, content, model, created_at) VALUES (?, ?, ?, ?, ?)'
-        ).run(cacheKey, analyzeMode, fullContent, 'claude', new Date().toISOString());
+        ).run(cacheKey, analyzeMode, fullContent, provider.name, new Date().toISOString());
         console.log(`[ai] Cached: ${cacheKey} (${fullContent.length} chars)`);
       }
       res.write(`data: ${JSON.stringify({ done: true, cached: false, generatedAt: new Date().toISOString() })}\n\n`);
@@ -66,7 +71,6 @@ export async function handleAnalyze(req: Request, res: Response) {
   });
 }
 
-// Generate a natural user message for each mode so the LLM has a clear "question"
 function getDefaultUserMessage(mode: AnalyzeMode, payload: Record<string, string>): string {
   switch (mode) {
     case 'session': return 'Analyze this training session.';

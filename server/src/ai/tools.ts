@@ -1,12 +1,13 @@
 // ai/tools.ts — Tool definitions + executors for the agentic loop
 import Anthropic from '@anthropic-ai/sdk';
 import db from '../db.js';
-import { claudeChat } from './claude.js';
 import { PROMPTS } from './prompts.js';
 import { buildTrainingContext, buildDailyContext } from './context.js';
 import { validatePlan, savePlanToDB, getPlanById } from '../routes/training.js';
 import { computeInsights } from '../insights/index.js';
 import { computeMacroTargets } from '../lib/macros.js';
+import type { Provider } from './providers/types.js';
+import { modelNameFor } from './config.js';
 
 // ── Tool definitions (Anthropic format) ──────────────────────────────
 
@@ -39,7 +40,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: 'object' as const,
       properties: {
-        goal: { type: 'string', description: 'Plan goal description (e.g., "3-day strength plan", "upper/lower hypertrophy")' },
+        goal: { type: 'string', description: 'Plan goal description (e.g., "run my first 10K", "tennis + gym 4 days/week", "triathlon prep", "3-day strength plan")' },
       },
       required: ['goal'],
     },
@@ -94,13 +95,17 @@ export interface ToolResult {
   isError: boolean;
 }
 
-export async function executeTool(name: string, input: Record<string, any>): Promise<ToolResult> {
+export async function executeTool(
+  name: string,
+  input: Record<string, any>,
+  opts: { provider?: Provider } = {}
+): Promise<ToolResult> {
   try {
     switch (name) {
       case 'update_profile':
         return { result: executeUpdateProfile(input), isError: false };
       case 'generate_training_plan':
-        return { result: await executeGenerateTrainingPlan(input), isError: false };
+        return { result: await executeGenerateTrainingPlan(input, opts.provider), isError: false };
       case 'log_meal':
         return { result: executeLogMeal(input), isError: false };
       case 'get_daily_briefing':
@@ -202,19 +207,22 @@ function executeUpdateProfile(input: Record<string, any>): any {
   return { updated_fields: updatedFields, profile: updated };
 }
 
-async function executeGenerateTrainingPlan(input: Record<string, any>): Promise<any> {
+async function executeGenerateTrainingPlan(input: Record<string, any>, provider?: Provider): Promise<any> {
+  if (!provider) {
+    throw new Error('Provider required to generate training plan inside agent');
+  }
   const goal = input.goal;
   const context = buildTrainingContext(goal);
   const systemPrompt = PROMPTS.training_plan + '\n\nUser data:\n' + context;
 
-  // Non-streaming inner call to Claude
-  const rawContent = await claudeChat(systemPrompt, `Generate a training plan for: ${goal}`, 4096);
+  // Non-streaming inner call via the active provider
+  const rawContent = await provider.chat(systemPrompt, `Generate a training plan for: ${goal}`, 4096);
 
   // Parse the ---PLAN_JSON--- delimiter
   const marker = '---PLAN_JSON---';
   const idx = rawContent.indexOf(marker);
   if (idx === -1) {
-    throw new Error('Claude did not generate the plan JSON correctly');
+    throw new Error('AI did not generate the plan JSON correctly (missing ---PLAN_JSON--- sentinel)');
   }
 
   let jsonStr = rawContent.slice(idx + marker.length).trim();
@@ -223,7 +231,7 @@ async function executeGenerateTrainingPlan(input: Record<string, any>): Promise<
 
   const planObj = JSON.parse(jsonStr);
   const plan = validatePlan(planObj);
-  const planId = savePlanToDB(plan, rawContent);
+  const planId = savePlanToDB(plan, rawContent, modelNameFor(provider.name));
   const fullPlan = getPlanById(planId);
 
   return {

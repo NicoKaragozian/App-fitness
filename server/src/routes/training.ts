@@ -2,22 +2,27 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import db from '../db.js';
 import { buildTrainingContext } from '../ai/context.js';
-import { PROMPTS } from '../ai/prompts.js';
-import { claudeStreamGenerate, claudeChat, isClaudeConfigured } from '../ai/claude.js';
+import { getPrompt } from '../ai/prompts.js';
+import { pickProviderFromReq, pickLanguageFromReq, isAIConfigured } from '../ai/providers/index.js';
+import { modelNameFor } from '../ai/config.js';
 
 const router = Router();
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 
 export interface AIExercise {
   name: string;
+  type?: 'strength' | 'cardio' | 'timed';
   category?: string;
   sets?: number;
   reps?: string | number;
+  duration_seconds?: number;
+  distance_meters?: number;
+  pace?: string;
   notes?: string;
 }
 
 export interface AISession {
   name: string;
+  type?: string;
   notes?: string;
   exercises?: AIExercise[];
 }
@@ -38,15 +43,15 @@ export function validatePlan(obj: any): AIPlan {
 }
 
 // Saves an AIPlan to DB and returns the inserted ID
-export function savePlanToDB(plan: AIPlan, rawContent: string): number {
+export function savePlanToDB(plan: AIPlan, rawContent: string, modelName?: string): number {
   const insertPlan = db.prepare(
     'INSERT INTO training_plans (title, objective, frequency, ai_model, raw_ai_response) VALUES (?,?,?,?,?)'
   );
   const insertSession = db.prepare(
-    'INSERT INTO training_sessions (plan_id, name, sort_order, notes) VALUES (?,?,?,?)'
+    'INSERT INTO training_sessions (plan_id, name, type, sort_order, notes) VALUES (?,?,?,?,?)'
   );
   const insertExercise = db.prepare(
-    'INSERT INTO training_exercises (session_id, name, category, target_sets, target_reps, notes, sort_order) VALUES (?,?,?,?,?,?,?)'
+    'INSERT INTO training_exercises (session_id, name, type, category, target_sets, target_reps, target_duration_seconds, target_distance_meters, target_pace, notes, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
   );
 
   let savedPlanId!: number;
@@ -55,13 +60,13 @@ export function savePlanToDB(plan: AIPlan, rawContent: string): number {
       plan.title,
       plan.objective ?? null,
       plan.frequency ?? null,
-      CLAUDE_MODEL,
+      modelName ?? 'unknown',
       rawContent,
     );
     savedPlanId = planResult.lastInsertRowid as number;
 
     (plan.sessions ?? []).forEach((session, si) => {
-      const sessionResult = insertSession.run(savedPlanId, session.name, si, session.notes ?? null);
+      const sessionResult = insertSession.run(savedPlanId, session.name, session.type ?? null, si, session.notes ?? null);
       const sessionId = sessionResult.lastInsertRowid as number;
 
       (session.exercises ?? []).forEach((ex, ei) => {
@@ -70,9 +75,13 @@ export function savePlanToDB(plan: AIPlan, rawContent: string): number {
         insertExercise.run(
           sessionId,
           ex.name,
+          ex.type ?? 'strength',
           ex.category ?? 'main',
           sets,
           reps,
+          ex.duration_seconds ?? null,
+          ex.distance_meters ?? null,
+          ex.pace ?? null,
           ex.notes ?? null,
           ei,
         );
@@ -87,9 +96,9 @@ export function savePlanToDB(plan: AIPlan, rawContent: string): number {
 // Emits "analysis" tokens for user feedback, then JSON plan at the end.
 // SSE Protocol:
 //   data: {"token":"..."}                         — analysis text (visible to the user)
-//   data: {"plan":{...},"recommendations":"..."}  — plan guardado, antes de [DONE]
-//   data: {"error":"..."}                         — si falla el parseo del JSON
-//   data: [DONE]                                  — fin del stream
+//   data: {"plan":{...},"recommendations":"..."}  — plan saved, before [DONE]
+//   data: {"error":"..."}                         — if JSON parse fails
+//   data: [DONE]                                  — end of stream
 router.post('/generate', async (req: Request, res: Response) => {
   const { goal } = req.body as { goal: string };
   if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
@@ -97,26 +106,28 @@ router.post('/generate', async (req: Request, res: Response) => {
     return;
   }
 
-  if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
+  const provider = pickProviderFromReq(req);
+  if (!(await isAIConfigured(provider.name))) {
+    const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
+    res.status(503).json({ error: `${label} is not available. Check your setup.` });
     return;
   }
 
+  const lang = pickLanguageFromReq(req);
   const context = buildTrainingContext(goal.trim());
-  const systemPrompt = `${PROMPTS.training_plan}\n\nUser data:\n${context}`;
+  const systemPrompt = `${getPrompt('training_plan', lang)}\n\nUser data:\n${context}`;
   const userMessage = `Generate my personalized training plan. Goal: ${goal.trim()}`;
+  const modelName = modelNameFor(provider.name);
 
-  await claudeStreamGenerate(systemPrompt, userMessage, res, {
+  await provider.streamGenerate(systemPrompt, userMessage, res, {
     maxTokens: 4096,
     beforeDone: (fullContent) => {
-      // Extraer la parte JSON usando el delimitador ---PLAN_JSON---
       const DELIMITER = '---PLAN_JSON---';
       const delimIdx = fullContent.indexOf(DELIMITER);
       let jsonStr = delimIdx >= 0
         ? fullContent.slice(delimIdx + DELIMITER.length).trim()
-        : fullContent.trim(); // fallback: intentar parsear todo
+        : fullContent.trim();
 
-      // Strip markdown fences (defensivo)
       if (jsonStr.startsWith('```')) {
         jsonStr = jsonStr.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
       }
@@ -124,12 +135,12 @@ router.post('/generate', async (req: Request, res: Response) => {
       try {
         const parsed = JSON.parse(jsonStr);
         const plan = validatePlan(parsed);
-        const savedPlanId = savePlanToDB(plan, fullContent);
+        const savedPlanId = savePlanToDB(plan, fullContent, modelName);
         const fullPlan = getPlanById(savedPlanId);
         res.write(`data: ${JSON.stringify({ plan: fullPlan, recommendations: plan.recommendations ?? null })}\n\n`);
       } catch (err: any) {
-        console.error('[training] Error parseando respuesta de Claude:', err.message);
-        res.write(`data: ${JSON.stringify({ error: `Claude did not return valid JSON: ${err.message}` })}\n\n`);
+        console.error('[training] Error parsing AI response:', err.message);
+        res.write(`data: ${JSON.stringify({ error: `AI did not return valid JSON: ${err.message}` })}\n\n`);
       }
     },
   });
@@ -214,16 +225,20 @@ router.delete('/plans/:id', (req: Request, res: Response) => {
 router.put('/exercises/:id', (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  const { name, target_sets, target_reps, notes, category } = req.body as any;
+  const { name, type, target_sets, target_reps, target_duration_seconds, target_distance_meters, target_pace, notes, category } = req.body as any;
   db.prepare(`
     UPDATE training_exercises SET
       name = COALESCE(?, name),
+      type = COALESCE(?, type),
       target_sets = COALESCE(?, target_sets),
       target_reps = COALESCE(?, target_reps),
+      target_duration_seconds = COALESCE(?, target_duration_seconds),
+      target_distance_meters = COALESCE(?, target_distance_meters),
+      target_pace = COALESCE(?, target_pace),
       notes = COALESCE(?, notes),
       category = COALESCE(?, category)
     WHERE id = ?
-  `).run(name ?? null, target_sets ?? null, target_reps ?? null, notes ?? null, category ?? null, id);
+  `).run(name ?? null, type ?? null, target_sets ?? null, target_reps ?? null, target_duration_seconds ?? null, target_distance_meters ?? null, target_pace ?? null, notes ?? null, category ?? null, id);
   res.json({ ok: true });
 });
 
@@ -290,14 +305,14 @@ router.delete('/workouts/:id', (req: Request, res: Response) => {
 router.post('/workouts/:id/sets', (req: Request, res: Response) => {
   const workoutId = parseInt(req.params.id as string);
   if (isNaN(workoutId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  const { exerciseId, setNumber, reps, weight, completed, notes } = req.body as any;
+  const { exerciseId, setNumber, reps, weight, completed, notes, duration_seconds, distance_meters } = req.body as any;
   if (!exerciseId || setNumber == null) {
     res.status(400).json({ error: 'exerciseId and setNumber required' });
     return;
   }
   const result = db.prepare(
-    'INSERT INTO workout_sets (workout_log_id, exercise_id, set_number, reps, weight, completed, notes) VALUES (?,?,?,?,?,?,?)'
-  ).run(workoutId, exerciseId, setNumber, reps ?? null, weight ?? null, completed ? 1 : 0, notes ?? null);
+    'INSERT INTO workout_sets (workout_log_id, exercise_id, set_number, reps, weight, completed, notes, duration_seconds, distance_meters) VALUES (?,?,?,?,?,?,?,?,?)'
+  ).run(workoutId, exerciseId, setNumber, reps ?? null, weight ?? null, completed ? 1 : 0, notes ?? null, duration_seconds ?? null, distance_meters ?? null);
   res.json({ setId: result.lastInsertRowid });
 });
 
@@ -312,6 +327,8 @@ router.put('/sets/:id', (req: Request, res: Response) => {
   if ('weight' in body) { updates.push('weight = ?'); params.push(body.weight ?? null); }
   if ('completed' in body) { updates.push('completed = ?'); params.push(body.completed ? 1 : 0); }
   if ('notes' in body) { updates.push('notes = ?'); params.push(body.notes ?? null); }
+  if ('duration_seconds' in body) { updates.push('duration_seconds = ?'); params.push(body.duration_seconds ?? null); }
+  if ('distance_meters' in body) { updates.push('distance_meters = ?'); params.push(body.distance_meters ?? null); }
   if (updates.length === 0) { res.json({ ok: true }); return; }
   params.push(id);
   db.prepare(`UPDATE workout_sets SET ${updates.join(', ')} WHERE id = ?`).run(...params);
@@ -326,35 +343,58 @@ router.delete('/sets/:id', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// GET /api/training/exercises/:id/history — Weight/reps history for progressive overload
+// GET /api/training/exercises/:id/history — Progressive overload history (adapts to exercise type)
 router.get('/exercises/:id/history', (req: Request, res: Response) => {
   const exerciseId = parseInt(req.params.id as string);
   if (isNaN(exerciseId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
 
-  // Find all completed sets for this exercise, ordered by date
+  const exercise = db.prepare('SELECT type FROM training_exercises WHERE id = ?').get(exerciseId) as { type: string } | undefined;
+  const exType = exercise?.type ?? 'strength';
+
   const rows = db.prepare(`
-    SELECT ws.set_number, ws.reps, ws.weight, ws.completed, wl.started_at, wl.id as workout_log_id
+    SELECT ws.set_number, ws.reps, ws.weight, ws.duration_seconds, ws.distance_meters, ws.completed, wl.started_at, wl.id as workout_log_id
     FROM workout_sets ws
     JOIN workout_logs wl ON wl.id = ws.workout_log_id
     WHERE ws.exercise_id = ? AND ws.completed = 1
     ORDER BY wl.started_at ASC, ws.set_number ASC
   `).all(exerciseId) as any[];
 
-  // Group by workout (date)
-  const byWorkout: Record<string, { date: string; sets: { set: number; reps: number | null; weight: number | null }[] }> = {};
+  const byWorkout: Record<string, { date: string; sets: any[] }> = {};
   for (const row of rows) {
     const date = row.started_at.slice(0, 10);
     const key = `${row.workout_log_id}`;
     if (!byWorkout[key]) byWorkout[key] = { date, sets: [] };
-    byWorkout[key].sets.push({ set: row.set_number, reps: row.reps, weight: row.weight });
+    byWorkout[key].sets.push({
+      set: row.set_number,
+      reps: row.reps,
+      weight: row.weight,
+      duration_seconds: row.duration_seconds,
+      distance_meters: row.distance_meters,
+    });
   }
 
-  const history = Object.values(byWorkout).map(w => ({
-    date: w.date,
-    sets: w.sets,
-    maxWeight: Math.max(...w.sets.map(s => s.weight ?? 0)),
-    totalReps: w.sets.reduce((sum, s) => sum + (s.reps ?? 0), 0),
-  }));
+  const history = Object.values(byWorkout).map(w => {
+    const base = { date: w.date, type: exType, sets: w.sets };
+    if (exType === 'cardio') {
+      const totalDistance = w.sets.reduce((sum: number, s: any) => sum + (s.distance_meters ?? 0), 0);
+      const totalDuration = w.sets.reduce((sum: number, s: any) => sum + (s.duration_seconds ?? 0), 0);
+      const bestPace = (totalDistance > 0 && totalDuration > 0)
+        ? `${Math.floor(totalDuration / 60 / (totalDistance / 1000))}:${String(Math.round((totalDuration / 60 / (totalDistance / 1000) % 1) * 60)).padStart(2, '0')}/km`
+        : null;
+      return { ...base, totalDistance, totalDuration, bestPace, maxWeight: 0, totalReps: 0 };
+    }
+    if (exType === 'timed') {
+      const totalDuration = w.sets.reduce((sum: number, s: any) => sum + (s.duration_seconds ?? 0), 0);
+      const setsCompleted = w.sets.length;
+      return { ...base, totalDuration, setsCompleted, maxWeight: 0, totalReps: 0 };
+    }
+    // strength (default)
+    return {
+      ...base,
+      maxWeight: Math.max(...w.sets.map((s: any) => s.weight ?? 0)),
+      totalReps: w.sets.reduce((sum: number, s: any) => sum + (s.reps ?? 0), 0),
+    };
+  });
 
   res.json(history);
 });
@@ -367,8 +407,10 @@ router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
   const exercise = db.prepare('SELECT * FROM training_exercises WHERE id = ?').get(exerciseId) as any;
   if (!exercise) { res.status(404).json({ error: 'Exercise not found' }); return; }
 
-  if (!isClaudeConfigured()) {
-    res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
+  const provider = pickProviderFromReq(req);
+  if (!(await isAIConfigured(provider.name))) {
+    const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
+    res.status(503).json({ error: `${label} is not available. Check your setup.` });
     return;
   }
 
@@ -377,7 +419,7 @@ router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
 
   let description: string;
   try {
-    description = (await claudeChat(systemPrompt, prompt, 512)).trim();
+    description = (await provider.chat(systemPrompt, prompt, 512)).trim();
   } catch (err: any) {
     res.status(502).json({ error: err.message || 'Error generating description' });
     return;

@@ -14,6 +14,16 @@ const CATEGORY_LABELS: Record<string, string> = {
   main: 'Main',
   core: 'Core',
   cooldown: 'Cool-down',
+  recovery: 'Recovery',
+};
+
+const SESSION_TYPE_ICONS: Record<string, string> = {
+  gym: '🏋️',
+  run: '🏃',
+  swim: '🏊',
+  bike: '🚴',
+  tennis: '🎾',
+  mixed: '⚡',
 };
 
 function formatDate(iso: string) {
@@ -21,14 +31,34 @@ function formatDate(iso: string) {
 }
 
 function groupExercises(exercises: TrainingExercise[]) {
-  const order = ['warmup', 'main', 'core', 'cooldown'];
+  const order = ['warmup', 'main', 'core', 'cooldown', 'recovery'];
   const groups: Record<string, TrainingExercise[]> = {};
   for (const ex of exercises) {
     const cat = ex.category ?? 'main';
     if (!groups[cat]) groups[cat] = [];
     groups[cat].push(ex);
   }
-  return order.filter(k => groups[k]?.length > 0).map(k => ({ category: k, exercises: groups[k] }));
+  const allCats = [...new Set([...order, ...Object.keys(groups)])];
+  return allCats.filter(k => groups[k]?.length > 0).map(k => ({ category: k, exercises: groups[k] }));
+}
+
+function exerciseBadge(ex: TrainingExercise): string | null {
+  if (ex.type === 'cardio') {
+    const parts: string[] = [];
+    if (ex.target_distance_meters) parts.push(`${(ex.target_distance_meters / 1000).toFixed(1)}km`);
+    if (ex.target_duration_seconds) parts.push(`${Math.floor(ex.target_duration_seconds / 60)}min`);
+    if (ex.target_pace) parts.push(`@${ex.target_pace}`);
+    return parts.length > 0 ? parts.join(' · ') : null;
+  }
+  if (ex.type === 'timed') {
+    if (ex.target_duration_seconds) {
+      return ex.target_sets ? `${ex.target_sets} × ${ex.target_duration_seconds}s` : `${ex.target_duration_seconds}s`;
+    }
+    return null;
+  }
+  // strength (default)
+  if (ex.target_sets && ex.target_reps) return `${ex.target_sets} × ${ex.target_reps}`;
+  return null;
 }
 
 export const PlanDetail: React.FC = () => {
@@ -206,7 +236,14 @@ export const PlanDetail: React.FC = () => {
             <div className="p-5 border-b border-outline-variant/20">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-display text-on-surface text-lg">{session.name}</p>
+                  <div className="flex items-center gap-2">
+                    {session.type && (
+                      <span className="text-sm" title={session.type}>
+                        {SESSION_TYPE_ICONS[session.type.toLowerCase()] ?? '▣'}
+                      </span>
+                    )}
+                    <p className="font-display text-on-surface text-lg">{session.name}</p>
+                  </div>
                   {session.notes && (
                     <p className="text-on-surface-variant text-sm mt-1">{session.notes}</p>
                   )}
@@ -275,9 +312,9 @@ export const PlanDetail: React.FC = () => {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-on-surface text-sm font-medium">{ex.name}</p>
-                              {ex.target_sets && ex.target_reps && (
+                              {exerciseBadge(ex) && (
                                 <span className="font-label text-[10px] text-primary tracking-widest uppercase bg-primary/10 px-2 py-0.5 rounded">
-                                  {ex.target_sets} × {ex.target_reps}
+                                  {exerciseBadge(ex)}
                                 </span>
                               )}
                             </div>
@@ -311,7 +348,7 @@ export const PlanDetail: React.FC = () => {
                               ) : '?'}
                             </button>
                             <button
-                              onClick={() => { setEditingExercise(ex.id); setEditFields({ name: ex.name, target_sets: ex.target_sets ?? undefined, target_reps: ex.target_reps ?? undefined, notes: ex.notes ?? undefined }); }}
+                              onClick={() => { setEditingExercise(ex.id); setEditFields({ name: ex.name, type: ex.type, target_sets: ex.target_sets ?? undefined, target_reps: ex.target_reps ?? undefined, target_duration_seconds: ex.target_duration_seconds ?? undefined, target_distance_meters: ex.target_distance_meters ?? undefined, target_pace: ex.target_pace ?? undefined, notes: ex.notes ?? undefined }); }}
                               className="opacity-0 group-hover:opacity-100 transition-opacity text-on-surface-variant text-xs px-2 py-1 rounded hover:bg-surface-container"
                             >
                               edit
@@ -336,6 +373,8 @@ interface WorkoutSetDetail {
   set_number: number;
   reps: number | null;
   weight: number | null;
+  duration_seconds: number | null;
+  distance_meters: number | null;
   completed: number;
   exercise_id: number;
   exercise_name: string | null;
@@ -562,12 +601,16 @@ function SessionHistoryPanel({ sessionId, planId }: { sessionId: number; planId:
                             ) : (
                               <>
                                 <span className="font-label text-[10px] text-on-surface-variant w-8">S{s.set_number}</span>
-                                <span className="text-on-surface text-xs w-12">
-                                  {s.reps != null ? `${s.reps} reps` : '-'}
-                                </span>
-                                <span className="text-on-surface-variant text-xs w-14">
-                                  {s.weight != null && s.weight > 0 ? `${s.weight} kg` : '—'}
-                                </span>
+                                {s.duration_seconds != null ? (
+                                  <span className="text-on-surface text-xs">{s.duration_seconds}s</span>
+                                ) : s.reps != null ? (
+                                  <span className="text-on-surface text-xs w-12">{s.reps} reps</span>
+                                ) : null}
+                                {s.distance_meters != null ? (
+                                  <span className="text-on-surface-variant text-xs">{(s.distance_meters / 1000).toFixed(2)}km</span>
+                                ) : s.weight != null && s.weight > 0 ? (
+                                  <span className="text-on-surface-variant text-xs w-14">{s.weight} kg</span>
+                                ) : null}
                                 <button
                                   onClick={() => handleEditSet(s)}
                                   className="text-on-surface-variant text-[10px] hover:text-primary transition-colors px-1"
@@ -605,34 +648,92 @@ function EditExerciseForm({ exercise, fields, onChange, onSave, onCancel }: {
   onSave: () => void;
   onCancel: () => void;
 }) {
+  const type = fields.type ?? exercise.type ?? 'strength';
+  const INPUT = 'bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary';
   return (
     <div className="space-y-2" onClick={e => e.stopPropagation()}>
       <input
         value={fields.name ?? exercise.name}
         onChange={e => onChange({ ...fields, name: e.target.value })}
-        className="w-full bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+        className={`w-full ${INPUT}`}
         placeholder="Name"
       />
-      <div className="flex gap-2">
+      <select
+        value={type}
+        onChange={e => onChange({ ...fields, type: e.target.value as any })}
+        className={`w-full ${INPUT}`}
+      >
+        <option value="strength">Strength (sets × reps × weight)</option>
+        <option value="cardio">Cardio (distance / duration)</option>
+        <option value="timed">Timed (sets × duration)</option>
+      </select>
+      {type === 'strength' && (
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={fields.target_sets ?? exercise.target_sets ?? ''}
+            onChange={e => onChange({ ...fields, target_sets: e.target.value ? parseInt(e.target.value) : undefined })}
+            className={`w-20 ${INPUT}`}
+            placeholder="Sets"
+          />
+          <input
+            value={fields.target_reps ?? exercise.target_reps ?? ''}
+            onChange={e => onChange({ ...fields, target_reps: e.target.value })}
+            className={`flex-1 ${INPUT}`}
+            placeholder="Reps (e.g. 10-12, AMRAP)"
+          />
+        </div>
+      )}
+      {type === 'timed' && (
+        <div className="flex gap-2">
+          <input
+            type="number"
+            value={fields.target_sets ?? exercise.target_sets ?? ''}
+            onChange={e => onChange({ ...fields, target_sets: e.target.value ? parseInt(e.target.value) : undefined })}
+            className={`w-20 ${INPUT}`}
+            placeholder="Sets"
+          />
+          <input
+            type="number"
+            value={fields.target_duration_seconds ?? exercise.target_duration_seconds ?? ''}
+            onChange={e => onChange({ ...fields, target_duration_seconds: e.target.value ? parseInt(e.target.value) : undefined })}
+            className={`flex-1 ${INPUT}`}
+            placeholder="Duration (seconds)"
+          />
+        </div>
+      )}
+      {type === 'cardio' && (
+        <div className="flex gap-2">
+          <input
+            type="number"
+            step="0.1"
+            value={fields.target_distance_meters != null ? (fields.target_distance_meters / 1000).toFixed(2) : exercise.target_distance_meters != null ? (exercise.target_distance_meters / 1000).toFixed(2) : ''}
+            onChange={e => onChange({ ...fields, target_distance_meters: e.target.value ? Math.round(parseFloat(e.target.value) * 1000) : undefined })}
+            className={`flex-1 ${INPUT}`}
+            placeholder="Distance (km)"
+          />
+          <input
+            type="number"
+            value={fields.target_duration_seconds != null ? Math.round(fields.target_duration_seconds / 60) : exercise.target_duration_seconds != null ? Math.round(exercise.target_duration_seconds / 60) : ''}
+            onChange={e => onChange({ ...fields, target_duration_seconds: e.target.value ? parseInt(e.target.value) * 60 : undefined })}
+            className={`flex-1 ${INPUT}`}
+            placeholder="Duration (min)"
+          />
+        </div>
+      )}
+      {type === 'cardio' && (
         <input
-          type="number"
-          value={fields.target_sets ?? exercise.target_sets ?? ''}
-          onChange={e => onChange({ ...fields, target_sets: e.target.value ? parseInt(e.target.value) : undefined })}
-          className="w-20 bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          placeholder="Sets"
+          value={fields.target_pace ?? exercise.target_pace ?? ''}
+          onChange={e => onChange({ ...fields, target_pace: e.target.value })}
+          className={`w-full ${INPUT}`}
+          placeholder="Pace (e.g. 5:30/km)"
         />
-        <input
-          value={fields.target_reps ?? exercise.target_reps ?? ''}
-          onChange={e => onChange({ ...fields, target_reps: e.target.value })}
-          className="flex-1 bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-          placeholder="Reps (e.g.: 10-12, 30s)"
-        />
-      </div>
+      )}
       <input
         value={fields.notes ?? exercise.notes ?? ''}
         onChange={e => onChange({ ...fields, notes: e.target.value })}
-        className="w-full bg-surface-container rounded px-3 py-1.5 text-on-surface text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-        placeholder="Technical notes"
+        className={`w-full ${INPUT}`}
+        placeholder="Notes"
       />
       <div className="flex gap-2">
         <button onClick={onSave} className="flex-1 bg-primary text-surface font-label text-[10px] tracking-widest uppercase px-3 py-1.5 rounded">Save</button>
@@ -738,13 +839,33 @@ function ExerciseHistoryInline({ exerciseId }: { exerciseId: number }) {
 
   return (
     <div className="mt-2 space-y-1">
-      {history.map((entry, i) => (
-        <div key={i} className="flex items-center gap-3 text-xs text-on-surface-variant">
-          <span className="font-label tracking-widest">{entry.date}</span>
-          <span>max {entry.maxWeight > 0 ? `${entry.maxWeight}kg` : '-'}</span>
-          <span>{entry.totalReps} reps</span>
-        </div>
-      ))}
+      {history.map((entry, i) => {
+        const exType = entry.type ?? 'strength';
+        return (
+          <div key={i} className="flex items-center gap-3 text-xs text-on-surface-variant">
+            <span className="font-label tracking-widest">{entry.date}</span>
+            {exType === 'cardio' && (
+              <>
+                {entry.totalDistance ? <span>{(entry.totalDistance / 1000).toFixed(2)}km</span> : null}
+                {entry.totalDuration ? <span>{Math.round(entry.totalDuration / 60)}min</span> : null}
+                {entry.bestPace ? <span>@ {entry.bestPace}</span> : null}
+              </>
+            )}
+            {exType === 'timed' && (
+              <>
+                {entry.setsCompleted ? <span>{entry.setsCompleted} sets</span> : null}
+                {entry.totalDuration ? <span>{entry.totalDuration}s total</span> : null}
+              </>
+            )}
+            {exType === 'strength' && (
+              <>
+                <span>max {entry.maxWeight > 0 ? `${entry.maxWeight}kg` : '-'}</span>
+                <span>{entry.totalReps} reps</span>
+              </>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

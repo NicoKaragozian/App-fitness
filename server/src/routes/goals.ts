@@ -1,26 +1,31 @@
 import express from 'express';
 import db from '../db.js';
 import { buildGoalContext } from '../ai/context.js';
-import { PROMPTS } from '../ai/prompts.js';
-import { claudeChat, isClaudeConfigured } from '../ai/claude.js';
+import { getPrompt } from '../ai/prompts.js';
+import { pickProviderFromReq, pickLanguageFromReq, isAIConfigured } from '../ai/providers/index.js';
+import { modelNameFor } from '../ai/config.js';
 
 const router = express.Router();
-const CLAUDE_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 
 // POST /api/goals/generate
 router.post('/generate', async (req, res) => {
   const { objective, targetDate } = req.body;
   if (!objective?.trim()) return res.status(400).json({ error: 'objective required' });
 
-  if (!isClaudeConfigured()) {
-    return res.status(503).json({ error: 'Claude API not configured. Add ANTHROPIC_API_KEY to .env' });
+  const provider = pickProviderFromReq(req);
+  if (!(await isAIConfigured(provider.name))) {
+    const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
+    return res.status(503).json({ error: `${label} is not available. Check your setup.` });
   }
 
+  const lang = pickLanguageFromReq(req);
   const context = buildGoalContext(objective, targetDate);
-  const systemPrompt = PROMPTS.goal_plan;
+  const systemPrompt = getPrompt('goal_plan', lang);
 
   try {
-    const raw = await claudeChat(
+    // For Gemma: use chatJSON to guarantee parseable output (Ollama JSON mode)
+    // For Claude: regular chat (follows JSON prompts reliably)
+    const raw = await provider.chatJSON(
       `${systemPrompt}\n\n${context}`,
       `Objective: ${objective}${targetDate ? `\nDeadline: ${targetDate}` : ''}`
     );
@@ -58,7 +63,7 @@ router.post('/generate', async (req, res) => {
         JSON.stringify(Array.isArray(parsed.prerequisites) ? parsed.prerequisites : []),
         JSON.stringify(Array.isArray(parsed.common_mistakes) ? parsed.common_mistakes : []),
         parsed.estimated_timeline ?? null,
-        CLAUDE_MODEL,
+        modelNameFor(provider.name),
         raw
       );
 
