@@ -213,14 +213,31 @@ export const ActiveWorkout: React.FC = () => {
 
   const groups = groupExercises(session.exercises);
 
+  const SESSION_TYPE_INFO: Record<string, { icon: string; label: string; timerColor: string; barColor: string }> = {
+    gym:    { icon: '🏋️', label: 'Gym',    timerColor: 'text-primary',   barColor: 'bg-primary' },
+    run:    { icon: '🏃', label: 'Run',    timerColor: 'text-secondary', barColor: 'bg-secondary' },
+    swim:   { icon: '🏊', label: 'Swim',   timerColor: 'text-secondary', barColor: 'bg-secondary' },
+    bike:   { icon: '🚴', label: 'Bike',   timerColor: 'text-tertiary',  barColor: 'bg-tertiary' },
+    tennis: { icon: '🎾', label: 'Tennis', timerColor: 'text-tertiary',  barColor: 'bg-tertiary' },
+    mixed:  { icon: '⚡', label: 'Mixed',  timerColor: 'text-primary',   barColor: 'bg-primary' },
+    surf:   { icon: '🏄', label: 'Surf',   timerColor: 'text-secondary', barColor: 'bg-secondary' },
+  };
+  const typeKey = session.type?.toLowerCase() ?? '';
+  const typeInfo = SESSION_TYPE_INFO[typeKey] ?? { icon: '▣', label: session.type ?? '', timerColor: 'text-primary', barColor: 'bg-primary' };
+
   return (
     <div className="min-h-screen flex flex-col bg-surface pb-28">
       {/* Fixed header */}
       <div className="sticky top-0 z-10 bg-surface border-b border-outline-variant/20 px-4 py-3">
         <div className="flex items-center justify-between max-w-2xl mx-auto">
           <div>
-            <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase line-clamp-1">{session.name}</p>
-            <p className="font-display text-2xl text-primary tabular-nums">{timer}</p>
+            <div className="flex items-center gap-2 mb-0.5">
+              {session.type && (
+                <span className="text-sm">{typeInfo.icon}</span>
+              )}
+              <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase line-clamp-1">{session.name}</p>
+            </div>
+            <p className={`font-display text-2xl tabular-nums ${typeInfo.timerColor}`}>{timer}</p>
           </div>
           <div className="text-right">
             <p className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
@@ -228,7 +245,7 @@ export const ActiveWorkout: React.FC = () => {
             </p>
             <div className="w-24 h-1.5 bg-surface-container rounded-full mt-1 overflow-hidden">
               <div
-                className="h-full bg-primary rounded-full transition-all"
+                className={`h-full rounded-full transition-all ${typeInfo.barColor}`}
                 style={{ width: `${totalSets > 0 ? (completedSets / totalSets) * 100 : 0}%` }}
               />
             </div>
@@ -251,6 +268,8 @@ export const ActiveWorkout: React.FC = () => {
                   key={ex.id}
                   className={`bg-surface-low rounded-xl overflow-hidden transition-all ${allCompleted ? 'opacity-70' : ''}`}
                 >
+                  {/* Exercise type strip */}
+                  <div className={`h-0.5 w-full ${ex.type === 'cardio' ? 'bg-secondary/40' : ex.type === 'timed' ? 'bg-tertiary/40' : 'bg-primary/40'}`} />
                   {/* Exercise header */}
                   <div className="px-4 py-3 flex items-center justify-between border-b border-outline-variant/10">
                     <div>

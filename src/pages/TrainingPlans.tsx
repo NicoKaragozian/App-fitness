@@ -27,6 +27,8 @@ export const TrainingPlans: React.FC = () => {
     t('training.presets.2'),
     t('training.presets.3'),
     t('training.presets.4'),
+    t('training.presets.5'),
+    t('training.presets.6'),
   ];
 
   const formatDate = (iso: string) =>
@@ -259,13 +261,24 @@ export const TrainingPlans: React.FC = () => {
 
           {/* Empty state */}
           {activePlans.length === 0 && !showForm && (
-            <div className="bg-surface-low rounded-xl p-8 text-center space-y-3">
-              <p className="text-3xl">▣</p>
-              <p className="font-display text-on-surface">{t('training.noActivePlans')}</p>
-              <p className="text-on-surface-variant text-sm">{t('training.noActivePlansDesc')}</p>
+            <div className="bg-surface-low rounded-xl p-8 text-center space-y-4 border border-outline-variant/10">
+              <div className="flex justify-center gap-3 text-2xl">
+                <span>🏃</span><span>🏋️</span><span>🎾</span><span>🏊</span>
+              </div>
+              <div>
+                <p className="font-display text-on-surface text-lg">{t('training.noActivePlans')}</p>
+                <p className="text-on-surface-variant text-sm mt-1">{t('training.noActivePlansDesc')}</p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2">
+                {(['Run 10K', 'Tennis + Gym', 'Triathlon', 'Strength']).map(ex => (
+                  <span key={ex} className="text-xs text-on-surface-variant bg-surface-container px-3 py-1 rounded-full border border-outline-variant/20">
+                    {ex}
+                  </span>
+                ))}
+              </div>
               <button
                 onClick={() => setShowForm(true)}
-                className="mt-2 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
+                className="bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-6 py-2.5 rounded-lg hover:opacity-90 transition-opacity"
               >
                 {t('training.createFirstPlan')}
               </button>
@@ -320,6 +333,40 @@ export const TrainingPlans: React.FC = () => {
   );
 };
 
+const SPORT_ICONS: Record<string, string> = {
+  gym: '🏋️',
+  run: '🏃',
+  swim: '🏊',
+  bike: '🚴',
+  tennis: '🎾',
+  mixed: '⚡',
+  surf: '🏄',
+  kite: '🪁',
+};
+
+const SPORT_COLORS: Record<string, { bg: string; text: string }> = {
+  gym: { bg: 'bg-primary/10', text: 'text-primary' },
+  run: { bg: 'bg-secondary/10', text: 'text-secondary' },
+  swim: { bg: 'bg-secondary/10', text: 'text-secondary' },
+  bike: { bg: 'bg-tertiary/10', text: 'text-tertiary' },
+  tennis: { bg: 'bg-tertiary/10', text: 'text-tertiary' },
+  mixed: { bg: 'bg-surface-bright', text: 'text-on-surface-variant' },
+  surf: { bg: 'bg-secondary/10', text: 'text-secondary' },
+  kite: { bg: 'bg-secondary/10', text: 'text-secondary' },
+};
+
+function SportChip({ type }: { type: string }) {
+  const key = type.toLowerCase();
+  const colors = SPORT_COLORS[key] ?? { bg: 'bg-surface-bright', text: 'text-on-surface-variant' };
+  const icon = SPORT_ICONS[key] ?? '▣';
+  return (
+    <span className={`inline-flex items-center gap-1 ${colors.bg} ${colors.text} font-label text-[10px] tracking-widest uppercase px-2 py-1 rounded-lg`}>
+      <span>{icon}</span>
+      <span>{type}</span>
+    </span>
+  );
+}
+
 interface PlanCardProps {
   plan: ReturnType<typeof useTrainingPlans>['plans'][number];
   onOpen: () => void;
@@ -335,69 +382,80 @@ function PlanCard({ plan, onOpen, onArchive, onDelete, archived, formatDate, t }
 
   return (
     <div
-      className={`bg-surface-low rounded-xl p-5 cursor-pointer hover:bg-surface-container transition-colors relative ${archived ? 'opacity-60' : ''}`}
+      className={`bg-surface-low rounded-xl overflow-hidden cursor-pointer hover:bg-surface-container transition-colors relative border border-outline-variant/10 ${archived ? 'opacity-60' : ''}`}
       onClick={onOpen}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
             {archived && (
-              <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase bg-surface-container px-2 py-0.5 rounded">
+              <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase bg-surface-container px-2 py-0.5 rounded mb-2 inline-block">
                 {t('training.archived')}
               </span>
             )}
-          </div>
-          <p className="font-display text-on-surface text-lg leading-tight">{plan.title}</p>
-          {plan.objective && (
-            <p className="text-on-surface-variant text-sm mt-1 line-clamp-2">{plan.objective}</p>
-          )}
-          <div className="flex flex-wrap gap-3 mt-3">
-            {plan.frequency && (
-              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-                {plan.frequency}
-              </span>
+            <p className="font-display text-on-surface text-lg leading-tight">{plan.title}</p>
+            {plan.objective && (
+              <p className="text-on-surface-variant text-sm mt-1 line-clamp-2">{plan.objective}</p>
             )}
-            <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-              {plan.sessionCount} {t('training.sessions')}
-            </span>
-            <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-              {plan.workoutCount} {t('training.completed').toLowerCase()}
-            </span>
-            {plan.lastWorkout && (
-              <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
-                {t('training.lastWorkout')}: {formatDate(plan.lastWorkout)}
-              </span>
-            )}
-          </div>
-        </div>
 
-        {/* Menu */}
-        <div className="relative" onClick={e => e.stopPropagation()}>
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors text-lg"
-          >
-            ⋯
-          </button>
-          {menuOpen && (
-            <div className="absolute right-0 top-9 bg-surface-container rounded-xl shadow-lg overflow-hidden z-10 w-40">
-              {!archived && (
+            {/* Sport type chips */}
+            {plan.sessionTypes && plan.sessionTypes.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {plan.sessionTypes.map(type => (
+                  <SportChip key={type} type={type} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Menu */}
+          <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors text-lg"
+            >
+              ⋯
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-9 bg-surface-container rounded-xl shadow-lg overflow-hidden z-10 w-40">
+                {!archived && (
+                  <button
+                    onClick={() => { setMenuOpen(false); onArchive(); }}
+                    className="w-full px-4 py-3 text-left text-sm text-on-surface-variant hover:bg-surface-high transition-colors"
+                  >
+                    {t('training.archive')}
+                  </button>
+                )}
                 <button
-                  onClick={() => { setMenuOpen(false); onArchive(); }}
-                  className="w-full px-4 py-3 text-left text-sm text-on-surface-variant hover:bg-surface-high transition-colors"
+                  onClick={() => { setMenuOpen(false); onDelete(); }}
+                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-surface-high transition-colors"
                 >
-                  {t('training.archive')}
+                  {t('common.delete')}
                 </button>
-              )}
-              <button
-                onClick={() => { setMenuOpen(false); onDelete(); }}
-                className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-surface-high transition-colors"
-              >
-                {t('common.delete')}
-              </button>
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* Footer bar */}
+      <div className="px-5 py-2.5 bg-surface-container/40 border-t border-outline-variant/10 flex flex-wrap gap-x-4 gap-y-1">
+        {plan.frequency && (
+          <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
+            {plan.frequency}
+          </span>
+        )}
+        <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
+          {plan.sessionCount} {t('training.sessions')}
+        </span>
+        <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
+          {plan.workoutCount} {t('training.completed').toLowerCase()}
+        </span>
+        {plan.lastWorkout && (
+          <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">
+            {t('training.lastWorkout')}: {formatDate(plan.lastWorkout)}
+          </span>
+        )}
       </div>
     </div>
   );

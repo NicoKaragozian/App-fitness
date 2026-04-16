@@ -161,12 +161,14 @@
     "lastWorkout": "Último",
     "deletePlan": "Eliminar plan",
     "deletePlanDesc": "El plan, todas las sesiones e historial de entrenamientos serán eliminados. Esta acción no se puede deshacer.",
-    "goalInputPlaceholder": "Describe tu objetivo (ej.: plan de fuerza para complementar surf y tenis, 3 días por semana)...",
+    "goalInputPlaceholder": "Describe tu objetivo — cualquier deporte o combinación (ej.: correr mis primeros 10K, tenis + gym 4 días/semana, preparación para triatlón...)...",
     "presets": {
-      "1": "Plan de fuerza funcional para complementar deportes acuáticos y de raqueta",
-      "2": "Plan de hipertrofia con 3 sesiones semanales",
-      "3": "Core y estabilidad para mejorar el equilibrio en el agua",
-      "4": "Plan de fuerza general para principiantes en el gym"
+      "1": "Correr mis primeros 10K desde cero",
+      "2": "Tenis + gym: fuerza para pegar más fuerte y evitar lesiones",
+      "3": "Base de triatlón: natación, ciclismo y running",
+      "4": "Plan de hipertrofia — 3 sesiones de gym por semana",
+      "5": "Mejorar mi surf y kite con fuerza funcional",
+      "6": "Running + fuerza: velocidad en 5K y gym 2 días/semana"
     }
   },
   "goals": {

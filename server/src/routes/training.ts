@@ -177,7 +177,8 @@ router.get('/plans', (_req: Request, res: Response) => {
       'SELECT completed_at FROM workout_logs WHERE plan_id = ? AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT 1'
     ).get(p.id) as any;
     const workoutCount = (db.prepare('SELECT COUNT(*) as c FROM workout_logs WHERE plan_id = ? AND completed_at IS NOT NULL').get(p.id) as any).c;
-    return { ...p, sessionCount, lastWorkout: lastWorkout?.completed_at ?? null, workoutCount };
+    const sessionTypes = (db.prepare('SELECT DISTINCT type FROM training_sessions WHERE plan_id = ? AND type IS NOT NULL').all(p.id) as any[]).map((r: any) => r.type as string);
+    return { ...p, sessionCount, lastWorkout: lastWorkout?.completed_at ?? null, workoutCount, sessionTypes };
   });
 
   res.json(result);

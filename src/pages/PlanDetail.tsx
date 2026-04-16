@@ -17,14 +17,80 @@ const CATEGORY_LABELS: Record<string, string> = {
   recovery: 'Recovery',
 };
 
-const SESSION_TYPE_ICONS: Record<string, string> = {
-  gym: '🏋️',
-  run: '🏃',
-  swim: '🏊',
-  bike: '🚴',
-  tennis: '🎾',
-  mixed: '⚡',
+const SESSION_TYPE_CONFIG: Record<string, {
+  icon: string;
+  label: string;
+  topBar: string;
+  chipBg: string;
+  chipText: string;
+  startBtn: string;
+}> = {
+  gym: {
+    icon: '🏋️', label: 'Gym',
+    topBar: 'bg-primary/20',
+    chipBg: 'bg-primary/15', chipText: 'text-primary',
+    startBtn: 'bg-primary text-surface',
+  },
+  run: {
+    icon: '🏃', label: 'Run',
+    topBar: 'bg-secondary/20',
+    chipBg: 'bg-secondary/15', chipText: 'text-secondary',
+    startBtn: 'bg-secondary text-surface',
+  },
+  swim: {
+    icon: '🏊', label: 'Swim',
+    topBar: 'bg-secondary/20',
+    chipBg: 'bg-secondary/15', chipText: 'text-secondary',
+    startBtn: 'bg-secondary text-surface',
+  },
+  bike: {
+    icon: '🚴', label: 'Bike',
+    topBar: 'bg-tertiary/20',
+    chipBg: 'bg-tertiary/15', chipText: 'text-tertiary',
+    startBtn: 'bg-tertiary text-surface',
+  },
+  tennis: {
+    icon: '🎾', label: 'Tennis',
+    topBar: 'bg-tertiary/20',
+    chipBg: 'bg-tertiary/15', chipText: 'text-tertiary',
+    startBtn: 'bg-tertiary text-surface',
+  },
+  mixed: {
+    icon: '⚡', label: 'Mixed',
+    topBar: 'bg-outline-variant/30',
+    chipBg: 'bg-surface-bright', chipText: 'text-on-surface-variant',
+    startBtn: 'bg-primary text-surface',
+  },
+  surf: {
+    icon: '🏄', label: 'Surf',
+    topBar: 'bg-secondary/20',
+    chipBg: 'bg-secondary/15', chipText: 'text-secondary',
+    startBtn: 'bg-secondary text-surface',
+  },
 };
+
+const DEFAULT_SESSION_CONFIG = {
+  icon: '▣', label: 'Session',
+  topBar: 'bg-surface-container',
+  chipBg: 'bg-surface-bright', chipText: 'text-on-surface-variant',
+  startBtn: 'bg-primary text-surface',
+};
+
+function getSessionConfig(type: string | null) {
+  if (!type) return DEFAULT_SESSION_CONFIG;
+  return SESSION_TYPE_CONFIG[type.toLowerCase()] ?? { ...DEFAULT_SESSION_CONFIG, label: type };
+}
+
+const EXERCISE_TYPE_DOT: Record<string, string> = {
+  strength: 'bg-primary',
+  cardio: 'bg-secondary',
+  timed: 'bg-tertiary',
+};
+
+function ExerciseTypeDot({ type }: { type?: string }) {
+  const color = EXERCISE_TYPE_DOT[type ?? 'strength'] ?? 'bg-primary';
+  return <span className={`shrink-0 w-1.5 h-1.5 rounded-full mt-1.5 ${color}`} />;
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -229,25 +295,30 @@ export const PlanDetail: React.FC = () => {
       {plan.sessions.map((session) => {
         const hist = sessionHistory[session.id];
         const groups = groupExercises(session.exercises);
+        const cfg = getSessionConfig(session.type);
 
         return (
-          <div key={session.id} className="bg-surface-low rounded-xl overflow-hidden">
+          <div key={session.id} className="bg-surface-low rounded-xl overflow-hidden border border-outline-variant/10">
+            {/* Session type top bar */}
+            <div className={`h-1.5 w-full ${cfg.topBar}`} />
+
             {/* Session header */}
-            <div className="p-5 border-b border-outline-variant/20">
+            <div className="p-5 border-b border-outline-variant/15">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    {session.type && (
-                      <span className="text-sm" title={session.type}>
-                        {SESSION_TYPE_ICONS[session.type.toLowerCase()] ?? '▣'}
-                      </span>
-                    )}
-                    <p className="font-display text-on-surface text-lg">{session.name}</p>
+                <div className="flex-1 min-w-0">
+                  {/* Type chip + name */}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className={`inline-flex items-center gap-1 ${cfg.chipBg} ${cfg.chipText} font-label text-[10px] tracking-widest uppercase px-2 py-0.5 rounded-md shrink-0`}>
+                      <span>{cfg.icon}</span>
+                      <span>{cfg.label}</span>
+                    </span>
                   </div>
+                  <p className="font-display text-on-surface text-lg leading-snug">{session.name}</p>
                   {session.notes && (
-                    <p className="text-on-surface-variant text-sm mt-1">{session.notes}</p>
+                    <p className="text-on-surface-variant text-sm mt-1 leading-relaxed">{session.notes}</p>
                   )}
-                  <div className="flex gap-3 mt-2">
+                  {/* Completion stats */}
+                  <div className="flex flex-wrap gap-3 mt-2.5">
                     {hist ? (
                       <>
                         <button
@@ -256,7 +327,7 @@ export const PlanDetail: React.FC = () => {
                             if (next.has(session.id)) next.delete(session.id); else next.add(session.id);
                             return next;
                           })}
-                          className="font-label text-label-sm text-primary tracking-widest uppercase hover:opacity-70 transition-opacity"
+                          className={`font-label text-label-sm tracking-widest uppercase hover:opacity-70 transition-opacity ${cfg.chipText}`}
                         >
                           {hist.count}× completed {openSessionHistory.has(session.id) ? '▲' : '▼'}
                         </button>
@@ -267,15 +338,16 @@ export const PlanDetail: React.FC = () => {
                         )}
                       </>
                     ) : (
-                      <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Not completed</span>
+                      <span className="font-label text-label-sm text-on-surface-variant tracking-widest uppercase">Not done yet</span>
                     )}
                   </div>
                 </div>
                 <button
                   onClick={() => handleStartWorkout(session)}
-                  className="shrink-0 bg-primary text-surface font-label text-label-sm tracking-widest uppercase px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+                  className={`shrink-0 ${cfg.startBtn} font-label text-label-sm tracking-widest uppercase px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-2`}
                 >
-                  Start
+                  <span>▶</span>
+                  <span>Start</span>
                 </button>
               </div>
             </div>
@@ -286,16 +358,16 @@ export const PlanDetail: React.FC = () => {
             )}
 
             {/* Exercises */}
-            <div className="divide-y divide-outline-variant/10">
+            <div className="divide-y divide-outline-variant/8">
               {groups.map(({ category, exercises }) => (
                 <div key={category}>
-                  <div className="px-5 py-2 bg-surface-container/30">
-                    <span className="font-label text-[10px] text-on-surface-variant tracking-widest uppercase">
+                  <div className="px-5 py-2 bg-surface-container/20">
+                    <span className="font-label text-[10px] text-on-surface-variant/60 tracking-widest uppercase">
                       {CATEGORY_LABELS[category] ?? category}
                     </span>
                   </div>
                   {exercises.map(ex => (
-                    <div key={ex.id} className="px-5 py-3">
+                    <div key={ex.id} className="px-5 py-3 hover:bg-surface-container/20 transition-colors">
                       {editingExercise === ex.id ? (
                         <EditExerciseForm
                           exercise={ex}
@@ -309,30 +381,38 @@ export const PlanDetail: React.FC = () => {
                           className="flex items-start justify-between gap-3 cursor-pointer group"
                           onClick={() => setExpandedHistory(expandedHistory === ex.id ? null : ex.id)}
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-on-surface text-sm font-medium">{ex.name}</p>
-                              {exerciseBadge(ex) && (
-                                <span className="font-label text-[10px] text-primary tracking-widest uppercase bg-primary/10 px-2 py-0.5 rounded">
-                                  {exerciseBadge(ex)}
-                                </span>
+                          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                            {/* Exercise type dot */}
+                            <ExerciseTypeDot type={ex.type} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-on-surface text-sm font-medium">{ex.name}</p>
+                                {exerciseBadge(ex) && (
+                                  <span className={`font-label text-[10px] tracking-widest uppercase px-2 py-0.5 rounded ${
+                                    ex.type === 'cardio'
+                                      ? 'bg-secondary/10 text-secondary'
+                                      : ex.type === 'timed'
+                                        ? 'bg-tertiary/10 text-tertiary'
+                                        : 'bg-primary/10 text-primary'
+                                  }`}>
+                                    {exerciseBadge(ex)}
+                                  </span>
+                                )}
+                              </div>
+                              {ex.notes && (
+                                <p className="text-on-surface-variant text-xs mt-0.5">{ex.notes}</p>
+                              )}
+                              {openDescs.has(ex.id) && (
+                                <p className="text-on-surface-variant text-xs mt-1.5 leading-relaxed border-l-2 border-primary/30 pl-2">
+                                  {generatedDescs[ex.id] ?? ex.description}
+                                </p>
+                              )}
+                              {expandedHistory === ex.id && (
+                                <ExerciseHistoryInline exerciseId={ex.id} />
                               )}
                             </div>
-                            {ex.notes && (
-                              <p className="text-on-surface-variant text-xs mt-0.5">{ex.notes}</p>
-                            )}
-                            {/* Collapsible description */}
-                            {openDescs.has(ex.id) && (
-                              <p className="text-on-surface-variant text-xs mt-1.5 leading-relaxed border-l-2 border-primary/30 pl-2">
-                                {generatedDescs[ex.id] ?? ex.description}
-                              </p>
-                            )}
-                            {expandedHistory === ex.id && (
-                              <ExerciseHistoryInline exerciseId={ex.id} />
-                            )}
                           </div>
                           <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
-                            {/* Describe button */}
                             <button
                               onClick={() => handleDescribe(ex)}
                               disabled={describingId === ex.id}

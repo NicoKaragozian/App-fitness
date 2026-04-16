@@ -161,12 +161,14 @@
     "lastWorkout": "Last",
     "deletePlan": "Delete plan",
     "deletePlanDesc": "The plan, all sessions, and workout history will be deleted. This action cannot be undone.",
-    "goalInputPlaceholder": "Describe your goal (e.g.: strength plan to complement surfing and tennis, 3 days a week)...",
+    "goalInputPlaceholder": "Describe your goal — any sport or combination (e.g.: run my first 10K, tennis + gym 4 days/week, triathlon prep...)...",
     "presets": {
-      "1": "Functional strength plan to complement water and racket sports",
-      "2": "Hypertrophy plan with 3 weekly sessions",
-      "3": "Core and stability to improve balance in the water",
-      "4": "General strength plan for gym beginners"
+      "1": "Run my first 10K from scratch",
+      "2": "Tennis + gym: strength to hit harder and prevent injuries",
+      "3": "Triathlon base: swimming, cycling and running",
+      "4": "Hypertrophy plan — 3 gym sessions per week",
+      "5": "Improve my surf and kite with functional strength",
+      "6": "Running + strength: 5K speed and gym 2 days/week"
     }
   },
   "goals": {

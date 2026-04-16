@@ -13,6 +13,7 @@ export interface TrainingPlanSummary {
   sessionCount: number;
   lastWorkout: string | null;
   workoutCount: number;
+  sessionTypes: string[];
 }
 
 export function useTrainingPlans() {
