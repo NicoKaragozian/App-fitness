@@ -137,34 +137,50 @@ External:
 ### Prerequisites
 
 - Node.js 18+
-- Garmin Connect account (optional — demo mode available)
-- Anthropic API key (`ANTHROPIC_API_KEY`)
+- npm
+- Garmin account (optional)
+- One AI path:
+  - Local AI with Ollama (`AI_PROVIDER=gemma`), or
+  - Claude API key (`AI_PROVIDER=claude` + `ANTHROPIC_API_KEY`)
 
-### Setup
+### Quickstart Local (recommended)
 
 ```bash
-# Clone the repository
-git clone https://github.com/NicoKaragozian/drift.git
-cd drift
+# 1) Install deps + create server/.env if missing
+npm run setup
 
-# Install frontend dependencies
-npm install
+# 2) Validate local environment
+npm run check:env
 
-# Install backend dependencies
-cd server && npm install && cd ..
-
-# Configure environment
-cp server/.env.example server/.env
-# Add your ANTHROPIC_API_KEY to server/.env
-
-# Start backend (port 3001)
-npx tsx server/src/index.ts
-
-# Start frontend (port 5175) — in a separate terminal
-npm run dev
+# 3) Start backend + frontend together
+npm run dev:all
 ```
 
-### Garmin Authentication
+App URLs:
+- Frontend: `http://localhost:5175`
+- Backend: `http://localhost:3001`
+
+### Choose Your Login/Usage Path
+
+You can use DRIFT in localhost with **or without Garmin device data**.
+
+#### Path A — Demo Mode (fastest)
+
+Use this if you want to explore immediately.
+
+1. Open `http://localhost:5175`
+2. On Login page, click **Demo Mode**
+3. Explore Dashboard, AI Coach, Training, Nutrition, Goals
+
+#### Path B — Without device, with your own data/profile
+
+Use this if you do not have a Garmin device but want personalized flows.
+
+1. Open `http://localhost:5175`
+2. Enter app via Demo Mode or regular path
+3. Complete Assessment/Profile and keep working with AI features based on form context
+
+#### Path C — With Garmin real sync (optional)
 
 Garmin requires browser-based login (Cloudflare WAF blocks programmatic SSO):
 
@@ -174,9 +190,20 @@ npx tsx server/src/get-tokens.ts
 # Tokens last ~90 days
 ```
 
-### Demo Mode
+After token capture, return to the app and use live Garmin sync.
 
-No Garmin watch? No problem. Click **"Demo Mode"** on the login page to explore DRIFT with realistic sample data. All AI features work in demo mode with your Anthropic API key.
+### Startup Profiles
+
+- `Demo now`: `npm run setup` -> `npm run check:env` -> `npm run dev:all` -> Demo Mode
+- `No device, personalized`: same startup + complete Assessment/Profile
+- `Garmin connected`: same startup + run token flow once with `get-tokens.ts`
+
+### Troubleshooting (localhost)
+
+- `ERROR: Missing server/.env` -> run `npm run setup`
+- `AI_PROVIDER=gemma but Ollama is missing` -> install/start Ollama or switch to Claude in `server/.env`
+- Frontend starts but API fails -> confirm backend is running on `:3001`
+- Backend changes not reflected -> restart backend (`tsx` may need manual restart in this project)
 
 ---
 
@@ -196,14 +223,22 @@ No Garmin watch? No problem. Click **"Demo Mode"** on the login page to explore 
 ## Environment Variables
 
 ```env
-# Required
-ANTHROPIC_API_KEY=sk-ant-...
+# Core
+AI_PROVIDER=gemma                    # gemma (local Ollama) or claude
 
-# Optional
-CLAUDE_MODEL=claude-sonnet-4-6      # Default model
-UPLOAD_PATH=/data/uploads            # Meal photo storage
-DB_PATH=/data/drift.db               # SQLite database path
-NODE_ENV=production                  # Serves built frontend
+# If AI_PROVIDER=gemma
+OLLAMA_URL=http://localhost:11434
+GEMMA_MODEL=gemma4:e2b
+# GEMMA_VISION_MODEL=gemma4:e2b
+
+# If AI_PROVIDER=claude
+# ANTHROPIC_API_KEY=sk-ant-...
+# CLAUDE_MODEL=claude-sonnet-4-6
+
+# Optional runtime
+# UPLOAD_PATH=/data/uploads           # Meal photo storage
+# DB_PATH=/data/drift.db              # SQLite database path
+# NODE_ENV=production                 # Serves built frontend
 ```
 
 ---

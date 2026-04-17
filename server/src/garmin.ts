@@ -1,4 +1,4 @@
-import { GarminConnect } from '@gooin/garmin-connect';
+import GarminConnectModule from '@gooin/garmin-connect';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -8,7 +8,12 @@ const SESSION_DIR = path.resolve(path.join(__dirname, '..'));
 
 console.log(`[garmin] SESSION_DIR = ${SESSION_DIR}`);
 
-let client: GarminConnect | null = null;
+// @gooin/garmin-connect is CJS; support both named and default export shapes in ESM runtime.
+const GarminConnect =
+  (GarminConnectModule as unknown as { GarminConnect?: any }).GarminConnect ??
+  GarminConnectModule;
+
+let client: any = null;
 let isLoggedIn = false;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -82,7 +87,7 @@ export async function fetchActivities(startDate: Date, _endDate: Date) {
   try {
     const activities = await client.getActivities(0, 100);
     await sleep(1000);
-    return activities.filter((a) => {
+    return activities.filter((a: any) => {
       const d = new Date(a.startTimeLocal || a.startTimeGMT || '');
       return d >= startDate;
     });
@@ -108,7 +113,7 @@ export async function fetchStress(date: string) {
   if (!client || !isLoggedIn) throw new Error('Not logged in');
   try {
     // Use generic get for stress endpoint
-    const data = await client.get<any>(
+    const data = await client.get(
       `https://connectapi.garmin.com/wellness-service/wellness/dailyStress/${date}`
     );
     await sleep(1000);
@@ -135,7 +140,7 @@ export async function fetchDailySummary(date: string) {
   if (!client || !isLoggedIn) throw new Error('Not logged in');
   try {
     // Use generic get for user summary
-    const data = await client.get<any>(
+    const data = await client.get(
       `https://connectapi.garmin.com/usersummary-service/usersummary/daily/${date}`
     );
     await sleep(1000);

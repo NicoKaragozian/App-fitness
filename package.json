@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "check:env": "node scripts/check-env.mjs",
+    "dev:all": "node scripts/dev-all.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

@@ -131,6 +131,22 @@ export async function ollamaChatStream(
         }
       }
     }
+
+    // Some Ollama responses end without a trailing newline.
+    // Parse the remaining buffer so we don't lose the final token chunk.
+    const remaining = buffer.trim();
+    if (remaining) {
+      try {
+        const chunk = JSON.parse(remaining) as any;
+        const token = chunk.message?.content ?? '';
+        if (token) {
+          fullContent += token;
+          onToken(token);
+        }
+      } catch {
+        // Ignore malformed final JSON fragment
+      }
+    }
   } catch (err: any) {
     if (onError) onError(err);
   }
