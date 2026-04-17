@@ -1,5 +1,7 @@
 import express from 'express';
-import db from '../db.js';
+import { eq, desc, asc, sql, count } from 'drizzle-orm';
+import db from '../db/client.js';
+import { goals, goal_milestones } from '../db/schema/index.js';
 import { buildGoalContext } from '../ai/context.js';
 import { getPrompt } from '../ai/prompts.js';
 import { pickProviderFromReq, pickLanguageFromReq, isAIConfigured } from '../ai/providers/index.js';
@@ -10,21 +12,19 @@ const router = express.Router();
 // POST /api/goals/generate
 router.post('/generate', async (req, res) => {
   const { objective, targetDate } = req.body;
-  if (!objective?.trim()) return res.status(400).json({ error: 'objective required' });
+  if (!objective?.trim()) { res.status(400).json({ error: 'objective required' }); return; }
 
   const provider = pickProviderFromReq(req);
   if (!(await isAIConfigured(provider.name))) {
     const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
-    return res.status(503).json({ error: `${label} is not available. Check your setup.` });
+    res.status(503).json({ error: `${label} is not available. Check your setup.` }); return;
   }
 
   const lang = pickLanguageFromReq(req);
-  const context = buildGoalContext(objective, targetDate);
+  const context = await buildGoalContext(objective, targetDate);
   const systemPrompt = getPrompt('goal_plan', lang);
 
   try {
-    // For Gemma: use chatJSON to guarantee parseable output (Ollama JSON mode)
-    // For Claude: regular chat (follows JSON prompts reliably)
     const raw = await provider.chatJSON(
       `${systemPrompt}\n\n${context}`,
       `Objective: ${objective}${targetDate ? `\nDeadline: ${targetDate}` : ''}`
@@ -33,11 +33,9 @@ router.post('/generate', async (req, res) => {
     let parsed: any;
     try {
       let jsonStr = raw.trim();
-      // Strip markdown fences (Claude sometimes wraps with ```json ... ```)
       if (jsonStr.startsWith('```')) {
         jsonStr = jsonStr.replace(/^```json?\s*/i, '').replace(/```\s*$/, '').trim();
       }
-      // Fallback: extract from first { to last }
       if (!jsonStr.startsWith('{')) {
         const first = jsonStr.indexOf('{');
         const last = jsonStr.lastIndexOf('}');
@@ -45,55 +43,51 @@ router.post('/generate', async (req, res) => {
       }
       parsed = JSON.parse(jsonStr);
     } catch {
-      return res.status(502).json({ error: 'Claude did not generate valid JSON. Try again.' });
+      res.status(502).json({ error: 'Claude did not generate valid JSON. Try again.' }); return;
     }
 
     if (!parsed.title || !Array.isArray(parsed.phases) || parsed.phases.length === 0) {
-      return res.status(502).json({ error: 'Invalid guide structure. Try again.' });
+      res.status(502).json({ error: 'Invalid guide structure. Try again.' }); return;
     }
 
-    const saveGoal = db.transaction(() => {
-      const goalResult = db.prepare(`
-        INSERT INTO goals (title, description, target_date, prerequisites, common_mistakes, estimated_timeline, ai_model, raw_ai_response)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        parsed.title,
-        parsed.description ?? null,
-        targetDate || '',
-        JSON.stringify(Array.isArray(parsed.prerequisites) ? parsed.prerequisites : []),
-        JSON.stringify(Array.isArray(parsed.common_mistakes) ? parsed.common_mistakes : []),
-        parsed.estimated_timeline ?? null,
-        modelNameFor(provider.name),
-        raw
-      );
+    const goalId = await db.transaction(async (tx) => {
+      const [goalRow] = await tx.insert(goals).values({
+        title: parsed.title,
+        description: parsed.description ?? null,
+        target_date: targetDate || '',
+        prerequisites: Array.isArray(parsed.prerequisites) ? parsed.prerequisites : [],
+        common_mistakes: Array.isArray(parsed.common_mistakes) ? parsed.common_mistakes : [],
+        estimated_timeline: parsed.estimated_timeline ?? null,
+        ai_model: modelNameFor(provider.name),
+        raw_ai_response: raw,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).returning({ id: goals.id });
 
-      const goalId = goalResult.lastInsertRowid as number;
-      const insertPhase = db.prepare(`
-        INSERT INTO goal_milestones (goal_id, week_number, title, description, target, workouts, duration, tips, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
+      const gId = goalRow.id;
 
       for (let i = 0; i < parsed.phases.length; i++) {
         const p = parsed.phases[i];
-        insertPhase.run(
-          goalId,
-          p.phase ?? i + 1,
-          p.title ?? `Phase ${i + 1}`,
-          p.description ?? null,
-          p.success_criteria ?? null,
-          JSON.stringify(Array.isArray(p.key_exercises) ? p.key_exercises : []),
-          p.duration ?? null,
-          JSON.stringify(Array.isArray(p.tips) ? p.tips : []),
-          i
-        );
+        await tx.insert(goal_milestones).values({
+          goal_id: gId,
+          week_number: p.phase ?? i + 1,
+          title: p.title ?? `Phase ${i + 1}`,
+          description: p.description ?? null,
+          target: p.success_criteria ?? null,
+          workouts: Array.isArray(p.key_exercises) ? p.key_exercises : [],
+          duration: p.duration ?? null,
+          tips: Array.isArray(p.tips) ? p.tips : [],
+          sort_order: i,
+        });
       }
 
-      return goalId;
+      return gId;
     });
 
-    const goalId = saveGoal();
-    const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(goalId) as any;
-    const milestones = db.prepare('SELECT * FROM goal_milestones WHERE goal_id = ? ORDER BY sort_order').all(goalId) as any[];
+    const [goal] = await db.select().from(goals).where(eq(goals.id, goalId));
+    const milestones = await db.select().from(goal_milestones)
+      .where(eq(goal_milestones.goal_id, goalId))
+      .orderBy(asc(goal_milestones.sort_order));
 
     res.json({ ...goal, milestones });
   } catch (err: any) {
@@ -102,60 +96,73 @@ router.post('/generate', async (req, res) => {
 });
 
 // GET /api/goals
-router.get('/', (req, res) => {
-  const goals = db.prepare(`
-    SELECT g.*,
-      COALESCE(COUNT(m.id), 0) as milestone_count,
-      COALESCE(SUM(m.completed), 0) as completed_count
-    FROM goals g
-    LEFT JOIN goal_milestones m ON m.goal_id = g.id
-    GROUP BY g.id
-    ORDER BY g.created_at DESC
-  `).all() as any[];
-  res.json(goals);
+router.get('/', async (req, res) => {
+  const rows = await db.select({
+    id: goals.id,
+    title: goals.title,
+    description: goals.description,
+    target_date: goals.target_date,
+    status: goals.status,
+    prerequisites: goals.prerequisites,
+    common_mistakes: goals.common_mistakes,
+    estimated_timeline: goals.estimated_timeline,
+    ai_model: goals.ai_model,
+    raw_ai_response: goals.raw_ai_response,
+    created_at: goals.created_at,
+    updated_at: goals.updated_at,
+    milestone_count: sql<number>`COALESCE(COUNT(${goal_milestones.id}), 0)`,
+    completed_count: sql<number>`COALESCE(COUNT(*) FILTER (WHERE ${goal_milestones.completed} = TRUE), 0)`,
+  })
+    .from(goals)
+    .leftJoin(goal_milestones, eq(goal_milestones.goal_id, goals.id))
+    .groupBy(goals.id)
+    .orderBy(desc(goals.created_at));
+
+  res.json(rows);
 });
 
 // GET /api/goals/:id
-router.get('/:id', (req, res) => {
-  const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(req.params.id) as any;
-  if (!goal) return res.status(404).json({ error: 'Goal not found' });
-  const milestones = db.prepare('SELECT * FROM goal_milestones WHERE goal_id = ? ORDER BY sort_order').all(req.params.id) as any[];
+router.get('/:id', async (req, res) => {
+  const [goal] = await db.select().from(goals).where(eq(goals.id, parseInt(req.params.id)));
+  if (!goal) { res.status(404).json({ error: 'Goal not found' }); return; }
+  const milestones = await db.select().from(goal_milestones)
+    .where(eq(goal_milestones.goal_id, goal.id))
+    .orderBy(asc(goal_milestones.sort_order));
   res.json({ ...goal, milestones });
 });
 
 // PUT /api/goals/:id
-router.put('/:id', (req, res) => {
-  const updates: string[] = [];
-  const values: any[] = [];
+router.put('/:id', async (req, res) => {
+  const updates: Partial<typeof goals.$inferInsert> = { updated_at: new Date().toISOString() };
 
-  if (req.body.title !== undefined) { updates.push('title = ?'); values.push(req.body.title); }
-  if (req.body.description !== undefined) { updates.push('description = ?'); values.push(req.body.description); }
-  if (req.body.status !== undefined) { updates.push('status = ?'); values.push(req.body.status); }
+  if (req.body.title !== undefined) updates.title = req.body.title;
+  if (req.body.description !== undefined) updates.description = req.body.description;
+  if (req.body.status !== undefined) updates.status = req.body.status;
 
-  if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+  if (Object.keys(updates).length <= 1) { res.status(400).json({ error: 'No fields to update' }); return; }
 
-  updates.push('updated_at = CURRENT_TIMESTAMP');
-  values.push(req.params.id);
-
-  db.prepare(`UPDATE goals SET ${updates.join(', ')} WHERE id = ?`).run(...values);
-  const goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(req.params.id) as any;
+  await db.update(goals).set(updates).where(eq(goals.id, parseInt(req.params.id)));
+  const [goal] = await db.select().from(goals).where(eq(goals.id, parseInt(req.params.id)));
   res.json(goal);
 });
 
 // DELETE /api/goals/:id
-router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM goals WHERE id = ?').run(req.params.id);
+router.delete('/:id', async (req, res) => {
+  await db.delete(goals).where(eq(goals.id, parseInt(req.params.id)));
   res.json({ ok: true });
 });
 
 // PUT /api/goals/:goalId/milestones/:milestoneId
-router.put('/:goalId/milestones/:milestoneId', (req, res) => {
+router.put('/:goalId/milestones/:milestoneId', async (req, res) => {
   const { completed } = req.body;
   const completedAt = completed ? new Date().toISOString() : null;
-  db.prepare(`
-    UPDATE goal_milestones SET completed = ?, completed_at = ? WHERE id = ? AND goal_id = ?
-  `).run(completed ? 1 : 0, completedAt, req.params.milestoneId, req.params.goalId);
-  const milestone = db.prepare('SELECT * FROM goal_milestones WHERE id = ?').get(req.params.milestoneId) as any;
+  await db.update(goal_milestones).set({
+    completed: Boolean(completed),
+    completed_at: completedAt,
+  }).where(
+    sql`${goal_milestones.id} = ${parseInt(req.params.milestoneId)} AND ${goal_milestones.goal_id} = ${parseInt(req.params.goalId)}`
+  );
+  const [milestone] = await db.select().from(goal_milestones).where(eq(goal_milestones.id, parseInt(req.params.milestoneId)));
   res.json(milestone);
 });
 

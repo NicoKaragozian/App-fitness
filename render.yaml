@@ -2,14 +2,31 @@ services:
   - type: web
     name: drift
     runtime: node
-    buildCommand: npm install --legacy-peer-deps && npm run build && cd server && npm install
+    buildCommand: >
+      npm install --legacy-peer-deps &&
+      npm run build &&
+      cd server &&
+      npm install &&
+      npx drizzle-kit migrate
     startCommand: cd server && npx tsx src/index.ts
     disk:
-      name: drift-data
+      name: drift-uploads
       mountPath: /data
       sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DB_PATH
-        value: /data/drift.db
+      # Neon Postgres — set these in the Render dashboard (not here to avoid committing secrets)
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      # Anthropic (optional — only needed for provider=claude)
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Storage for uploaded meal photos
+      - key: UPLOAD_PATH
+        value: /data/uploads
+      # AI provider (gemma = local Ollama, claude = Anthropic API)
+      - key: AI_PROVIDER
+        value: claude

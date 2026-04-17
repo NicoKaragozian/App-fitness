@@ -1,12 +1,14 @@
 import { Router } from 'express';
-import db from '../db.js';
+import { eq, asc, sql, count } from 'drizzle-orm';
+import db from '../db/client.js';
+import { weekly_plan, training_sessions } from '../db/schema/index.js';
 
 const router = Router();
 
 // Get all plan items
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const items = db.prepare(`SELECT * FROM weekly_plan ORDER BY created_at ASC`).all();
+    const items = await db.select().from(weekly_plan).orderBy(asc(weekly_plan.created_at));
     res.json(items);
   } catch (error) {
     console.error('Failed to get plan:', error);
@@ -15,41 +17,50 @@ router.get('/', (req, res) => {
 });
 
 // Create a new item
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { day, sport, detail, plan_id, session_id } = req.body;
-  if (!day || !sport) {
-    res.status(400).json({ error: 'Missing day or sport' });
-    return;
-  }
+  if (!day || !sport) { res.status(400).json({ error: 'Missing day or sport' }); return; }
 
   try {
-    const result = db.prepare(`
-      INSERT INTO weekly_plan (day, sport, detail, completed, plan_id, session_id)
-      VALUES (?, ?, ?, 0, ?, ?)
-    `).run(day, sport, detail || '', plan_id ?? null, session_id ?? null);
+    const [item] = await db.insert(weekly_plan).values({
+      day,
+      sport,
+      detail: detail || '',
+      completed: false,
+      plan_id: plan_id ?? null,
+      session_id: session_id ?? null,
+      created_at: new Date().toISOString(),
+    }).returning();
 
-    res.json({ id: result.lastInsertRowid, day, sport, detail: detail || '', completed: 0, plan_id: plan_id ?? null, session_id: session_id ?? null });
+    res.json({
+      id: item.id,
+      day: item.day,
+      sport: item.sport,
+      detail: item.detail || '',
+      completed: item.completed,
+      plan_id: item.plan_id ?? null,
+      session_id: item.session_id ?? null,
+    });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Update an item
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { id } = req.params;
   const { day, sport, detail, completed, plan_id, session_id } = req.body;
 
   try {
-    db.prepare(`
-      UPDATE weekly_plan
-      SET day = COALESCE(?, day),
-          sport = COALESCE(?, sport),
-          detail = COALESCE(?, detail),
-          completed = COALESCE(?, completed),
-          plan_id = CASE WHEN ? IS NOT NULL THEN ? ELSE plan_id END,
-          session_id = CASE WHEN ? IS NOT NULL THEN ? ELSE session_id END
-      WHERE id = ?
-    `).run(day, sport, detail, completed, plan_id, plan_id, session_id, session_id, id);
+    const updates: Partial<typeof weekly_plan.$inferInsert> = {};
+    if (day !== undefined) updates.day = day;
+    if (sport !== undefined) updates.sport = sport;
+    if (detail !== undefined) updates.detail = detail;
+    if (completed !== undefined) updates.completed = Boolean(completed);
+    if (plan_id !== undefined) updates.plan_id = plan_id;
+    if (session_id !== undefined) updates.session_id = session_id;
+
+    await db.update(weekly_plan).set(updates).where(eq(weekly_plan.id, parseInt(id)));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
@@ -57,34 +68,32 @@ router.put('/:id', (req, res) => {
 });
 
 // Delete an item
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
-    db.prepare(`DELETE FROM weekly_plan WHERE id = ?`).run(id);
+    await db.delete(weekly_plan).where(eq(weekly_plan.id, parseInt(id)));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Initial seeder just in case the table is completely empty to simulate the mock data
-router.post('/seed', (req, res) => {
+// Initial seeder
+router.post('/seed', async (req, res) => {
   const mockPlan = [
-    { day: 'MON', sport: 'GYM / STRENGTH', detail: 'UPPER BODY STRENGTH', completed: 1 },
-    { day: 'TUE', sport: 'WINGFOIL', detail: 'TECHNICAL SESSION - WIND 15KT', completed: 1 },
-    { day: 'WED', sport: 'TENNIS', detail: 'MATCH PLAY - 90 MIN', completed: 1 },
-    { day: 'THU', sport: 'GYM / STRENGTH', detail: 'LOWER BODY + CORE', completed: 0 },
-    { day: 'FRI', sport: 'TENNIS', detail: 'TECHNICAL TRAINING', completed: 0 },
+    { day: 'MON', sport: 'GYM / STRENGTH', detail: 'UPPER BODY STRENGTH', completed: true },
+    { day: 'TUE', sport: 'WINGFOIL', detail: 'TECHNICAL SESSION - WIND 15KT', completed: true },
+    { day: 'WED', sport: 'TENNIS', detail: 'MATCH PLAY - 90 MIN', completed: true },
+    { day: 'THU', sport: 'GYM / STRENGTH', detail: 'LOWER BODY + CORE', completed: false },
+    { day: 'FRI', sport: 'TENNIS', detail: 'TECHNICAL TRAINING', completed: false },
   ];
 
   try {
-    const existing = db.prepare('SELECT count(*) as c FROM weekly_plan').get() as { c: number };
-    if (existing.c === 0) {
-      const stmt = db.prepare('INSERT INTO weekly_plan (day, sport, detail, completed) VALUES (?, ?, ?, ?)');
-      const tx = db.transaction((items) => {
-        for (const item of items) stmt.run(item.day, item.sport, item.detail, item.completed);
-      });
-      tx(mockPlan);
+    const [{ c }] = await db.select({ c: count() }).from(weekly_plan);
+    if (Number(c) === 0) {
+      await db.insert(weekly_plan).values(
+        mockPlan.map(item => ({ ...item, created_at: new Date().toISOString() }))
+      );
     }
     res.json({ success: true });
   } catch (err) {

@@ -3,9 +3,9 @@ import { computeInsights } from '../insights/index.js';
 
 const router = Router();
 
-router.get('/', (_req, res) => {
+router.get('/', async (_req, res) => {
   try {
-    const result = computeInsights();
+    const result = await computeInsights();
     res.json(result);
   } catch (err: any) {
     console.error('[insights] Error computing insights:', err);

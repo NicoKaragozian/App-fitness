@@ -1,32 +1,35 @@
-// ai/nutrition-context.ts — Context builder for nutrition plan generation
-// Queries DB and builds a string with the profile, active training plan, and recent data.
+// ai/nutrition-context.ts — Context builders for nutrition (async, Drizzle)
 
-import db from '../db.js';
+import { desc, eq, gte, sql } from 'drizzle-orm';
+import db from '../db/client.js';
+import { user_profile } from '../db/schema/profile.js';
+import { training_plans, training_sessions } from '../db/schema/training.js';
+import { activities as activitiesTable } from '../db/schema/garmin.js';
+import { nutrition_logs, nutrition_plans, nutrition_plan_meals } from '../db/schema/nutrition.js';
 
-export function buildNutritionPlanContext(strategy?: string): string {
+function parseDietPrefs(raw: unknown): string {
+  if (!raw) return 'none';
+  if (Array.isArray(raw)) return raw.length > 0 ? raw.join(', ') : 'none';
+  if (typeof raw === 'object' && raw !== null) {
+    const r = raw as Record<string, any>;
+    const lines: string[] = [];
+    if (r.diet_type) lines.push(`Diet type: ${r.diet_type}`);
+    if (r.allergies?.length > 0) lines.push(`Allergies/intolerances: ${r.allergies.join(', ')}`);
+    if (r.excluded_foods) lines.push(`Excluded foods: ${r.excluded_foods}`);
+    if (r.preferred_foods) lines.push(`Preferred foods (incorporate, not use exclusively): ${r.preferred_foods}`);
+    if (r.meals_per_day) lines.push(`Meals per day: ${r.meals_per_day}`);
+    return lines.length > 0 ? '\n' + lines.map(l => `  - ${l}`).join('\n') : 'none';
+  }
+  return 'none';
+}
+
+export async function buildNutritionPlanContext(strategy?: string): Promise<string> {
   const sections: string[] = [];
 
-  // User profile
-  const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() as any;
+  const [profile] = await db.select().from(user_profile).where(eq(user_profile.id, 1)).limit(1);
   if (profile) {
-    const sports = JSON.parse(profile.sports || '[]');
-
-    // Parse preferences: support for object format (new) and array format (old)
-    let dietPrefsText = 'none';
-    try {
-      const raw = JSON.parse(profile.dietary_preferences || 'null');
-      if (Array.isArray(raw)) {
-        dietPrefsText = raw.length > 0 ? raw.join(', ') : 'none';
-      } else if (raw && typeof raw === 'object') {
-        const lines: string[] = [];
-        if (raw.diet_type) lines.push(`Diet type: ${raw.diet_type}`);
-        if (raw.allergies?.length > 0) lines.push(`Allergies/intolerances: ${raw.allergies.join(', ')}`);
-        if (raw.excluded_foods) lines.push(`Excluded foods: ${raw.excluded_foods}`);
-        if (raw.preferred_foods) lines.push(`Preferred foods (incorporate, not use exclusively): ${raw.preferred_foods}`);
-        if (raw.meals_per_day) lines.push(`Meals per day: ${raw.meals_per_day}`);
-        dietPrefsText = lines.length > 0 ? '\n' + lines.map(l => `  - ${l}`).join('\n') : 'none';
-      }
-    } catch { /* invalid format, ignore */ }
+    const sports = (profile.sports as string[] | null) ?? [];
+    const dietPrefsText = parseDietPrefs(profile.dietary_preferences);
 
     sections.push(`## User profile
 Name: ${profile.name || 'N/A'}
@@ -42,18 +45,24 @@ Current targets: ${profile.daily_calorie_target || '-'}kcal | Prot: ${profile.da
     sections.push('## User profile\nNo profile configured. Generate a standard balanced plan.');
   }
 
-  if (strategy) {
-    sections.push(`## Requested strategy\n${strategy}`);
-  }
+  if (strategy) sections.push(`## Requested strategy\n${strategy}`);
 
-  // Active training plan
-  const activePlan = db.prepare(
-    'SELECT tp.*, COUNT(ts.id) as session_count FROM training_plans tp LEFT JOIN training_sessions ts ON ts.plan_id = tp.id WHERE tp.status = ? GROUP BY tp.id ORDER BY tp.id DESC LIMIT 1'
-  ).get('active') as any;
+  const [activePlan] = await db.select({
+    id: training_plans.id,
+    title: training_plans.title,
+    objective: training_plans.objective,
+    frequency: training_plans.frequency,
+  }).from(training_plans)
+    .where(eq(training_plans.status, 'active'))
+    .orderBy(desc(training_plans.id))
+    .limit(1);
 
   if (activePlan) {
-    const sessions = db.prepare('SELECT name, notes FROM training_sessions WHERE plan_id = ? ORDER BY sort_order').all(activePlan.id) as any[];
-    const sessionNames = sessions.map((s: any) => s.name).join(', ');
+    const sessions = await db.select({ name: training_sessions.name })
+      .from(training_sessions)
+      .where(eq(training_sessions.plan_id, activePlan.id))
+      .orderBy(training_sessions.sort_order);
+    const sessionNames = sessions.map(s => s.name).join(', ');
     sections.push(`## Active training plan
 Title: ${activePlan.title}
 Objective: ${activePlan.objective || '-'}
@@ -61,40 +70,47 @@ Frequency: ${activePlan.frequency || '-'}
 Sessions: ${sessionNames || '-'}`);
   }
 
-  // Recent activities (7 days) to calculate training load
   const cutoff7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const activities = db.prepare(`
-    SELECT sport_type, start_time, duration, calories, avg_hr
-    FROM activities WHERE start_time >= ? ORDER BY start_time DESC
-  `).all(cutoff7d + 'T00:00:00') as any[];
+  const acts = await db.select({
+    sport_type: activitiesTable.sport_type,
+    start_time: activitiesTable.start_time,
+    duration: activitiesTable.duration,
+    calories: activitiesTable.calories,
+    avg_hr: activitiesTable.avg_hr,
+  }).from(activitiesTable)
+    .where(gte(activitiesTable.start_time, `${cutoff7d}T00:00:00`))
+    .orderBy(desc(activitiesTable.start_time));
 
-  if (activities.length > 0) {
-    const totalDur = activities.reduce((s: number, a: any) => s + (a.duration || 0), 0);
-    const totalCal = activities.reduce((s: number, a: any) => s + (a.calories || 0), 0);
-    const lines = activities.map((a: any) => {
+  if (acts.length > 0) {
+    const totalDur = acts.reduce((s, a) => s + (a.duration || 0), 0);
+    const totalCal = acts.reduce((s, a) => s + (a.calories || 0), 0);
+    const lines = acts.map(a => {
       const dur = a.duration ? `${Math.round(a.duration / 60)}min` : '-';
       return `${a.start_time.slice(0, 10)} | ${a.sport_type} | ${dur} | ${a.calories || '-'}kcal`;
     });
-    sections.push(`## Activities last 7 days (${activities.length} sessions)
+    sections.push(`## Activities last 7 days (${acts.length} sessions)
 Total trained: ${Math.round(totalDur / 60)}min | Calories burned: ${totalCal}kcal
 ${lines.join('\n')}`);
   }
 
-  // Average intake last 7 days (if nutrition logs exist)
-  const nutritionLogs = db.prepare(`
-    SELECT date,
-      SUM(calories) as cals, SUM(protein_g) as prot, SUM(carbs_g) as carbs, SUM(fat_g) as fat
-    FROM nutrition_logs
-    WHERE date >= ?
-    GROUP BY date ORDER BY date DESC
-  `).all(cutoff7d) as any[];
+  const dailyLogs = await db.select({
+    date: nutrition_logs.date,
+    cals: sql<number>`SUM(${nutrition_logs.calories})`,
+    prot: sql<number>`SUM(${nutrition_logs.protein_g})`,
+    carbs: sql<number>`SUM(${nutrition_logs.carbs_g})`,
+    fat: sql<number>`SUM(${nutrition_logs.fat_g})`,
+  }).from(nutrition_logs)
+    .where(gte(nutrition_logs.date, cutoff7d))
+    .groupBy(nutrition_logs.date)
+    .orderBy(desc(nutrition_logs.date));
 
-  if (nutritionLogs.length > 0) {
-    const avgCals = Math.round(nutritionLogs.reduce((s: number, r: any) => s + (r.cals || 0), 0) / nutritionLogs.length);
-    const avgProt = Math.round(nutritionLogs.reduce((s: number, r: any) => s + (r.prot || 0), 0) / nutritionLogs.length);
-    const avgCarbs = Math.round(nutritionLogs.reduce((s: number, r: any) => s + (r.carbs || 0), 0) / nutritionLogs.length);
-    const avgFat = Math.round(nutritionLogs.reduce((s: number, r: any) => s + (r.fat || 0), 0) / nutritionLogs.length);
-    sections.push(`## Average intake last ${nutritionLogs.length} days with logs
+  if (dailyLogs.length > 0) {
+    const n = dailyLogs.length;
+    const avgCals = Math.round(dailyLogs.reduce((s, r) => s + (r.cals || 0), 0) / n);
+    const avgProt = Math.round(dailyLogs.reduce((s, r) => s + (r.prot || 0), 0) / n);
+    const avgCarbs = Math.round(dailyLogs.reduce((s, r) => s + (r.carbs || 0), 0) / n);
+    const avgFat = Math.round(dailyLogs.reduce((s, r) => s + (r.fat || 0), 0) / n);
+    sections.push(`## Average intake last ${n} days with logs
 Calories: ${avgCals}kcal | Protein: ${avgProt}g | Carbs: ${avgCarbs}g | Fat: ${avgFat}g`);
   } else {
     sections.push('## Recent intake\nNo previous nutrition logs.');
@@ -104,61 +120,52 @@ Calories: ${avgCals}kcal | Protein: ${avgProt}g | Carbs: ${avgCarbs}g | Fat: ${a
 }
 
 // Context builder for nutrition chat — selected day context
-export function buildNutritionChatContext(date: string): string {
+export async function buildNutritionChatContext(date: string): Promise<string> {
   const sections: string[] = [];
 
   sections.push(`## Date queried\n${date}`);
 
-  // Profile and targets
-  const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() as any;
+  const [profile] = await db.select().from(user_profile).where(eq(user_profile.id, 1)).limit(1);
   const targets = {
-    daily_calorie_target: profile?.daily_calorie_target || 2000,
-    daily_protein_g: profile?.daily_protein_g || 150,
-    daily_carbs_g: profile?.daily_carbs_g || 250,
-    daily_fat_g: profile?.daily_fat_g || 65,
+    daily_calorie_target: profile?.daily_calorie_target ?? 2000,
+    daily_protein_g: profile?.daily_protein_g ?? 150,
+    daily_carbs_g: profile?.daily_carbs_g ?? 250,
+    daily_fat_g: profile?.daily_fat_g ?? 65,
   };
 
   if (profile) {
-    let dietPrefsText = 'none';
-    try {
-      const raw = JSON.parse(profile.dietary_preferences || 'null');
-      if (Array.isArray(raw)) {
-        dietPrefsText = raw.length > 0 ? raw.join(', ') : 'none';
-      } else if (raw && typeof raw === 'object') {
-        const lines: string[] = [];
-        if (raw.diet_type) lines.push(`Diet type: ${raw.diet_type}`);
-        if (raw.allergies?.length > 0) lines.push(`Allergies/intolerances: ${raw.allergies.join(', ')}`);
-        if (raw.excluded_foods) lines.push(`Excluded foods: ${raw.excluded_foods}`);
-        if (raw.preferred_foods) lines.push(`Preferred foods: ${raw.preferred_foods}`);
-        if (raw.meals_per_day) lines.push(`Meals per day: ${raw.meals_per_day}`);
-        dietPrefsText = lines.length > 0 ? lines.join(' | ') : 'none';
-      }
-    } catch { /* ignore */ }
-
+    const dietPrefsText = parseDietPrefs(profile.dietary_preferences);
     sections.push(`## User profile
 Weight: ${profile.weight_kg || '-'}kg | Goal: ${profile.primary_goal || '-'}
 Preferences: ${dietPrefsText}`);
   }
 
-  // Meals logged on this day
-  const logs = db.prepare(
-    'SELECT meal_slot, meal_name, calories, protein_g, carbs_g, fat_g, logged_at FROM nutrition_logs WHERE date = ? ORDER BY logged_at'
-  ).all(date) as any[];
+  const logs = await db.select({
+    meal_slot: nutrition_logs.meal_slot,
+    meal_name: nutrition_logs.meal_name,
+    calories: nutrition_logs.calories,
+    protein_g: nutrition_logs.protein_g,
+    carbs_g: nutrition_logs.carbs_g,
+    fat_g: nutrition_logs.fat_g,
+    logged_at: nutrition_logs.logged_at,
+  }).from(nutrition_logs)
+    .where(eq(nutrition_logs.date, date))
+    .orderBy(nutrition_logs.logged_at);
+
+  const SLOT_EN: Record<string, string> = {
+    breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snack',
+    dinner: 'Dinner', pre_workout: 'Pre-workout', post_workout: 'Post-workout',
+  };
 
   if (logs.length > 0) {
-    const totalCals = logs.reduce((s: number, l: any) => s + (l.calories || 0), 0);
-    const totalProt = logs.reduce((s: number, l: any) => s + (l.protein_g || 0), 0);
-    const totalCarbs = logs.reduce((s: number, l: any) => s + (l.carbs_g || 0), 0);
-    const totalFat = logs.reduce((s: number, l: any) => s + (l.fat_g || 0), 0);
+    const totalCals = logs.reduce((s, l) => s + (l.calories || 0), 0);
+    const totalProt = logs.reduce((s, l) => s + (l.protein_g || 0), 0);
+    const totalCarbs = logs.reduce((s, l) => s + (l.carbs_g || 0), 0);
+    const totalFat = logs.reduce((s, l) => s + (l.fat_g || 0), 0);
 
-    const SLOT_EN: Record<string, string> = {
-      breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snack',
-      dinner: 'Dinner', pre_workout: 'Pre-workout', post_workout: 'Post-workout',
-    };
-
-    const logLines = logs.map((l: any, i: number) => {
+    const logLines = logs.map((l, i) => {
       const time = l.logged_at ? new Date(l.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
-      const slot = SLOT_EN[l.meal_slot] || l.meal_slot || '';
+      const slot = SLOT_EN[l.meal_slot ?? ''] || l.meal_slot || '';
       return `${i + 1}. ${slot}${time ? ' (' + time + ')' : ''}: ${l.meal_name || 'Unnamed'} — ${l.calories || 0}kcal | ${l.protein_g || 0}g prot | ${l.carbs_g || 0}g carbs | ${l.fat_g || 0}g fat`;
     });
 
@@ -177,27 +184,34 @@ Remaining: ${remCals}kcal | ${remProt}g prot | ${remCarbs}g carbs | ${remFat}g f
 Progress: ${Math.round(totalCals / targets.daily_calorie_target * 100)}% cal | ${Math.round(totalProt / targets.daily_protein_g * 100)}% prot | ${Math.round(totalCarbs / targets.daily_carbs_g * 100)}% carbs | ${Math.round(totalFat / targets.daily_fat_g * 100)}% fat`);
   } else {
     sections.push(`## Meals logged today\nNo meals logged yet.`);
-    sections.push(`## Daily goals
-${targets.daily_calorie_target}kcal | ${targets.daily_protein_g}g prot | ${targets.daily_carbs_g}g carbs | ${targets.daily_fat_g}g fat`);
+    sections.push(`## Daily goals\n${targets.daily_calorie_target}kcal | ${targets.daily_protein_g}g prot | ${targets.daily_carbs_g}g carbs | ${targets.daily_fat_g}g fat`);
   }
 
-  // Active nutrition plan with its meals
-  const activePlan = db.prepare(
-    "SELECT id, title, strategy, daily_calories, daily_protein_g, daily_carbs_g, daily_fat_g FROM nutrition_plans ORDER BY id DESC LIMIT 1"
-  ).get() as any;
+  const [activePlan] = await db.select({
+    id: nutrition_plans.id,
+    title: nutrition_plans.title,
+    strategy: nutrition_plans.strategy,
+    daily_calories: nutrition_plans.daily_calories,
+    daily_protein_g: nutrition_plans.daily_protein_g,
+    daily_carbs_g: nutrition_plans.daily_carbs_g,
+    daily_fat_g: nutrition_plans.daily_fat_g,
+  }).from(nutrition_plans).orderBy(desc(nutrition_plans.id)).limit(1);
 
   if (activePlan) {
-    const meals = db.prepare(
-      'SELECT slot, option_number, name, calories, protein_g, carbs_g, fat_g FROM nutrition_plan_meals WHERE plan_id = ? ORDER BY slot, option_number'
-    ).all(activePlan.id) as any[];
+    const meals = await db.select({
+      slot: nutrition_plan_meals.slot,
+      option_number: nutrition_plan_meals.option_number,
+      name: nutrition_plan_meals.name,
+      calories: nutrition_plan_meals.calories,
+      protein_g: nutrition_plan_meals.protein_g,
+      carbs_g: nutrition_plan_meals.carbs_g,
+      fat_g: nutrition_plan_meals.fat_g,
+    }).from(nutrition_plan_meals)
+      .where(eq(nutrition_plan_meals.plan_id, activePlan.id))
+      .orderBy(nutrition_plan_meals.slot, nutrition_plan_meals.option_number);
 
-    const SLOT_EN: Record<string, string> = {
-      breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snack',
-      dinner: 'Dinner', pre_workout: 'Pre-workout', post_workout: 'Post-workout',
-    };
-
-    const mealLines = meals.map((m: any) =>
-      `  - ${SLOT_EN[m.slot] || m.slot} Op.${m.option_number}: ${m.name} (${m.calories}kcal | ${m.protein_g}g P | ${m.carbs_g}g C | ${m.fat_g}g F)`
+    const mealLines = meals.map(m =>
+      `  - ${SLOT_EN[m.slot ?? ''] || m.slot} Op.${m.option_number}: ${m.name} (${m.calories}kcal | ${m.protein_g}g P | ${m.carbs_g}g C | ${m.fat_g}g F)`
     );
 
     sections.push(`## Active nutrition plan: "${activePlan.title}" (${activePlan.strategy})

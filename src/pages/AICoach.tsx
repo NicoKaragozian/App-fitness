@@ -253,7 +253,7 @@ export const AICoach: React.FC = () => {
       localStorage.setItem(GREETING_KEY, '1');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [provider]);
 
   // Persist current chat after streaming ends
   const persistMessages = useCallback((msgs: Message[], chatId: string | null) => {
@@ -486,7 +486,7 @@ export const AICoach: React.FC = () => {
       abortRef.current = null;
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [messages, isStreaming, persistMessages, aiProgress]);
+  }, [messages, isStreaming, persistMessages, aiProgress, imageFile, provider, language, navigate]);
 
   const resizeTextarea = useCallback(() => {
     const el = inputRef.current;

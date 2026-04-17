@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import * as garmin from '../garmin.js';
 import { syncInitial, startPeriodicSync, isSyncing, lastSync, signalAbortSync } from '../sync.js';
-import db from '../db.js';
+import db from '../db/client.js';
+import { activities, sleep, stress, hrv, daily_summary, sync_log } from '../db/schema/index.js';
 
 const router = Router();
 
-// Token-based login: carga los tokens OAuth guardados por get-tokens.ts
 router.post('/token-login', async (_req, res) => {
   try {
     const ok = await garmin.tryRestoreSession();
@@ -29,16 +29,16 @@ router.get('/status', (_req, res) => {
   });
 });
 
-router.post('/logout', (_req, res) => {
+router.post('/logout', async (_req, res) => {
   signalAbortSync();
   garmin.logout();
   try {
-    db.prepare('DELETE FROM activities').run();
-    db.prepare('DELETE FROM sleep').run();
-    db.prepare('DELETE FROM stress').run();
-    db.prepare('DELETE FROM hrv').run();
-    db.prepare('DELETE FROM daily_summary').run();
-    db.prepare('DELETE FROM sync_log').run();
+    await db.delete(activities);
+    await db.delete(sleep);
+    await db.delete(stress);
+    await db.delete(hrv);
+    await db.delete(daily_summary);
+    await db.delete(sync_log);
   } catch (err) {
     console.error('DB wipe error on logout:', err);
   }

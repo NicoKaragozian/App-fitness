@@ -1,19 +1,30 @@
 import { Router } from 'express';
-import db from '../db.js';
+import { desc, sql } from 'drizzle-orm';
+import db from '../db/client.js';
+import { sleep, hrv, stress, daily_summary } from '../db/schema/index.js';
 
 const router = Router();
 
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-router.get('/sleep', (req, res) => {
+router.get('/sleep', async (req, res) => {
   const period = (req.query.period as string) || 'weekly';
 
-  // 'daily' → return only the most recent entry (for the dashboard)
   if (period === 'daily') {
-    const row = db.prepare(
-      `SELECT s.*, h.nightly_avg FROM sleep s LEFT JOIN hrv h ON s.date = h.date WHERE s.score IS NOT NULL ORDER BY s.date DESC LIMIT 1`
-    ).get() as any;
-    if (!row) { res.json([]); return; }
+    const rows = await db.select({
+      date: sleep.date,
+      score: sleep.score,
+      duration_seconds: sleep.duration_seconds,
+      nightly_avg: hrv.nightly_avg,
+    })
+      .from(sleep)
+      .leftJoin(hrv, sql`${sleep.date} = ${hrv.date}`)
+      .where(sql`${sleep.score} IS NOT NULL`)
+      .orderBy(desc(sleep.date))
+      .limit(1);
+
+    if (!rows.length) { res.json([]); return; }
+    const row = rows[0];
     res.json([{
       day: 'TODAY',
       hours: row.duration_seconds ? Math.round((row.duration_seconds / 3600) * 10) / 10 : 0,
@@ -24,12 +35,12 @@ router.get('/sleep', (req, res) => {
   }
 
   const limit = period === 'weekly' ? 7 : 49;
+  const sleepRows = await db.select().from(sleep)
+    .where(sql`${sleep.score} IS NOT NULL`)
+    .orderBy(desc(sleep.date))
+    .limit(limit);
 
-  const rows = db.prepare(
-    `SELECT * FROM sleep WHERE score IS NOT NULL ORDER BY date DESC LIMIT ?`
-  ).all(limit) as any[];
-
-  const data = rows.reverse().map((r) => {
+  const data = sleepRows.reverse().map((r) => {
     const d = new Date(r.date + 'T00:00:00');
     return {
       day: period === 'weekly' ? DAY_NAMES[d.getDay()] : d.getDate(),
@@ -40,26 +51,22 @@ router.get('/sleep', (req, res) => {
     };
   });
 
-  // Enrich with HRV data
-  const hrvRows = db.prepare(
-    `SELECT date, nightly_avg FROM hrv ORDER BY date DESC LIMIT ?`
-  ).all(limit) as any[];
+  const hrvRows = await db.select({ date: hrv.date, nightly_avg: hrv.nightly_avg })
+    .from(hrv).orderBy(desc(hrv.date)).limit(limit);
 
   const hrvMap = new Map(hrvRows.map((r) => [r.date, r.nightly_avg]));
-
-  for (let i = 0; i < rows.length && i < data.length; i++) {
-    const hrv = hrvMap.get(rows[i]?.date);
-    if (hrv) data[i].hrv = Math.round(hrv);
+  for (let i = 0; i < sleepRows.length && i < data.length; i++) {
+    const h = hrvMap.get(sleepRows[i]?.date);
+    if (h) data[i].hrv = Math.round(h);
   }
 
   res.json(data);
 });
 
-router.get('/stress', (req, res) => {
+router.get('/stress', async (req, res) => {
   const period = (req.query.period as string) || 'weekly';
 
-  // Helper to extract distribution and momentum from rows
-  const getMetrics = (dataRows: any[]) => {
+  const getMetrics = (dataRows: (typeof stress.$inferSelect)[]) => {
     let rest = 0, low = 0, medium = 0, high = 0;
     let peakDay = '', minDay = '';
     let peakStress = -1, minStress = 999;
@@ -86,7 +93,7 @@ router.get('/stress', (req, res) => {
       low: Math.round((low / total) * 100),
       medium: Math.round((medium / total) * 100),
       high: Math.round((high / total) * 100),
-    } : { rest: 35, low: 40, medium: 20, high: 5 }; // default fallbacks if no data
+    } : { rest: 35, low: 40, medium: 20, high: 5 };
 
     const formatDay = (dString: string) => {
       if (!dString) return '';
@@ -100,43 +107,28 @@ router.get('/stress', (req, res) => {
         peakDay: formatDay(peakDay),
         peakStress: peakStress === -1 ? 0 : peakStress,
         minDay: formatDay(minDay),
-        minStress: minStress === 999 ? 0 : minStress
-      }
+        minStress: minStress === 999 ? 0 : minStress,
+      },
     };
   };
 
   if (period === 'weekly') {
-    const rows = db.prepare(
-      `SELECT * FROM stress ORDER BY date DESC LIMIT 7`
-    ).all() as any[];
-
+    const rows = await db.select().from(stress).orderBy(desc(stress.date)).limit(7);
     const metrics = getMetrics(rows);
     const data = rows.reverse().map((r) => {
       const d = new Date(r.date + 'T00:00:00');
-      return {
-        day: DAY_NAMES[d.getDay()],
-        stress: r.avg_stress ?? 0,
-        date: r.date,
-      };
+      return { day: DAY_NAMES[d.getDay()], stress: r.avg_stress ?? 0, date: r.date };
     });
-
     const avg = data.length ? Math.round(data.reduce((a, b) => a + b.stress, 0) / data.length) : 0;
 
-    // Monthly avg
-    const monthlyRows = db.prepare(
-      `SELECT avg_stress FROM stress ORDER BY date DESC LIMIT 30`
-    ).all() as any[];
+    const monthlyRows = await db.select({ avg_stress: stress.avg_stress }).from(stress).orderBy(desc(stress.date)).limit(30);
     const monthlyAvg = monthlyRows.length
       ? Math.round(monthlyRows.reduce((a, b) => a + (b.avg_stress ?? 0), 0) / monthlyRows.length)
       : 0;
 
     res.json({ data, weeklyAvg: avg, monthlyAvg, ...metrics });
   } else {
-    // Monthly
-    const rows = db.prepare(
-      `SELECT * FROM stress ORDER BY date DESC LIMIT 30`
-    ).all() as any[];
-
+    const rows = await db.select().from(stress).orderBy(desc(stress.date)).limit(30);
     const metrics = getMetrics(rows);
     const weeks: Record<string, number[]> = {};
     rows.forEach((r, i) => {
@@ -162,14 +154,11 @@ router.get('/stress', (req, res) => {
   }
 });
 
-router.get('/hrv', (req, res) => {
+router.get('/hrv', async (req, res) => {
   const period = (req.query.period as string) || 'weekly';
   const limit = period === 'weekly' ? 7 : 30;
 
-  const rows = db.prepare(
-    `SELECT * FROM hrv ORDER BY date DESC LIMIT ?`
-  ).all(limit) as any[];
-
+  const rows = await db.select().from(hrv).orderBy(desc(hrv.date)).limit(limit);
   const latest = rows[0];
   const history = rows.reverse().map((r) => {
     const d = new Date(r.date + 'T00:00:00');
@@ -186,45 +175,33 @@ router.get('/hrv', (req, res) => {
   });
 });
 
-router.get('/summary', (_req, res) => {
-  const row = db.prepare(
-    `SELECT * FROM daily_summary ORDER BY date DESC LIMIT 1`
-  ).get() as any;
+router.get('/summary', async (_req, res) => {
+  const [row] = await db.select().from(daily_summary).orderBy(desc(daily_summary.date)).limit(1);
+  const [sleepRow] = await db.select({ score: sleep.score })
+    .from(sleep).where(sql`${sleep.score} IS NOT NULL`).orderBy(desc(sleep.date)).limit(1);
+  const [stressRow] = await db.select({ avg_stress: stress.avg_stress })
+    .from(stress).where(sql`${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(1);
+  const [hrvRow] = await db.select({ status: hrv.status, nightly_avg: hrv.nightly_avg })
+    .from(hrv).where(sql`${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(1);
 
-  const sleepRow = db.prepare(
-    `SELECT score FROM sleep WHERE score IS NOT NULL ORDER BY date DESC LIMIT 1`
-  ).get() as any;
-
-  const stressRow = db.prepare(
-    `SELECT avg_stress FROM stress WHERE avg_stress IS NOT NULL ORDER BY date DESC LIMIT 1`
-  ).get() as any;
-
-  const hrvRow = db.prepare(
-    `SELECT status, nightly_avg FROM hrv WHERE nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 1`
-  ).get() as any;
-
-  // Composite Readiness Calculation
   const slpScore = sleepRow?.score ?? 0;
   const avgStress = stressRow?.avg_stress ?? 0;
   const stressInverse = avgStress > 0 ? (100 - avgStress) : 0;
-  
+
   const hrvRaw = hrvRow?.nightly_avg ?? 0;
   let customHrvScore = 0;
-  
+
   if (hrvRaw > 0) {
     const minBaseline = 38;
     const maxBaseline = 99;
     const lowestPossible = 20;
-
     if (hrvRaw <= lowestPossible) {
       customHrvScore = 10;
     } else if (hrvRaw <= minBaseline) {
-      // Maps 20-38 into 10-45 score
       customHrvScore = Math.round(10 + ((hrvRaw - lowestPossible) / (minBaseline - lowestPossible)) * 35);
     } else if (hrvRaw >= maxBaseline) {
       customHrvScore = 100;
     } else {
-      // Maps 38-99 into 45-100 score
       customHrvScore = Math.round(45 + ((hrvRaw - minBaseline) / (maxBaseline - minBaseline)) * 55);
     }
   }
@@ -234,7 +211,6 @@ router.get('/summary', (_req, res) => {
     const sleepWeight = slpScore > 0 ? 0.4 : 0;
     const stressWeight = avgStress > 0 ? 0.3 : 0;
     const hrvWeight = customHrvScore > 0 ? 0.3 : 0;
-    
     const totalWeight = sleepWeight + stressWeight + hrvWeight;
     if (totalWeight > 0) {
       compositeScore = Math.round(
@@ -243,13 +219,12 @@ router.get('/summary', (_req, res) => {
     }
   }
 
-  // Dynamic Label
   let readinessTitle = 'HIGH STRAIN';
   if (compositeScore >= 85) readinessTitle = 'PRIME READINESS';
   else if (compositeScore >= 70) readinessTitle = 'OPTIMAL READINESS';
   else if (compositeScore >= 50) readinessTitle = 'MODERATE STRAIN';
 
-  const payload = {
+  res.json({
     steps: row?.steps ?? null,
     calories: row?.calories ?? null,
     bodyBattery: row?.body_battery ?? null,
@@ -258,11 +233,9 @@ router.get('/summary', (_req, res) => {
     readiness: {
       score: compositeScore,
       title: readinessTitle,
-      breakdown: { sleep: slpScore, stressInverse, hrvScore: customHrvScore, hrvRaw: hrvRow?.nightly_avg ?? 0 }
-    }
-  };
-
-  res.json(payload);
+      breakdown: { sleep: slpScore, stressInverse, hrvScore: customHrvScore, hrvRaw: hrvRow?.nightly_avg ?? 0 },
+    },
+  });
 });
 
 export default router;

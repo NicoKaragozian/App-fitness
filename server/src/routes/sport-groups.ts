@@ -1,5 +1,7 @@
 import { Router } from 'express';
-import db from '../db.js';
+import { eq, ne, asc, sql } from 'drizzle-orm';
+import db from '../db/client.js';
+import { sport_groups } from '../db/schema/index.js';
 
 const router = Router();
 
@@ -9,119 +11,123 @@ function slugify(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/, '');
 }
 
-function parseGroup(row: any) {
+function parseGroup(row: typeof sport_groups.$inferSelect) {
   return {
     id: row.id,
     name: row.name,
     subtitle: row.subtitle,
     color: row.color,
     icon: row.icon,
-    sportTypes: JSON.parse(row.sport_types),
-    metrics: JSON.parse(row.metrics),
-    chartMetrics: JSON.parse(row.chart_metrics),
+    sportTypes: row.sport_types,
+    metrics: row.metrics,
+    chartMetrics: row.chart_metrics,
     sortOrder: row.sort_order,
   };
 }
 
 // GET /api/sport-groups
-router.get('/', (_req, res) => {
-  const rows = db.prepare('SELECT * FROM sport_groups ORDER BY sort_order ASC').all();
+router.get('/', async (_req, res) => {
+  const rows = await db.select().from(sport_groups).orderBy(asc(sport_groups.sort_order));
   res.json(rows.map(parseGroup));
 });
 
 // POST /api/sport-groups
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, subtitle = '', color = '#6a9cff', icon = '◎', sportTypes, metrics, chartMetrics = [] } = req.body;
 
-  if (!name || typeof name !== 'string') return res.status(400).json({ error: 'name is required' });
-  if (!Array.isArray(sportTypes) || sportTypes.length === 0) return res.status(400).json({ error: 'sportTypes must be a non-empty array' });
-  if (!Array.isArray(metrics) || metrics.length === 0) return res.status(400).json({ error: 'metrics must be a non-empty array' });
-  if (metrics.some((m: string) => !VALID_METRICS.has(m))) return res.status(400).json({ error: 'metrics contains invalid values' });
+  if (!name || typeof name !== 'string') { res.status(400).json({ error: 'name is required' }); return; }
+  if (!Array.isArray(sportTypes) || sportTypes.length === 0) { res.status(400).json({ error: 'sportTypes must be a non-empty array' }); return; }
+  if (!Array.isArray(metrics) || metrics.length === 0) { res.status(400).json({ error: 'metrics must be a non-empty array' }); return; }
+  if (metrics.some((m: string) => !VALID_METRICS.has(m))) { res.status(400).json({ error: 'metrics contains invalid values' }); return; }
 
-  // Check for sport_type conflicts
-  const allGroups = db.prepare('SELECT id, name, sport_types FROM sport_groups').all() as any[];
+  const allGroups = await db.select({ id: sport_groups.id, name: sport_groups.name, sport_types: sport_groups.sport_types }).from(sport_groups);
   for (const g of allGroups) {
-    const existing: string[] = JSON.parse(g.sport_types);
+    const existing = g.sport_types as string[];
     const conflict = (sportTypes as string[]).find((st) => existing.includes(st));
-    if (conflict) return res.status(409).json({ error: `Sport "${conflict}" already belongs to group "${g.name}"` });
+    if (conflict) { res.status(409).json({ error: `Sport "${conflict}" already belongs to group "${g.name}"` }); return; }
   }
 
-  // Generate unique slug
   let id = slugify(name);
   let suffix = 2;
-  while (db.prepare('SELECT id FROM sport_groups WHERE id = ?').get(id)) {
+  while ((await db.select({ id: sport_groups.id }).from(sport_groups).where(eq(sport_groups.id, id))).length > 0) {
     id = `${slugify(name)}_${suffix++}`;
   }
 
-  const maxOrder = (db.prepare('SELECT MAX(sort_order) as m FROM sport_groups').get() as any).m ?? -1;
+  const [{ m }] = await db.select({ m: sql<number>`MAX(${sport_groups.sort_order})` }).from(sport_groups);
+  const maxOrder = m ?? -1;
 
-  db.prepare(
-    'INSERT INTO sport_groups (id, name, subtitle, color, icon, sport_types, metrics, chart_metrics, sort_order) VALUES (?,?,?,?,?,?,?,?,?)'
-  ).run(id, name, subtitle, color, icon, JSON.stringify(sportTypes), JSON.stringify(metrics), JSON.stringify(chartMetrics), maxOrder + 1);
+  const [created] = await db.insert(sport_groups).values({
+    id,
+    name,
+    subtitle,
+    color,
+    icon,
+    sport_types: sportTypes,
+    metrics,
+    chart_metrics: chartMetrics,
+    sort_order: Number(maxOrder) + 1,
+    created_at: new Date().toISOString(),
+  }).returning();
 
-  const created = db.prepare('SELECT * FROM sport_groups WHERE id = ?').get(id) as any;
   res.status(201).json(parseGroup(created));
 });
 
 // PUT /api/sport-groups/reorder — must go BEFORE /:id
-router.put('/reorder', (req, res) => {
+router.put('/reorder', async (req, res) => {
   const { order } = req.body;
-  if (!Array.isArray(order)) return res.status(400).json({ error: 'order must be an array of ids' });
+  if (!Array.isArray(order)) { res.status(400).json({ error: 'order must be an array of ids' }); return; }
 
-  const update = db.prepare('UPDATE sport_groups SET sort_order = ? WHERE id = ?');
-  const tx = db.transaction(() => {
-    order.forEach((id: string, i: number) => update.run(i, id));
+  await db.transaction(async (tx) => {
+    for (let i = 0; i < order.length; i++) {
+      await tx.update(sport_groups).set({ sort_order: i }).where(eq(sport_groups.id, order[i]));
+    }
   });
-  tx();
   res.json({ ok: true });
 });
 
 // PUT /api/sport-groups/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const existing = db.prepare('SELECT * FROM sport_groups WHERE id = ?').get(id) as any;
-  if (!existing) return res.status(404).json({ error: 'Group not found' });
+  const [existing] = await db.select().from(sport_groups).where(eq(sport_groups.id, id));
+  if (!existing) { res.status(404).json({ error: 'Group not found' }); return; }
 
   const { name, subtitle, color, icon, sportTypes, metrics, chartMetrics } = req.body;
 
   if (metrics && metrics.some((m: string) => !VALID_METRICS.has(m))) {
-    return res.status(400).json({ error: 'metrics contains invalid values' });
+    res.status(400).json({ error: 'metrics contains invalid values' }); return;
   }
 
-  const newSportTypes: string[] = sportTypes ?? JSON.parse(existing.sport_types);
+  const newSportTypes: string[] = sportTypes ?? (existing.sport_types as string[]);
 
-  // Check for sport_type conflicts (exclude self)
-  const otherGroups = db.prepare('SELECT id, name, sport_types FROM sport_groups WHERE id != ?').all(id) as any[];
+  const otherGroups = await db.select({ id: sport_groups.id, name: sport_groups.name, sport_types: sport_groups.sport_types })
+    .from(sport_groups).where(ne(sport_groups.id, id));
   for (const g of otherGroups) {
-    const existingTypes: string[] = JSON.parse(g.sport_types);
+    const existingTypes = g.sport_types as string[];
     const conflict = newSportTypes.find((st) => existingTypes.includes(st));
-    if (conflict) return res.status(409).json({ error: `Sport "${conflict}" already belongs to group "${g.name}"` });
+    if (conflict) { res.status(409).json({ error: `Sport "${conflict}" already belongs to group "${g.name}"` }); return; }
   }
 
-  db.prepare(
-    'UPDATE sport_groups SET name=?, subtitle=?, color=?, icon=?, sport_types=?, metrics=?, chart_metrics=? WHERE id=?'
-  ).run(
-    name ?? existing.name,
-    subtitle ?? existing.subtitle,
-    color ?? existing.color,
-    icon ?? existing.icon,
-    JSON.stringify(newSportTypes),
-    JSON.stringify(metrics ?? JSON.parse(existing.metrics)),
-    JSON.stringify(chartMetrics ?? JSON.parse(existing.chart_metrics)),
-    id
-  );
+  await db.update(sport_groups).set({
+    name: name ?? existing.name,
+    subtitle: subtitle ?? existing.subtitle,
+    color: color ?? existing.color,
+    icon: icon ?? existing.icon,
+    sport_types: newSportTypes,
+    metrics: metrics ?? existing.metrics,
+    chart_metrics: chartMetrics ?? existing.chart_metrics,
+  }).where(eq(sport_groups.id, id));
 
-  const updated = db.prepare('SELECT * FROM sport_groups WHERE id = ?').get(id) as any;
+  const [updated] = await db.select().from(sport_groups).where(eq(sport_groups.id, id));
   res.json(parseGroup(updated));
 });
 
 // DELETE /api/sport-groups/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   const { id } = req.params;
-  const existing = db.prepare('SELECT id FROM sport_groups WHERE id = ?').get(id);
-  if (!existing) return res.status(404).json({ error: 'Group not found' });
+  const [existing] = await db.select({ id: sport_groups.id }).from(sport_groups).where(eq(sport_groups.id, id));
+  if (!existing) { res.status(404).json({ error: 'Group not found' }); return; }
 
-  db.prepare('DELETE FROM sport_groups WHERE id = ?').run(id);
+  await db.delete(sport_groups).where(eq(sport_groups.id, id));
   res.json({ ok: true });
 });
 

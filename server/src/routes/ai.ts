@@ -2,7 +2,12 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import sharp from 'sharp';
-import db from '../db.js';
+import { eq, desc, gte, sql } from 'drizzle-orm';
+import db from '../db/client.js';
+import {
+  user_profile, training_plans, training_sessions, workout_logs,
+  nutrition_logs, sleep, hrv, stress, daily_summary, activities,
+} from '../db/schema/index.js';
 import { handleAnalyze } from '../ai/index.js';
 import { pickProviderFromReq, pickLanguageFromReq, isAIConfigured, getProvider } from '../ai/providers/index.js';
 import { getAssessmentContext } from '../ai/context.js';
@@ -12,7 +17,6 @@ import type { AIMessage, AIContentBlock } from '../ai/providers/types.js';
 
 const router = Router();
 
-// Multer for agent image uploads
 const agentUpload = multer({
   storage: multer.diskStorage({
     destination: UPLOAD_DIR,
@@ -22,9 +26,7 @@ const agentUpload = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    cb(null, file.mimetype.startsWith('image/'));
-  },
+  fileFilter: (_req, file, cb) => { cb(null, file.mimetype.startsWith('image/')); },
 });
 
 const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
@@ -38,7 +40,6 @@ async function toBase64(filePath: string, mimetype: string) {
   return { base64: jpegBuffer.toString('base64'), mediaType: 'image/jpeg' };
 }
 
-// Keywords to detect which context to load
 const ACTIVITY_KW = ['activity', 'activities', 'training', 'workout', 'sport', 'tennis', 'surf', 'kite', 'wingfoil', 'windsurf', 'gym', 'running', 'walking', 'exercise', 'session', 'sessions', 'performance', 'speed', 'distance', 'calorie', 'heart rate', 'avg hr', 'bpm', 'cycling', 'swimming', 'hiking'];
 const SLEEP_KW = ['sleep', 'sleeping', 'slept', 'rest', 'sleep hours', 'deep', 'rem', 'sleep score', 'sleep quality', 'woke up', 'bedtime'];
 const WELLNESS_KW = ['stress', 'hrv', 'variability', 'wellness', 'steps', 'recovery', 'readiness', 'resting hr', 'resting heart rate'];
@@ -59,63 +60,78 @@ function detectNeeds(message: string) {
   };
 }
 
-function buildContext(needs: ReturnType<typeof detectNeeds>): string {
+async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<string> {
   const sections: string[] = [];
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const cutoff7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const cutoff14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() as any;
+  const [profile] = await db.select().from(user_profile).where(eq(user_profile.id, 1));
   if (profile) {
-    const sports = JSON.parse(profile.sports || '[]').join(', ') || '-';
-    const equipment = JSON.parse(profile.equipment || '[]').join(', ') || '-';
-    const dietary = JSON.parse(profile.dietary_preferences || '[]').join(', ') || 'none';
+    const sportsArr = (profile.sports as string[] | null) || [];
+    const equipArr = (profile.equipment as string[] | null) || [];
+    const dietArr = profile.dietary_preferences;
+    const dietary = Array.isArray(dietArr) ? dietArr.join(', ') : (dietArr ? JSON.stringify(dietArr) : 'none');
     sections.push(`## User profile
 - Name: ${profile.name || '-'} | Age: ${profile.age || '-'} | Sex: ${profile.sex || '-'}
 - Build: ${profile.height_cm || '-'}cm / ${profile.weight_kg || '-'}kg
 - Experience: ${profile.experience_level || '-'} | Goal: ${profile.primary_goal || '-'}
-- Sports: ${sports}
+- Sports: ${sportsArr.join(', ') || '-'}
 - Training: ${profile.training_days_per_week || '-'} days/week, ~${profile.session_duration_min || '-'}min/session
-- Equipment: ${equipment}
+- Equipment: ${equipArr.join(', ') || '-'}
 - Injuries: ${profile.injuries || 'none'}
 - Dietary preferences: ${dietary}
 - Targets: ${profile.daily_calorie_target || '-'}kcal | prot:${profile.daily_protein_g || '-'}g | carbs:${profile.daily_carbs_g || '-'}g | fat:${profile.daily_fat_g || '-'}g`);
   }
 
-  const activePlan = db.prepare(
-    'SELECT id, title, objective, frequency FROM training_plans WHERE status = ? ORDER BY id DESC LIMIT 1'
-  ).get('active') as any;
+  const [activePlan] = await db.select({
+    id: training_plans.id,
+    title: training_plans.title,
+    objective: training_plans.objective,
+    frequency: training_plans.frequency,
+  }).from(training_plans).where(eq(training_plans.status, 'active')).orderBy(desc(training_plans.id)).limit(1);
+
   if (activePlan) {
-    const sessions = db.prepare(
-      'SELECT name FROM training_sessions WHERE plan_id = ? ORDER BY sort_order'
-    ).all(activePlan.id) as any[];
-    const sessionNames = sessions.map((s: any) => s.name).join(', ');
+    const sessions = await db.select({ name: training_sessions.name })
+      .from(training_sessions).where(eq(training_sessions.plan_id, activePlan.id)).orderBy(training_sessions.sort_order);
     sections.push(`## Active training plan
 - "${activePlan.title}" | ${activePlan.frequency || '-'}
 - Objective: ${activePlan.objective || '-'}
-- Sessions: ${sessionNames || '-'}`);
+- Sessions: ${sessions.map(s => s.name).join(', ') || '-'}`);
 
-    const lastWorkout = db.prepare(
-      `SELECT wl.started_at, ts.name as session_name
-       FROM workout_logs wl
-       JOIN training_sessions ts ON ts.id = wl.session_id
-       WHERE wl.plan_id = ?
-       ORDER BY wl.started_at DESC LIMIT 1`
-    ).get(activePlan.id) as any;
+    const [lastWorkout] = await db.select({
+      started_at: workout_logs.started_at,
+      session_name: training_sessions.name,
+    })
+      .from(workout_logs)
+      .innerJoin(training_sessions, eq(training_sessions.id, workout_logs.session_id))
+      .where(eq(workout_logs.plan_id, activePlan.id))
+      .orderBy(desc(workout_logs.started_at))
+      .limit(1);
+
     if (lastWorkout) {
       sections.push(`## Last completed workout
 - Session: "${lastWorkout.session_name}" | Date: ${lastWorkout.started_at?.slice(0, 10) || '-'}`);
     }
   }
 
-  const assessmentCtx = getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext();
   if (assessmentCtx) sections.push(assessmentCtx);
 
   if (needs.activities) {
-    const rows = db.prepare(`
-      SELECT sport_type, start_time, duration, distance, calories, avg_hr, max_speed
-      FROM activities WHERE start_time >= ? ORDER BY start_time DESC LIMIT 40
-    `).all(cutoff + 'T00:00:00') as any[];
+    const rows = await db.select({
+      sport_type: activities.sport_type,
+      start_time: activities.start_time,
+      duration: activities.duration,
+      distance: activities.distance,
+      calories: activities.calories,
+      avg_hr: activities.avg_hr,
+      max_speed: activities.max_speed,
+    }).from(activities)
+      .where(gte(activities.start_time, cutoff + 'T00:00:00'))
+      .orderBy(desc(activities.start_time))
+      .limit(40);
+
     if (rows.length > 0) {
       const lines = rows.map(a => {
         const dur = a.duration ? `${Math.round(a.duration / 60)}min` : '-';
@@ -128,10 +144,17 @@ function buildContext(needs: ReturnType<typeof detectNeeds>): string {
   }
 
   if (needs.sleep) {
-    const rows = db.prepare(`
-      SELECT date, score, duration_seconds, deep_seconds, rem_seconds
-      FROM sleep WHERE date >= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 21
-    `).all(cutoff) as any[];
+    const rows = await db.select({
+      date: sleep.date,
+      score: sleep.score,
+      duration_seconds: sleep.duration_seconds,
+      deep_seconds: sleep.deep_seconds,
+      rem_seconds: sleep.rem_seconds,
+    }).from(sleep)
+      .where(sql`${sleep.date} >= ${cutoff} AND ${sleep.score} IS NOT NULL`)
+      .orderBy(desc(sleep.date))
+      .limit(21);
+
     if (rows.length > 0) {
       const lines = rows.map(s => {
         const dur = s.duration_seconds ? `${Math.floor(s.duration_seconds / 3600)}h${Math.round((s.duration_seconds % 3600) / 60)}m` : '-';
@@ -144,41 +167,39 @@ function buildContext(needs: ReturnType<typeof detectNeeds>): string {
   }
 
   if (needs.wellness) {
-    const hrv = db.prepare(`
-      SELECT date, nightly_avg, status FROM hrv
-      WHERE date >= ? AND nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 14
-    `).all(cutoff14d) as any[];
-    const stress = db.prepare(`
-      SELECT date, avg_stress FROM stress
-      WHERE date >= ? AND avg_stress IS NOT NULL ORDER BY date DESC LIMIT 14
-    `).all(cutoff14d) as any[];
-    const summary = db.prepare(`
-      SELECT date, steps, resting_hr FROM daily_summary
-      WHERE date >= ? AND steps IS NOT NULL ORDER BY date DESC LIMIT 14
-    `).all(cutoff14d) as any[];
+    const hrvRows = await db.select({ date: hrv.date, nightly_avg: hrv.nightly_avg, status: hrv.status })
+      .from(hrv).where(sql`${hrv.date} >= ${cutoff14d} AND ${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(14);
+    const stressRows = await db.select({ date: stress.date, avg_stress: stress.avg_stress })
+      .from(stress).where(sql`${stress.date} >= ${cutoff14d} AND ${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(14);
+    const summaryRows = await db.select({ date: daily_summary.date, steps: daily_summary.steps, resting_hr: daily_summary.resting_hr })
+      .from(daily_summary).where(sql`${daily_summary.date} >= ${cutoff14d} AND ${daily_summary.steps} IS NOT NULL`).orderBy(desc(daily_summary.date)).limit(14);
 
-    if (hrv.length > 0) {
-      const lines = hrv.map((h: any) => `${h.date} | HRV:${Number(h.nightly_avg).toFixed(1)}ms | status:${h.status || '-'}`);
-      sections.push(`## HRV (2 weeks)\n${lines.join('\n')}`);
+    if (hrvRows.length > 0) {
+      sections.push(`## HRV (2 weeks)\n${hrvRows.map(h => `${h.date} | HRV:${Number(h.nightly_avg).toFixed(1)}ms | status:${h.status || '-'}`).join('\n')}`);
     }
-    if (stress.length > 0) {
-      const lines = stress.map((s: any) => `${s.date} | stress:${s.avg_stress}`);
-      sections.push(`## Average stress\n${lines.join('\n')}`);
+    if (stressRows.length > 0) {
+      sections.push(`## Average stress\n${stressRows.map(s => `${s.date} | stress:${s.avg_stress}`).join('\n')}`);
     }
-    if (summary.length > 0) {
-      const lines = summary.map((s: any) => `${s.date} | steps:${s.steps} | resting HR:${s.resting_hr ?? '-'}bpm`);
-      sections.push(`## Daily activity\n${lines.join('\n')}`);
+    if (summaryRows.length > 0) {
+      sections.push(`## Daily activity\n${summaryRows.map(s => `${s.date} | steps:${s.steps} | resting HR:${s.resting_hr ?? '-'}bpm`).join('\n')}`);
     }
   }
 
   if (needs.nutrition) {
-    const nutritionRows = db.prepare(`
-      SELECT date,
-        SUM(calories) as cals, SUM(protein_g) as prot, SUM(carbs_g) as carbs, SUM(fat_g) as fat,
-        COUNT(*) as meals
-      FROM nutrition_logs WHERE date >= ?
-      GROUP BY date ORDER BY date DESC LIMIT 7
-    `).all(cutoff7d) as any[];
+    const nutritionRows = await db.select({
+      date: nutrition_logs.date,
+      cals: sql<number>`SUM(${nutrition_logs.calories})`,
+      prot: sql<number>`SUM(${nutrition_logs.protein_g})`,
+      carbs: sql<number>`SUM(${nutrition_logs.carbs_g})`,
+      fat: sql<number>`SUM(${nutrition_logs.fat_g})`,
+      meals: sql<number>`COUNT(*)`,
+    })
+      .from(nutrition_logs)
+      .where(gte(nutrition_logs.date, cutoff7d))
+      .groupBy(nutrition_logs.date)
+      .orderBy(desc(nutrition_logs.date))
+      .limit(7);
+
     if (nutritionRows.length > 0) {
       const lines = nutritionRows.map(r =>
         `${r.date} | ${r.meals} meals | ${r.cals || 0}kcal | prot:${r.prot || 0}g | carbs:${r.carbs || 0}g | fat:${r.fat || 0}g`
@@ -194,21 +215,19 @@ function buildContext(needs: ReturnType<typeof detectNeeds>): string {
 router.post('/chat', async (req: Request, res: Response) => {
   const { messages } = req.body as { messages: { role: string; content: string }[] };
   if (!Array.isArray(messages) || messages.length === 0) {
-    res.status(400).json({ error: 'messages required' });
-    return;
+    res.status(400).json({ error: 'messages required' }); return;
   }
 
   const provider = pickProviderFromReq(req);
   if (!(await isAIConfigured(provider.name))) {
     const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
-    res.status(503).json({ error: `${label} is not available. Check your setup.` });
-    return;
+    res.status(503).json({ error: `${label} is not available. Check your setup.` }); return;
   }
 
   const lang = pickLanguageFromReq(req);
   const lastUser = [...messages].reverse().find(m => m.role === 'user');
   const needs = detectNeeds(lastUser?.content || '');
-  const context = buildContext(needs);
+  const context = await buildContext(needs);
 
   const langRule = lang === 'es'
     ? 'CRÍTICO: Responde siempre en castellano únicamente, sin importar el idioma del mensaje del usuario o los datos del perfil.'
@@ -225,86 +244,84 @@ ${context ? `User data:\n${context}` : 'No data available yet in the database.'}
   await provider.streamChat({ systemPrompt, messages: aiMessages, res });
 });
 
-// POST /api/ai/analyze — Unified contextual analysis endpoint
+// POST /api/ai/analyze
 router.post('/analyze', handleAnalyze);
 
-// POST /api/ai/agent — Agentic chat with tool use
-// Accepts JSON body or multipart/form-data with optional image
+// POST /api/ai/agent
 router.post('/agent', agentUpload.single('image'), async (req: Request, res: Response) => {
   let rawMessages: { role: string; content: string }[];
   if (req.file) {
-    try {
-      rawMessages = JSON.parse(req.body.messages);
-    } catch {
-      res.status(400).json({ error: 'invalid messages' });
-      return;
-    }
+    try { rawMessages = JSON.parse(req.body.messages); }
+    catch { res.status(400).json({ error: 'invalid messages' }); return; }
   } else {
     rawMessages = req.body.messages;
   }
 
   if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
-    res.status(400).json({ error: 'messages required' });
-    return;
+    res.status(400).json({ error: 'messages required' }); return;
   }
 
   const provider = pickProviderFromReq(req);
   if (!(await isAIConfigured(provider.name))) {
     const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
-    res.status(503).json({ error: `${label} is not available. Check your setup.` });
-    return;
+    res.status(503).json({ error: `${label} is not available. Check your setup.` }); return;
   }
 
-  // Build slim always-on context
   const sections: string[] = [];
 
-  const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() as any;
+  const [profile] = await db.select().from(user_profile).where(eq(user_profile.id, 1));
   if (profile) {
-    const sports = JSON.parse(profile.sports || '[]').join(', ') || '-';
-    const equipment = JSON.parse(profile.equipment || '[]').join(', ') || '-';
+    const sportsArr = (profile.sports as string[] | null) || [];
+    const equipArr = (profile.equipment as string[] | null) || [];
     sections.push(`## User profile
 - Name: ${profile.name || '[empty]'} | Age: ${profile.age || '[empty]'} | Sex: ${profile.sex || '[empty]'}
 - Build: ${profile.height_cm || '[empty]'}cm / ${profile.weight_kg || '[empty]'}kg
 - Experience: ${profile.experience_level || '[empty]'} | Goal: ${profile.primary_goal || '[empty]'}
-- Sports: ${sports || '[empty]'}
+- Sports: ${sportsArr.join(', ') || '[empty]'}
 - Training: ${profile.training_days_per_week || '[empty]'} days/week, ~${profile.session_duration_min || '[empty]'}min/session
-- Equipment: ${equipment || '[empty]'}
+- Equipment: ${equipArr.join(', ') || '[empty]'}
 - Injuries: ${profile.injuries || 'none'}
 - Targets: ${profile.daily_calorie_target || '-'}kcal | prot:${profile.daily_protein_g || '-'}g | carbs:${profile.daily_carbs_g || '-'}g | fat:${profile.daily_fat_g || '-'}g`);
   } else {
     sections.push('## User profile\nNo profile configured. All fields are empty — start onboarding.');
   }
 
-  const activePlan = db.prepare(
-    'SELECT id, title, objective, frequency FROM training_plans WHERE status = ? ORDER BY id DESC LIMIT 1'
-  ).get('active') as any;
+  const [activePlan] = await db.select({
+    id: training_plans.id,
+    title: training_plans.title,
+    objective: training_plans.objective,
+    frequency: training_plans.frequency,
+  }).from(training_plans).where(eq(training_plans.status, 'active')).orderBy(desc(training_plans.id)).limit(1);
+
   if (activePlan) {
-    const sessionRows = db.prepare(
-      'SELECT name FROM training_sessions WHERE plan_id = ? ORDER BY sort_order'
-    ).all(activePlan.id) as any[];
+    const sessionRows = await db.select({ name: training_sessions.name })
+      .from(training_sessions).where(eq(training_sessions.plan_id, activePlan.id)).orderBy(training_sessions.sort_order);
     sections.push(`## Active training plan
 - "${activePlan.title}" | ${activePlan.frequency || '-'}
 - Objective: ${activePlan.objective || '-'}
-- Sessions: ${sessionRows.map((s: any) => s.name).join(', ') || '-'}`);
+- Sessions: ${sessionRows.map(s => s.name).join(', ') || '-'}`);
   }
 
-  const assessmentCtx = getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext();
   if (assessmentCtx) sections.push(assessmentCtx);
 
-  // Today's nutrition
   const todayStr = new Date().toISOString().slice(0, 10);
-  const todayLogs = db.prepare(
-    'SELECT meal_slot, meal_name, calories, protein_g, carbs_g, fat_g FROM nutrition_logs WHERE date = ? ORDER BY logged_at'
-  ).all(todayStr) as any[];
+  const todayLogs = await db.select({
+    meal_slot: nutrition_logs.meal_slot,
+    meal_name: nutrition_logs.meal_name,
+    calories: nutrition_logs.calories,
+    protein_g: nutrition_logs.protein_g,
+    carbs_g: nutrition_logs.carbs_g,
+    fat_g: nutrition_logs.fat_g,
+  }).from(nutrition_logs).where(eq(nutrition_logs.date, todayStr)).orderBy(nutrition_logs.logged_at);
+
   if (todayLogs.length > 0) {
-    const logLines = todayLogs.map((l: any) =>
+    const logLines = todayLogs.map(l =>
       `- ${l.meal_slot || '-'}: ${l.meal_name || '-'} | ${l.calories || 0}kcal | prot:${l.protein_g || 0}g | carbs:${l.carbs_g || 0}g | fat:${l.fat_g || 0}g`
     );
-    const totals = todayLogs.reduce((acc: any, l: any) => ({
-      cals: acc.cals + (l.calories || 0),
-      prot: acc.prot + (l.protein_g || 0),
-      carbs: acc.carbs + (l.carbs_g || 0),
-      fat: acc.fat + (l.fat_g || 0),
+    const totals = todayLogs.reduce((acc, l) => ({
+      cals: acc.cals + (l.calories || 0), prot: acc.prot + (l.protein_g || 0),
+      carbs: acc.carbs + (l.carbs_g || 0), fat: acc.fat + (l.fat_g || 0),
     }), { cals: 0, prot: 0, carbs: 0, fat: 0 });
     sections.push(`## Today's nutrition (${todayLogs.length} meals logged)
 ${logLines.join('\n')}
@@ -317,7 +334,6 @@ ${logLines.join('\n')}
   const context = sections.join('\n\n');
   const systemPrompt = `${getPrompt('agent', agentLang)}\n\nCurrent user data:\n${context}`;
 
-  // Build AIMessages — handle image on last user message if present
   const aiMessages: AIMessage[] = rawMessages
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));

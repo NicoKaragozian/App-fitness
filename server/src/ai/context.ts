@@ -1,9 +1,21 @@
-// ai/context.ts — Context builders by analysis mode
+// ai/context.ts — Context builders by analysis mode (async, Drizzle)
 
-import db from '../db.js';
+import { desc, eq, inArray, sql, and, gte, lte } from 'drizzle-orm';
+import db from '../db/client.js';
+import {
+  activities as activitiesTable,
+  sleep as sleepTable,
+  hrv as hrvTable,
+  stress as stressTable,
+  daily_summary,
+} from '../db/schema/garmin.js';
+import { sport_groups, weekly_plan } from '../db/schema/core.js';
+import { user_assessment, user_profile } from '../db/schema/profile.js';
+import { training_plans, training_sessions } from '../db/schema/training.js';
+import { nutrition_logs } from '../db/schema/nutrition.js';
 import { computeInsights } from '../insights/index.js';
 
-interface AnalyzePayload {
+export interface AnalyzePayload {
   activityId?: string;
   groupId?: string;
   period?: string;
@@ -11,11 +23,12 @@ interface AnalyzePayload {
 }
 
 // --- Session context: individual activity + comparison ---
-function buildSessionContext(payload: AnalyzePayload): string {
+async function buildSessionContext(payload: AnalyzePayload): Promise<string> {
   const { activityId } = payload;
   if (!activityId) return '';
 
-  const row = db.prepare('SELECT * FROM activities WHERE garmin_id = ?').get(activityId) as any;
+  const [row] = await db.select().from(activitiesTable)
+    .where(eq(activitiesTable.garmin_id, activityId)).limit(1);
   if (!row) return 'Activity not found.';
 
   const raw = JSON.parse(row.raw_json ?? '{}');
@@ -23,7 +36,6 @@ function buildSessionContext(payload: AnalyzePayload): string {
   const dist = row.distance ? (row.distance / 1000).toFixed(1) : null;
   const maxSpd = row.max_speed ? (row.max_speed * 3.6).toFixed(1) : null;
 
-  // HR zones
   const hrZones = [1, 2, 3, 4, 5].map(z => ({
     zone: z,
     seconds: Math.round(raw[`hrTimeInZone_${z}`] ?? 0),
@@ -50,17 +62,26 @@ Anaerobic Training Effect: ${raw.anaerobicTrainingEffect ?? '-'}
 Training load: ${raw.activityTrainingLoad ? Math.round(raw.activityTrainingLoad) : '-'}
 Location: ${raw.locationName ?? '-'}`);
 
-  // Comparison with recent sessions of the same sport
-  const recentSame = db.prepare(`
-    SELECT duration, distance, avg_hr, max_speed, calories
-    FROM activities WHERE sport_type = ? AND garmin_id != ?
-    ORDER BY start_time DESC LIMIT 10
-  `).all(row.sport_type, activityId) as any[];
+  const recentSame = await db.select({
+    duration: activitiesTable.duration,
+    distance: activitiesTable.distance,
+    avg_hr: activitiesTable.avg_hr,
+    max_speed: activitiesTable.max_speed,
+    calories: activitiesTable.calories,
+  }).from(activitiesTable)
+    .where(and(
+      eq(activitiesTable.sport_type, row.sport_type),
+      sql`${activitiesTable.garmin_id} != ${activityId}`,
+    ))
+    .orderBy(desc(activitiesTable.start_time))
+    .limit(10);
 
   if (recentSame.length >= 2) {
-    const avgDur = Math.round(recentSame.reduce((s: number, r: any) => s + (r.duration ?? 0), 0) / recentSame.length / 60);
-    const avgHr = Math.round(recentSame.filter((r: any) => r.avg_hr).reduce((s: number, r: any) => s + r.avg_hr, 0) / recentSame.filter((r: any) => r.avg_hr).length) || null;
-    const avgDist = recentSame.filter((r: any) => r.distance).reduce((s: number, r: any) => s + r.distance, 0) / recentSame.filter((r: any) => r.distance).length / 1000;
+    const avgDur = Math.round(recentSame.reduce((s, r) => s + (r.duration ?? 0), 0) / recentSame.length / 60);
+    const withHr = recentSame.filter(r => r.avg_hr);
+    const avgHr = withHr.length > 0 ? Math.round(withHr.reduce((s, r) => s + r.avg_hr!, 0) / withHr.length) : null;
+    const withDist = recentSame.filter(r => r.distance);
+    const avgDist = withDist.length > 0 ? withDist.reduce((s, r) => s + r.distance!, 0) / withDist.length / 1000 : 0;
 
     sections.push(`## User averages in ${row.sport_type} (last ${recentSame.length} sessions)
 Average duration: ${avgDur}min
@@ -72,16 +93,25 @@ Average distance: ${avgDist > 0 ? `${avgDist.toFixed(1)}km` : '-'}`);
 }
 
 // --- Sleep context ---
-function buildSleepContext(payload: AnalyzePayload): string {
+async function buildSleepContext(payload: AnalyzePayload): Promise<string> {
   const limit = payload.period === 'monthly' ? 30 : 14;
   const sections: string[] = [];
 
-  const sleepRows = db.prepare(`
-    SELECT s.date, s.score, s.duration_seconds, s.deep_seconds, s.light_seconds, s.rem_seconds, s.awake_seconds,
-           h.nightly_avg as hrv, h.status as hrv_status
-    FROM sleep s LEFT JOIN hrv h ON s.date = h.date
-    WHERE s.score IS NOT NULL ORDER BY s.date DESC LIMIT ?
-  `).all(limit) as any[];
+  const sleepRows = await db.select({
+    date: sleepTable.date,
+    score: sleepTable.score,
+    duration_seconds: sleepTable.duration_seconds,
+    deep_seconds: sleepTable.deep_seconds,
+    light_seconds: sleepTable.light_seconds,
+    rem_seconds: sleepTable.rem_seconds,
+    awake_seconds: sleepTable.awake_seconds,
+    hrv: hrvTable.nightly_avg,
+    hrv_status: hrvTable.status,
+  }).from(sleepTable)
+    .leftJoin(hrvTable, eq(sleepTable.date, hrvTable.date))
+    .where(sql`${sleepTable.score} IS NOT NULL`)
+    .orderBy(desc(sleepTable.date))
+    .limit(limit);
 
   if (sleepRows.length > 0) {
     const lines = sleepRows.map(s => {
@@ -94,47 +124,41 @@ function buildSleepContext(payload: AnalyzePayload): string {
     });
     sections.push(`## Sleep (last ${sleepRows.length} nights)\nDate | Score | Total | Deep | REM | Light | HRV\n${lines.join('\n')}`);
 
-    // Stats summary
-    const scores = sleepRows.map(s => s.score);
+    const scores = sleepRows.map(s => s.score!);
     const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-    const min = Math.min(...scores);
-    const max = Math.max(...scores);
-    sections.push(`## Summary: avg score ${avg}, min ${min}, max ${max}`);
+    sections.push(`## Summary: avg score ${avg}, min ${Math.min(...scores)}, max ${Math.max(...scores)}`);
   }
 
   return sections.join('\n\n');
 }
 
 // --- Wellness context ---
-function buildWellnessContext(payload: AnalyzePayload): string {
+async function buildWellnessContext(payload: AnalyzePayload): Promise<string> {
   const limit = payload.period === 'monthly' ? 30 : 14;
   const sections: string[] = [];
 
-  const hrv = db.prepare(`
-    SELECT date, nightly_avg, status FROM hrv
-    WHERE nightly_avg IS NOT NULL ORDER BY date DESC LIMIT ?
-  `).all(limit) as any[];
+  const hrvRows = await db.select({
+    date: hrvTable.date, nightly_avg: hrvTable.nightly_avg, status: hrvTable.status,
+  }).from(hrvTable).where(sql`${hrvTable.nightly_avg} IS NOT NULL`).orderBy(desc(hrvTable.date)).limit(limit);
 
-  const stress = db.prepare(`
-    SELECT date, avg_stress, max_stress FROM stress
-    WHERE avg_stress IS NOT NULL ORDER BY date DESC LIMIT ?
-  `).all(limit) as any[];
+  const stressRows = await db.select({
+    date: stressTable.date, avg_stress: stressTable.avg_stress, max_stress: stressTable.max_stress,
+  }).from(stressTable).where(sql`${stressTable.avg_stress} IS NOT NULL`).orderBy(desc(stressTable.date)).limit(limit);
 
-  const summary = db.prepare(`
-    SELECT date, steps, resting_hr FROM daily_summary
-    WHERE steps IS NOT NULL ORDER BY date DESC LIMIT ?
-  `).all(limit) as any[];
+  const summaryRows = await db.select({
+    date: daily_summary.date, steps: daily_summary.steps, resting_hr: daily_summary.resting_hr,
+  }).from(daily_summary).where(sql`${daily_summary.steps} IS NOT NULL`).orderBy(desc(daily_summary.date)).limit(limit);
 
-  if (hrv.length > 0) {
-    const lines = hrv.map(h => `${h.date} | HRV:${Number(h.nightly_avg).toFixed(0)}ms | status:${h.status || '-'}`);
+  if (hrvRows.length > 0) {
+    const lines = hrvRows.map(h => `${h.date} | HRV:${Number(h.nightly_avg).toFixed(0)}ms | status:${h.status || '-'}`);
     sections.push(`## HRV\n${lines.join('\n')}`);
   }
-  if (stress.length > 0) {
-    const lines = stress.map(s => `${s.date} | avg stress:${s.avg_stress} | max:${s.max_stress}`);
+  if (stressRows.length > 0) {
+    const lines = stressRows.map(s => `${s.date} | avg stress:${s.avg_stress} | max:${s.max_stress}`);
     sections.push(`## Stress\n${lines.join('\n')}`);
   }
-  if (summary.length > 0) {
-    const lines = summary.map(s => `${s.date} | steps:${s.steps} | resting HR:${s.resting_hr ?? '-'}bpm`);
+  if (summaryRows.length > 0) {
+    const lines = summaryRows.map(s => `${s.date} | steps:${s.steps} | resting HR:${s.resting_hr ?? '-'}bpm`);
     sections.push(`## Daily activity\n${lines.join('\n')}`);
   }
 
@@ -142,52 +166,58 @@ function buildWellnessContext(payload: AnalyzePayload): string {
 }
 
 // --- Sport group context ---
-function buildSportContext(payload: AnalyzePayload): string {
+async function buildSportContext(payload: AnalyzePayload): Promise<string> {
   const { groupId } = payload;
   if (!groupId) return '';
 
-  const group = db.prepare('SELECT * FROM sport_groups WHERE id = ?').get(groupId) as any;
+  const [group] = await db.select().from(sport_groups).where(eq(sport_groups.id, groupId)).limit(1);
   if (!group) return 'Sport group not found.';
 
-  const sportTypes: string[] = JSON.parse(group.sport_types);
-  const placeholders = sportTypes.map(() => '?').join(',');
+  const sportTypes: string[] = group.sport_types as string[];
+  if (sportTypes.length === 0) return `## Group: ${group.name}\nNo sports assigned.`;
 
-  const activities = db.prepare(`
-    SELECT sport_type, start_time, duration, distance, calories, avg_hr, max_speed
-    FROM activities WHERE sport_type IN (${placeholders})
-    ORDER BY start_time DESC LIMIT 30
-  `).all(...sportTypes) as any[];
+  const acts = await db.select({
+    sport_type: activitiesTable.sport_type,
+    start_time: activitiesTable.start_time,
+    duration: activitiesTable.duration,
+    distance: activitiesTable.distance,
+    calories: activitiesTable.calories,
+    avg_hr: activitiesTable.avg_hr,
+    max_speed: activitiesTable.max_speed,
+  }).from(activitiesTable)
+    .where(inArray(activitiesTable.sport_type, sportTypes))
+    .orderBy(desc(activitiesTable.start_time))
+    .limit(30);
 
   const sections: string[] = [];
   sections.push(`## Group: ${group.name} (${group.subtitle})\nSports included: ${sportTypes.join(', ')}`);
 
-  if (activities.length > 0) {
-    const lines = activities.map(a => {
+  if (acts.length > 0) {
+    const lines = acts.map(a => {
       const date = a.start_time.slice(0, 10);
       const dur = a.duration ? `${Math.round(a.duration / 60)}min` : '-';
       const dist = a.distance ? `${(a.distance / 1000).toFixed(1)}km` : '-';
       const spd = a.max_speed ? `${(a.max_speed * 3.6).toFixed(1)}km/h` : '-';
       return `${date} | ${a.sport_type} | ${dur} | ${dist} | velMax:${spd} | FC:${a.avg_hr ?? '-'}bpm | ${a.calories ?? '-'}kcal`;
     });
-    sections.push(`## Recent sessions (${activities.length})\n${lines.join('\n')}`);
+    sections.push(`## Recent sessions (${acts.length})\n${lines.join('\n')}`);
 
-    // Aggregate stats
-    const totalDur = activities.reduce((s: number, a: any) => s + (a.duration ?? 0), 0);
-    const totalDist = activities.reduce((s: number, a: any) => s + (a.distance ?? 0), 0);
-    const avgHr = Math.round(activities.filter((a: any) => a.avg_hr).reduce((s: number, a: any) => s + a.avg_hr, 0) / activities.filter((a: any) => a.avg_hr).length) || null;
+    const totalDur = acts.reduce((s, a) => s + (a.duration ?? 0), 0);
+    const totalDist = acts.reduce((s, a) => s + (a.distance ?? 0), 0);
+    const withHr = acts.filter(a => a.avg_hr);
+    const avgHr = withHr.length > 0 ? Math.round(withHr.reduce((s, a) => s + a.avg_hr!, 0) / withHr.length) : null;
     sections.push(`## Aggregated stats
-Total sessions: ${activities.length}
+Total sessions: ${acts.length}
 Total duration: ${Math.round(totalDur / 60)}min
 Total distance: ${(totalDist / 1000).toFixed(1)}km
 Avg HR: ${avgHr ? `${avgHr}bpm` : '-'}`);
 
-    // Personal bests
-    const fastest = activities.filter((a: any) => a.max_speed).sort((a: any, b: any) => b.max_speed - a.max_speed)[0];
-    const longest = activities.filter((a: any) => a.duration).sort((a: any, b: any) => b.duration - a.duration)[0];
+    const fastest = acts.filter(a => a.max_speed).sort((a, b) => b.max_speed! - a.max_speed!)[0];
+    const longest = acts.filter(a => a.duration).sort((a, b) => b.duration! - a.duration!)[0];
     if (fastest || longest) {
       const bests: string[] = [];
-      if (fastest) bests.push(`Max speed: ${(fastest.max_speed * 3.6).toFixed(1)}km/h (${fastest.start_time.slice(0, 10)})`);
-      if (longest) bests.push(`Longest session: ${Math.round(longest.duration / 60)}min (${longest.start_time.slice(0, 10)})`);
+      if (fastest) bests.push(`Max speed: ${(fastest.max_speed! * 3.6).toFixed(1)}km/h (${fastest.start_time.slice(0, 10)})`);
+      if (longest) bests.push(`Longest session: ${Math.round(longest.duration! / 60)}min (${longest.start_time.slice(0, 10)})`);
       sections.push(`## Personal records\n${bests.join('\n')}`);
     }
   }
@@ -196,59 +226,60 @@ Avg HR: ${avgHr ? `${avgHr}bpm` : '-'}`);
 }
 
 // --- Monthly summary context ---
-function buildMonthlyContext(payload: AnalyzePayload): string {
-  const month = payload.month || new Date().toISOString().slice(0, 7); // YYYY-MM
+async function buildMonthlyContext(payload: AnalyzePayload): Promise<string> {
+  const month = payload.month || new Date().toISOString().slice(0, 7);
   const startDate = `${month}-01`;
   const endDate = `${month}-31`;
   const sections: string[] = [];
 
-  // Activities in the month
-  const activities = db.prepare(`
-    SELECT sport_type, start_time, duration, distance, calories, avg_hr
-    FROM activities WHERE start_time >= ? AND start_time <= ?
-    ORDER BY start_time
-  `).all(startDate + 'T00:00:00', endDate + 'T23:59:59') as any[];
+  const acts = await db.select({
+    sport_type: activitiesTable.sport_type,
+    start_time: activitiesTable.start_time,
+    duration: activitiesTable.duration,
+    distance: activitiesTable.distance,
+    calories: activitiesTable.calories,
+    avg_hr: activitiesTable.avg_hr,
+  }).from(activitiesTable)
+    .where(and(
+      gte(activitiesTable.start_time, `${startDate}T00:00:00`),
+      lte(activitiesTable.start_time, `${endDate}T23:59:59`),
+    ))
+    .orderBy(activitiesTable.start_time);
 
-  if (activities.length > 0) {
-    // Group by sport type
-    const bySport: Record<string, any[]> = {};
-    for (const a of activities) {
+  if (acts.length > 0) {
+    const bySport: Record<string, typeof acts> = {};
+    for (const a of acts) {
       if (!bySport[a.sport_type]) bySport[a.sport_type] = [];
       bySport[a.sport_type].push(a);
     }
-    const sportSummaries = Object.entries(bySport).map(([sport, acts]) => {
-      const totalDur = acts.reduce((s, a) => s + (a.duration ?? 0), 0);
-      const totalDist = acts.reduce((s, a) => s + (a.distance ?? 0), 0);
-      return `${sport}: ${acts.length} sessions, ${Math.round(totalDur / 60)}min total${totalDist > 0 ? `, ${(totalDist / 1000).toFixed(1)}km` : ''}`;
+    const sportSummaries = Object.entries(bySport).map(([sport, sessActs]) => {
+      const totalDur = sessActs.reduce((s, a) => s + (a.duration ?? 0), 0);
+      const totalDist = sessActs.reduce((s, a) => s + (a.distance ?? 0), 0);
+      return `${sport}: ${sessActs.length} sessions, ${Math.round(totalDur / 60)}min total${totalDist > 0 ? `, ${(totalDist / 1000).toFixed(1)}km` : ''}`;
     });
-    sections.push(`## Training for month ${month}\nTotal: ${activities.length} sessions\n${sportSummaries.join('\n')}`);
-
-    // Training days distribution
-    const trainingDays = new Set(activities.map(a => a.start_time.slice(0, 10)));
+    sections.push(`## Training for month ${month}\nTotal: ${acts.length} sessions\n${sportSummaries.join('\n')}`);
+    const trainingDays = new Set(acts.map(a => a.start_time.slice(0, 10)));
     sections.push(`Days trained: ${trainingDays.size}`);
   } else {
     sections.push(`## Month ${month}\nNo activities recorded.`);
   }
 
-  // Sleep averages for the month
-  const sleepRows = db.prepare(`
-    SELECT score, duration_seconds FROM sleep
-    WHERE date >= ? AND date <= ? AND score IS NOT NULL
-  `).all(startDate, endDate) as any[];
+  const sleepRows = await db.select({ score: sleepTable.score, duration_seconds: sleepTable.duration_seconds })
+    .from(sleepTable)
+    .where(and(gte(sleepTable.date, startDate), lte(sleepTable.date, endDate), sql`${sleepTable.score} IS NOT NULL`));
 
   if (sleepRows.length > 0) {
-    const avgScore = Math.round(sleepRows.reduce((s: number, r: any) => s + r.score, 0) / sleepRows.length);
-    const avgDur = Math.round(sleepRows.reduce((s: number, r: any) => s + (r.duration_seconds ?? 0), 0) / sleepRows.length / 3600 * 10) / 10;
+    const avgScore = Math.round(sleepRows.reduce((s, r) => s + r.score!, 0) / sleepRows.length);
+    const avgDur = Math.round(sleepRows.reduce((s, r) => s + (r.duration_seconds ?? 0), 0) / sleepRows.length / 3600 * 10) / 10;
     sections.push(`## Sleep for month\nAvg score: ${avgScore}\nAvg duration: ${avgDur}h`);
   }
 
-  // Stress average
-  const stressRows = db.prepare(`
-    SELECT avg_stress FROM stress WHERE date >= ? AND date <= ? AND avg_stress IS NOT NULL
-  `).all(startDate, endDate) as any[];
+  const stressRows = await db.select({ avg_stress: stressTable.avg_stress })
+    .from(stressTable)
+    .where(and(gte(stressTable.date, startDate), lte(stressTable.date, endDate), sql`${stressTable.avg_stress} IS NOT NULL`));
 
   if (stressRows.length > 0) {
-    const avgStress = Math.round(stressRows.reduce((s: number, r: any) => s + r.avg_stress, 0) / stressRows.length);
+    const avgStress = Math.round(stressRows.reduce((s, r) => s + r.avg_stress!, 0) / stressRows.length);
     sections.push(`## Stress for month\nAvg stress: ${avgStress}`);
   }
 
@@ -256,8 +287,8 @@ function buildMonthlyContext(payload: AnalyzePayload): string {
 }
 
 // --- Daily briefing context (uses computeInsights) ---
-export function buildDailyContext(): string {
-  const { stats, recommendations } = computeInsights();
+async function buildDailyContext(): Promise<string> {
+  const { stats, recommendations } = await computeInsights();
   const sections: string[] = [];
 
   sections.push(`## Current status
@@ -272,20 +303,23 @@ Load 3d: ${stats.trainingLoad.last3d}min | Load 7d: ${stats.trainingLoad.last7d}
     sections.push(`## Insights engine alerts\n${recStr}`);
   }
 
-  // Today's plan
   const todayName = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][new Date().getDay()];
-  const plans = db.prepare('SELECT sport, detail, completed FROM weekly_plan WHERE day = ?').all(todayName) as any[];
+  const plans = await db.select({ sport: weekly_plan.sport, detail: weekly_plan.detail, completed: weekly_plan.completed })
+    .from(weekly_plan).where(eq(weekly_plan.day, todayName));
   if (plans.length > 0) {
     const planStr = plans.map(p => `- ${p.sport}${p.detail ? `: ${p.detail}` : ''} ${p.completed ? '✓' : '○'}`).join('\n');
     sections.push(`## Plan for today (${todayName})\n${planStr}`);
   }
 
-  // Today's nutrition
   const todayStr = new Date().toISOString().slice(0, 10);
-  const nutritionToday = db.prepare(`
-    SELECT SUM(calories) as cals, SUM(protein_g) as prot, SUM(carbs_g) as carbs, SUM(fat_g) as fat, COUNT(*) as meals
-    FROM nutrition_logs WHERE date = ?
-  `).get(todayStr) as any;
+  const [nutritionToday] = await db.select({
+    cals: sql<number>`SUM(${nutrition_logs.calories})`,
+    prot: sql<number>`SUM(${nutrition_logs.protein_g})`,
+    carbs: sql<number>`SUM(${nutrition_logs.carbs_g})`,
+    fat: sql<number>`SUM(${nutrition_logs.fat_g})`,
+    meals: sql<number>`COUNT(*)`,
+  }).from(nutrition_logs).where(eq(nutrition_logs.date, todayStr));
+
   if (nutritionToday?.meals > 0) {
     sections.push(`## Today's nutrition\n${nutritionToday.meals} meals | ${nutritionToday.cals || 0}kcal | prot:${nutritionToday.prot || 0}g | carbs:${nutritionToday.carbs || 0}g | fat:${nutritionToday.fat || 0}g`);
   }
@@ -294,8 +328,8 @@ Load 3d: ${stats.trainingLoad.last3d}min | Load 7d: ${stats.trainingLoad.last7d}
 }
 
 // --- User assessment context ---
-export function getAssessmentContext(): string {
-  const row = db.prepare('SELECT * FROM user_assessment WHERE id = 1').get() as any;
+export async function getAssessmentContext(): Promise<string> {
+  const [row] = await db.select().from(user_assessment).where(eq(user_assessment.id, 1)).limit(1);
   if (!row) return '';
 
   const lines: string[] = [];
@@ -305,21 +339,18 @@ export function getAssessmentContext(): string {
   if (row.weight) lines.push(`Weight: ${row.weight} kg`);
   if (row.fitness_level) lines.push(`Fitness level: ${row.fitness_level}`);
 
-  if (row.goals) {
-    try { const g = JSON.parse(row.goals); if (g.length > 0) lines.push(`Training goals: ${g.join(', ')}`); } catch {}
-  }
+  const goals = row.goals as string[] | null;
+  if (goals?.length) lines.push(`Training goals: ${goals.join(', ')}`);
   if (row.goals_other) lines.push(`Other goals: ${row.goals_other}`);
   if (row.sport_practice) lines.push(`Practices sports: ${row.sport_practice}`);
   if (row.sport_name) lines.push(`Sports practiced: ${row.sport_name}`);
 
-  if (row.available_days) {
-    try { const d = JSON.parse(row.available_days); if (d.length > 0) lines.push(`Available training days: ${d.join(', ')}`); } catch {}
-  }
+  const availDays = row.available_days as string[] | null;
+  if (availDays?.length) lines.push(`Available training days: ${availDays.join(', ')}`);
   if (row.session_duration) lines.push(`Available session duration: ${row.session_duration} minutes`);
 
-  if (row.equipment) {
-    try { const e = JSON.parse(row.equipment); if (e.length > 0) lines.push(`Available equipment: ${e.join(', ')}`); } catch {}
-  }
+  const equipment = row.equipment as string[] | null;
+  if (equipment?.length) lines.push(`Available equipment: ${equipment.join(', ')}`);
   if (row.equipment_other) lines.push(`Additional equipment: ${row.equipment_other}`);
   if (row.injuries_limitations) lines.push(`Current injuries/limitations: ${row.injuries_limitations}`);
   if (row.training_preferences) lines.push(`Training preferences: ${row.training_preferences}`);
@@ -334,22 +365,30 @@ export function getAssessmentContext(): string {
 }
 
 // --- Training plan context ---
-export function buildTrainingContext(goal: string): string {
+export async function buildTrainingContext(goal: string): Promise<string> {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const sections: string[] = [];
 
-  const assessmentCtx = getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext();
   if (assessmentCtx) sections.push(assessmentCtx);
 
   sections.push(`## User's goal\n${goal}`);
 
-  // Activities
-  const activities = db.prepare(`
-    SELECT sport_type, start_time, duration, distance, avg_hr, max_speed, calories
-    FROM activities WHERE start_time >= ? ORDER BY start_time DESC LIMIT 40
-  `).all(cutoff + 'T00:00:00') as any[];
-  if (activities.length > 0) {
-    const lines = activities.map((a: any) => {
+  const acts = await db.select({
+    sport_type: activitiesTable.sport_type,
+    start_time: activitiesTable.start_time,
+    duration: activitiesTable.duration,
+    distance: activitiesTable.distance,
+    avg_hr: activitiesTable.avg_hr,
+    max_speed: activitiesTable.max_speed,
+    calories: activitiesTable.calories,
+  }).from(activitiesTable)
+    .where(gte(activitiesTable.start_time, `${cutoff}T00:00:00`))
+    .orderBy(desc(activitiesTable.start_time))
+    .limit(40);
+
+  if (acts.length > 0) {
+    const lines = acts.map(a => {
       const dur = a.duration ? `${Math.round(a.duration / 60)}min` : '-';
       const dist = a.distance ? `${(a.distance / 1000).toFixed(1)}km` : '-';
       const spd = a.max_speed ? `${(a.max_speed * 3.6).toFixed(1)}km/h` : '-';
@@ -358,74 +397,75 @@ export function buildTrainingContext(goal: string): string {
     sections.push(`## Recent activities (30 days)\nDate | Sport | Duration | Distance | MaxSpd | AvgHR\n${lines.join('\n')}`);
   }
 
-  // Sport groups (to know the user's categories)
-  const groups = db.prepare('SELECT name, sport_types FROM sport_groups ORDER BY sort_order').all() as any[];
+  const groups = await db.select({ name: sport_groups.name, sport_types: sport_groups.sport_types })
+    .from(sport_groups).orderBy(sport_groups.sort_order);
   if (groups.length > 0) {
-    const groupStr = groups.map((g: any) => {
-      const types = JSON.parse(g.sport_types ?? '[]').join(', ');
-      return `- ${g.name}: ${types}`;
-    }).join('\n');
+    const groupStr = groups.map(g => `- ${g.name}: ${(g.sport_types as string[]).join(', ')}`).join('\n');
     sections.push(`## User's sport categories\n${groupStr}`);
   }
 
-  // Sleep (last 2 weeks)
-  const sleep = db.prepare(`
-    SELECT date, score, duration_seconds, deep_seconds, rem_seconds
-    FROM sleep WHERE date >= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 14
-  `).all(cutoff) as any[];
-  if (sleep.length > 0) {
-    const avgScore = Math.round(sleep.reduce((s: number, r: any) => s + r.score, 0) / sleep.length);
-    const lines = sleep.slice(0, 7).map((s: any) => {
+  const sleepRows = await db.select({
+    date: sleepTable.date, score: sleepTable.score, duration_seconds: sleepTable.duration_seconds,
+    deep_seconds: sleepTable.deep_seconds, rem_seconds: sleepTable.rem_seconds,
+  }).from(sleepTable)
+    .where(and(gte(sleepTable.date, cutoff), sql`${sleepTable.score} IS NOT NULL`))
+    .orderBy(desc(sleepTable.date)).limit(14);
+
+  if (sleepRows.length > 0) {
+    const avgScore = Math.round(sleepRows.reduce((s, r) => s + r.score!, 0) / sleepRows.length);
+    const lines = sleepRows.slice(0, 7).map(s => {
       const dur = s.duration_seconds ? `${Math.floor(s.duration_seconds / 3600)}h${Math.round((s.duration_seconds % 3600) / 60)}m` : '-';
       return `${s.date} | score:${s.score} | total:${dur}`;
     });
     sections.push(`## Recent sleep (avg score: ${avgScore})\n${lines.join('\n')}`);
   }
 
-  // HRV
-  const hrv = db.prepare(`
-    SELECT date, nightly_avg, status FROM hrv
-    WHERE date >= ? AND nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 7
-  `).all(cutoff) as any[];
-  if (hrv.length > 0) {
-    const avgHrv = (hrv.reduce((s: number, r: any) => s + r.nightly_avg, 0) / hrv.length).toFixed(1);
-    sections.push(`## Recent HRV (avg: ${avgHrv}ms)\n${hrv.map((h: any) => `${h.date} | ${Number(h.nightly_avg).toFixed(1)}ms | ${h.status ?? '-'}`).join('\n')}`);
+  const hrvRows = await db.select({ date: hrvTable.date, nightly_avg: hrvTable.nightly_avg, status: hrvTable.status })
+    .from(hrvTable)
+    .where(and(gte(hrvTable.date, cutoff), sql`${hrvTable.nightly_avg} IS NOT NULL`))
+    .orderBy(desc(hrvTable.date)).limit(7);
+
+  if (hrvRows.length > 0) {
+    const avgHrv = (hrvRows.reduce((s, r) => s + r.nightly_avg!, 0) / hrvRows.length).toFixed(1);
+    sections.push(`## Recent HRV (avg: ${avgHrv}ms)\n${hrvRows.map(h => `${h.date} | ${Number(h.nightly_avg).toFixed(1)}ms | ${h.status ?? '-'}`).join('\n')}`);
   }
 
-  // Stress
-  const stress = db.prepare(`
-    SELECT date, avg_stress FROM stress
-    WHERE date >= ? AND avg_stress IS NOT NULL ORDER BY date DESC LIMIT 7
-  `).all(cutoff) as any[];
-  if (stress.length > 0) {
-    const avgStress = Math.round(stress.reduce((s: number, r: any) => s + r.avg_stress, 0) / stress.length);
-    sections.push(`## Recent stress (avg: ${avgStress})\n${stress.map((s: any) => `${s.date} | ${s.avg_stress}`).join('\n')}`);
+  const stressRows = await db.select({ date: stressTable.date, avg_stress: stressTable.avg_stress })
+    .from(stressTable)
+    .where(and(gte(stressTable.date, cutoff), sql`${stressTable.avg_stress} IS NOT NULL`))
+    .orderBy(desc(stressTable.date)).limit(7);
+
+  if (stressRows.length > 0) {
+    const avgStress = Math.round(stressRows.reduce((s, r) => s + r.avg_stress!, 0) / stressRows.length);
+    sections.push(`## Recent stress (avg: ${avgStress})\n${stressRows.map(s => `${s.date} | ${s.avg_stress}`).join('\n')}`);
   }
 
-  // Average nutritional intake 7 days (relevant for training plan — protein/kg)
-  const nutritionRows = db.prepare(`
-    SELECT SUM(calories) as cals, SUM(protein_g) as prot, SUM(carbs_g) as carbs, SUM(fat_g) as fat, COUNT(DISTINCT date) as days
-    FROM nutrition_logs WHERE date >= ?
-  `).get(cutoff) as any;
-  if (nutritionRows?.days > 0) {
-    const avgCals = Math.round(nutritionRows.cals / nutritionRows.days);
-    const avgProt = Math.round(nutritionRows.prot / nutritionRows.days);
-    const avgCarbs = Math.round(nutritionRows.carbs / nutritionRows.days);
-    const avgFat = Math.round(nutritionRows.fat / nutritionRows.days);
-    sections.push(`## Average nutritional intake (${nutritionRows.days} days with records)\n${avgCals}kcal/day | prot:${avgProt}g | carbs:${avgCarbs}g | fat:${avgFat}g`);
+  const [nutritionRow] = await db.select({
+    cals: sql<number>`SUM(${nutrition_logs.calories})`,
+    prot: sql<number>`SUM(${nutrition_logs.protein_g})`,
+    carbs: sql<number>`SUM(${nutrition_logs.carbs_g})`,
+    fat: sql<number>`SUM(${nutrition_logs.fat_g})`,
+    days: sql<number>`COUNT(DISTINCT ${nutrition_logs.date})`,
+  }).from(nutrition_logs).where(gte(nutrition_logs.date, cutoff));
+
+  if (nutritionRow?.days > 0) {
+    const avgCals = Math.round(nutritionRow.cals / nutritionRow.days);
+    const avgProt = Math.round(nutritionRow.prot / nutritionRow.days);
+    const avgCarbs = Math.round(nutritionRow.carbs / nutritionRow.days);
+    const avgFat = Math.round(nutritionRow.fat / nutritionRow.days);
+    sections.push(`## Average nutritional intake (${nutritionRow.days} days with records)\n${avgCals}kcal/day | prot:${avgProt}g | carbs:${avgCarbs}g | fat:${avgFat}g`);
   }
 
   return sections.join('\n\n');
 }
 
 // --- Goal plan context ---
-export function buildGoalContext(objective: string, targetDate?: string): string {
+export async function buildGoalContext(objective: string, targetDate?: string): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
   const sections: string[] = [];
 
-  const assessmentCtx = getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext();
   if (assessmentCtx) sections.push(assessmentCtx);
 
   sections.push(`## User's goal\n${objective}`);
@@ -439,12 +479,19 @@ export function buildGoalContext(objective: string, targetDate?: string): string
     sections.push(`## Timeline information\nToday's date: ${today}\nNo target date defined. Use realistic durations for the goal.`);
   }
 
-  const activities = db.prepare(`
-    SELECT sport_type, start_time, duration, distance, avg_hr
-    FROM activities WHERE start_time >= ? ORDER BY start_time DESC LIMIT 30
-  `).all(cutoff + 'T00:00:00') as any[];
-  if (activities.length > 0) {
-    const lines = activities.map((a: any) => {
+  const acts = await db.select({
+    sport_type: activitiesTable.sport_type,
+    start_time: activitiesTable.start_time,
+    duration: activitiesTable.duration,
+    distance: activitiesTable.distance,
+    avg_hr: activitiesTable.avg_hr,
+  }).from(activitiesTable)
+    .where(gte(activitiesTable.start_time, `${cutoff}T00:00:00`))
+    .orderBy(desc(activitiesTable.start_time))
+    .limit(30);
+
+  if (acts.length > 0) {
+    const lines = acts.map(a => {
       const dur = a.duration ? `${Math.round(a.duration / 60)}min` : '-';
       const dist = a.distance ? `${(a.distance / 1000).toFixed(1)}km` : '-';
       return `${a.start_time.slice(0, 10)} | ${a.sport_type} | ${dur} | ${dist} | FC:${a.avg_hr ?? '-'}bpm`;
@@ -452,27 +499,31 @@ export function buildGoalContext(objective: string, targetDate?: string): string
     sections.push(`## Recent activities (30 days)\n${lines.join('\n')}`);
   }
 
-  const groups = db.prepare('SELECT name, sport_types FROM sport_groups ORDER BY sort_order').all() as any[];
+  const groups = await db.select({ name: sport_groups.name, sport_types: sport_groups.sport_types })
+    .from(sport_groups).orderBy(sport_groups.sort_order);
   if (groups.length > 0) {
-    const groupStr = groups.map((g: any) => `- ${g.name}: ${JSON.parse(g.sport_types ?? '[]').join(', ')}`).join('\n');
+    const groupStr = groups.map(g => `- ${g.name}: ${(g.sport_types as string[]).join(', ')}`).join('\n');
     sections.push(`## User's sports\n${groupStr}`);
   }
 
-  const sleep = db.prepare(`
-    SELECT date, score FROM sleep WHERE date >= ? AND score IS NOT NULL ORDER BY date DESC LIMIT 7
-  `).all(cutoff) as any[];
-  if (sleep.length > 0) {
-    const avgScore = Math.round(sleep.reduce((s: number, r: any) => s + r.score, 0) / sleep.length);
-    sections.push(`## Recent sleep (avg score: ${avgScore})\n${sleep.map((s: any) => `${s.date} | score:${s.score}`).join('\n')}`);
+  const sleepRows = await db.select({ date: sleepTable.date, score: sleepTable.score })
+    .from(sleepTable)
+    .where(and(gte(sleepTable.date, cutoff), sql`${sleepTable.score} IS NOT NULL`))
+    .orderBy(desc(sleepTable.date)).limit(7);
+
+  if (sleepRows.length > 0) {
+    const avgScore = Math.round(sleepRows.reduce((s, r) => s + r.score!, 0) / sleepRows.length);
+    sections.push(`## Recent sleep (avg score: ${avgScore})\n${sleepRows.map(s => `${s.date} | score:${s.score}`).join('\n')}`);
   }
 
-  const hrv = db.prepare(`
-    SELECT date, nightly_avg, status FROM hrv
-    WHERE date >= ? AND nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 7
-  `).all(cutoff) as any[];
-  if (hrv.length > 0) {
-    const avgHrv = (hrv.reduce((s: number, r: any) => s + r.nightly_avg, 0) / hrv.length).toFixed(1);
-    sections.push(`## Recent HRV (avg: ${avgHrv}ms)\n${hrv.map((h: any) => `${h.date} | ${Number(h.nightly_avg).toFixed(1)}ms | ${h.status ?? '-'}`).join('\n')}`);
+  const hrvRows = await db.select({ date: hrvTable.date, nightly_avg: hrvTable.nightly_avg, status: hrvTable.status })
+    .from(hrvTable)
+    .where(and(gte(hrvTable.date, cutoff), sql`${hrvTable.nightly_avg} IS NOT NULL`))
+    .orderBy(desc(hrvTable.date)).limit(7);
+
+  if (hrvRows.length > 0) {
+    const avgHrv = (hrvRows.reduce((s, r) => s + r.nightly_avg!, 0) / hrvRows.length).toFixed(1);
+    sections.push(`## Recent HRV (avg: ${avgHrv}ms)\n${hrvRows.map(h => `${h.date} | ${Number(h.nightly_avg).toFixed(1)}ms | ${h.status ?? '-'}`).join('\n')}`);
   }
 
   return sections.join('\n\n');
@@ -481,8 +532,8 @@ export function buildGoalContext(objective: string, targetDate?: string): string
 // --- Main dispatcher ---
 export type AnalyzeMode = 'session' | 'sleep' | 'wellness' | 'sport' | 'monthly' | 'daily';
 
-export function buildAnalyzeContext(mode: AnalyzeMode, payload: AnalyzePayload): string {
-  const modeContext = (() => {
+export async function buildAnalyzeContext(mode: AnalyzeMode, payload: AnalyzePayload): Promise<string> {
+  const modeContext = await (async () => {
     switch (mode) {
       case 'session': return buildSessionContext(payload);
       case 'sleep': return buildSleepContext(payload);
@@ -494,7 +545,7 @@ export function buildAnalyzeContext(mode: AnalyzeMode, payload: AnalyzePayload):
     }
   })();
 
-  const assessmentCtx = getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext();
   if (!assessmentCtx) return modeContext;
   return modeContext ? `${assessmentCtx}\n\n${modeContext}` : assessmentCtx;
 }

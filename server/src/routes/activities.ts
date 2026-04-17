@@ -1,5 +1,7 @@
 import { Router } from 'express';
-import db from '../db.js';
+import { eq, desc, asc, and, gte, lte, sql } from 'drizzle-orm';
+import db from '../db/client.js';
+import { activities, sport_groups, sleep, stress, hrv } from '../db/schema/index.js';
 
 const router = Router();
 
@@ -9,23 +11,15 @@ function getDateRange(period: string): { start: string; end: string } {
   const start = new Date(now);
 
   switch (period) {
-    case 'daily':
-      start.setDate(start.getDate() - 1);
-      break;
-    case 'weekly':
-      start.setDate(start.getDate() - 7);
-      break;
-    case 'monthly':
-      start.setMonth(start.getMonth() - 1);
-      break;
-    default:
-      start.setDate(start.getDate() - 7);
+    case 'daily':  start.setDate(start.getDate() - 1); break;
+    case 'weekly': start.setDate(start.getDate() - 7); break;
+    case 'monthly': start.setMonth(start.getMonth() - 1); break;
+    default: start.setDate(start.getDate() - 7);
   }
 
   return { start: start.toISOString().split('T')[0], end };
 }
 
-// Normalize sport_type the same way sync.ts does (strip _v2 suffixes etc.)
 function normalizeSportType(raw: string): string {
   return raw.toLowerCase().replace(/\s+/g, '_').replace(/_v\d+$/, '');
 }
@@ -33,29 +27,29 @@ function normalizeSportType(raw: string): string {
 const round = (n: number) => Math.round(n * 10) / 10;
 
 // GET /api/activities/sport-types
-router.get('/sport-types', (_req, res) => {
-  const rows = db.prepare('SELECT DISTINCT sport_type FROM activities ORDER BY sport_type').all() as any[];
+router.get('/sport-types', async (_req, res) => {
+  const rows = await db.selectDistinct({ sport_type: activities.sport_type })
+    .from(activities)
+    .orderBy(asc(activities.sport_type));
   res.json(rows.map((r) => normalizeSportType(r.sport_type)));
 });
 
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const period = (req.query.period as string) || 'weekly';
 
-  // Load sport groups
-  const groupRows = db.prepare('SELECT * FROM sport_groups ORDER BY sort_order ASC').all() as any[];
+  const groupRows = await db.select().from(sport_groups).orderBy(asc(sport_groups.sort_order));
   const groups = groupRows.map((g) => ({
     id: g.id,
     name: g.name,
     subtitle: g.subtitle,
     color: g.color,
     icon: g.icon,
-    metrics: JSON.parse(g.metrics) as string[],
-    chartMetrics: JSON.parse(g.chart_metrics) as { dataKey: string; name: string; type: 'bar' | 'line' }[],
-    sportTypes: JSON.parse(g.sport_types) as string[],
+    metrics: g.metrics as string[],
+    chartMetrics: g.chart_metrics as { dataKey: string; name: string; type: 'bar' | 'line' }[],
+    sportTypes: g.sport_types as string[],
     sortOrder: g.sort_order,
   }));
 
-  // Build sport_type → group_id map
   const sportTypeToGroup: Record<string, string> = {};
   for (const g of groups) {
     for (const st of g.sportTypes) {
@@ -63,22 +57,23 @@ router.get('/', (req, res) => {
     }
   }
 
-  // Activities for selected period
-  const rows = period === 'total'
-    ? db.prepare(`SELECT * FROM activities ORDER BY start_time DESC`).all() as any[]
-    : (() => {
-        const { start, end } = getDateRange(period);
-        return db.prepare(
-          `SELECT * FROM activities WHERE date(start_time) >= ? AND date(start_time) <= ? ORDER BY start_time DESC`
-        ).all(start, end) as any[];
-      })();
+  let rows: (typeof activities.$inferSelect)[];
+  if (period === 'total') {
+    rows = await db.select().from(activities).orderBy(desc(activities.start_time));
+  } else {
+    const { start, end } = getDateRange(period);
+    rows = await db.select().from(activities)
+      .where(and(
+        gte(sql`LEFT(${activities.start_time}, 10)`, start),
+        lte(sql`LEFT(${activities.start_time}, 10)`, end),
+      ))
+      .orderBy(desc(activities.start_time));
+  }
 
-  // Aggregate per group
   const groupData: Record<string, { sessions: number; distance: number; duration: number; calories: number; avg_hr_sum: number; avg_hr_count: number; max_speed: number }> = {};
   for (const g of groups) {
     groupData[g.id] = { sessions: 0, distance: 0, duration: 0, calories: 0, avg_hr_sum: 0, avg_hr_count: 0, max_speed: 0 };
   }
-
   const others: Record<string, { name: string; sessions: number; distance: number; duration: number }> = {};
 
   for (const row of rows) {
@@ -101,7 +96,6 @@ router.get('/', (req, res) => {
     }
   }
 
-  // Build groups response
   const groupsResponse = groups.map((g) => {
     const d = groupData[g.id];
     const data: Record<string, number> = {
@@ -112,27 +106,16 @@ router.get('/', (req, res) => {
       avg_hr: d.avg_hr_count > 0 ? Math.round(d.avg_hr_sum / d.avg_hr_count) : 0,
       max_speed: Math.round(d.max_speed),
     };
-    return {
-      id: g.id,
-      name: g.name,
-      subtitle: g.subtitle,
-      color: g.color,
-      icon: g.icon,
-      metrics: g.metrics,
-      chartMetrics: g.chartMetrics,
-      sortOrder: g.sortOrder,
-      data,
-    };
+    return { id: g.id, name: g.name, subtitle: g.subtitle, color: g.color, icon: g.icon, metrics: g.metrics, chartMetrics: g.chartMetrics, sortOrder: g.sortOrder, data };
   });
 
-  // Volume history (last 6 months) — kept for compatibility
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
 
-  const volumeRows = db.prepare(
-    `SELECT * FROM activities WHERE date(start_time) >= ? ORDER BY start_time`
-  ).all(sixMonthsAgoStr) as any[];
+  const volumeRows = await db.select().from(activities)
+    .where(gte(sql`LEFT(${activities.start_time}, 10)`, sixMonthsAgoStr))
+    .orderBy(asc(activities.start_time));
 
   const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const volumeByMonth: Record<string, Record<string, number>> = {};
@@ -153,7 +136,6 @@ router.get('/', (req, res) => {
   }
   const volumeHistory = Object.entries(volumeByMonth).map(([month, data]) => ({ month, ...data }));
 
-  // Chart data per group (per-session, last 6 months)
   const chartData: Record<string, any[]> = {};
   for (const g of groups) chartData[g.id] = [];
 
@@ -172,8 +154,7 @@ router.get('/', (req, res) => {
     });
   }
 
-  // Recent sessions
-  const recentSessions = rows.slice(0, 3).map((r: any) => ({
+  const recentSessions = rows.slice(0, 3).map((r) => ({
     sport: (r.sport_type ?? 'unknown').toUpperCase().replace(/_V\d+/g, '').replace(/_/g, ' '),
     date: r.start_time.split('T')[0],
     duration: Math.round((r.duration ?? 0) / 60),
@@ -182,31 +163,27 @@ router.get('/', (req, res) => {
     calories: r.calories ?? 0,
   }));
 
-  // Training readiness composite score
-  const sleepForReadiness = db.prepare(
-    `SELECT score FROM sleep WHERE score IS NOT NULL ORDER BY date DESC LIMIT 1`
-  ).get() as any;
-  const stressForReadiness = db.prepare(
-    `SELECT avg_stress FROM stress WHERE avg_stress IS NOT NULL ORDER BY date DESC LIMIT 1`
-  ).get() as any;
-  const hrvForReadiness = db.prepare(
-    `SELECT nightly_avg FROM hrv WHERE nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 1`
-  ).get() as any;
+  const [sleepForReadiness] = await db.select({ score: sleep.score })
+    .from(sleep).where(sql`${sleep.score} IS NOT NULL`).orderBy(desc(sleep.date)).limit(1);
+  const [stressForReadiness] = await db.select({ avg_stress: stress.avg_stress })
+    .from(stress).where(sql`${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(1);
+  const [hrvForReadiness] = await db.select({ nightly_avg: hrv.nightly_avg })
+    .from(hrv).where(sql`${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(1);
 
   const slp = sleepForReadiness?.score ?? 0;
-  const stress = stressForReadiness?.avg_stress ?? 0;
-  const stressInv = stress > 0 ? 100 - stress : 0;
-  const hrv = hrvForReadiness?.nightly_avg ?? 0;
+  const stressVal = stressForReadiness?.avg_stress ?? 0;
+  const stressInv = stressVal > 0 ? 100 - stressVal : 0;
+  const hrvVal = hrvForReadiness?.nightly_avg ?? 0;
   let hrvScore = 0;
-  if (hrv > 0) {
-    if (hrv >= 99) hrvScore = 100;
-    else if (hrv <= 20) hrvScore = 10;
-    else if (hrv <= 38) hrvScore = Math.round(10 + ((hrv - 20) / 18) * 35);
-    else hrvScore = Math.round(45 + ((hrv - 38) / 61) * 55);
+  if (hrvVal > 0) {
+    if (hrvVal >= 99) hrvScore = 100;
+    else if (hrvVal <= 20) hrvScore = 10;
+    else if (hrvVal <= 38) hrvScore = Math.round(10 + ((hrvVal - 20) / 18) * 35);
+    else hrvScore = Math.round(45 + ((hrvVal - 38) / 61) * 55);
   }
-  const weights = (slp > 0 ? 0.4 : 0) + (stress > 0 ? 0.3 : 0) + (hrv > 0 ? 0.3 : 0);
+  const weights = (slp > 0 ? 0.4 : 0) + (stressVal > 0 ? 0.3 : 0) + (hrvVal > 0 ? 0.3 : 0);
   const trainingReadiness = weights > 0
-    ? Math.round((slp * (slp > 0 ? 0.4 : 0) + stressInv * (stress > 0 ? 0.3 : 0) + hrvScore * (hrv > 0 ? 0.3 : 0)) / weights)
+    ? Math.round((slp * (slp > 0 ? 0.4 : 0) + stressInv * (stressVal > 0 ? 0.3 : 0) + hrvScore * (hrvVal > 0 ? 0.3 : 0)) / weights)
     : null;
 
   res.json({
@@ -224,33 +201,31 @@ router.get('/', (req, res) => {
   });
 });
 
-router.get('/category/:category', (req, res) => {
+router.get('/category/:category', async (req, res) => {
   const { category } = req.params;
   const period = (req.query.period as string) || 'total';
 
-  // Look up group by id in sport_groups
-  const groupRow = db.prepare('SELECT * FROM sport_groups WHERE id = ?').get(category) as any;
+  const [groupRow] = await db.select().from(sport_groups).where(eq(sport_groups.id, category));
   if (!groupRow) {
-    return res.status(404).json({ error: 'Group not found' });
+    res.status(404).json({ error: 'Group not found' });
+    return;
   }
 
-  const sportTypes: string[] = JSON.parse(groupRow.sport_types);
+  const sportTypes = groupRow.sport_types as string[];
 
-  // All activities for this group (for personal bests — always all-time)
-  const allRows = db.prepare(`SELECT * FROM activities ORDER BY start_time DESC`).all() as any[];
+  const allRows = await db.select().from(activities).orderBy(desc(activities.start_time));
   const allGroupRows = allRows.filter((r) => sportTypes.includes(normalizeSportType(r.sport_type)));
 
-  // Filter by period for stats/chart/list
-  let rows = allGroupRows;
+  let filteredRows = allGroupRows;
   if (period !== 'total') {
     const { start, end } = getDateRange(period);
-    rows = allGroupRows.filter((r) => {
+    filteredRows = allGroupRows.filter((r) => {
       const d = r.start_time.split('T')[0];
       return d >= start && d <= end;
     });
   }
 
-  const mapActivity = (r: any) => ({
+  const mapActivity = (r: typeof activities.$inferSelect) => ({
     id: r.garmin_id,
     date: r.start_time.split('T')[0],
     sportType: r.sport_type,
@@ -261,18 +236,15 @@ router.get('/category/:category', (req, res) => {
     calories: r.calories ?? null,
   });
 
-  // Filtered activities (for stats + chart + list)
-  const activities = rows.map(mapActivity);
-
-  // All-time activities (for personal bests only)
+  const activityList = filteredRows.map(mapActivity);
   const allActivities = allGroupRows.map(mapActivity);
 
-  const totalSessions = activities.length;
-  const totalDuration = activities.reduce((s, a) => s + a.duration, 0);
-  const totalCalories = activities.reduce((s, a) => s + (a.calories ?? 0), 0);
-  const totalDistance = round(activities.reduce((s, a) => s + a.distance, 0));
+  const totalSessions = activityList.length;
+  const totalDuration = activityList.reduce((s, a) => s + a.duration, 0);
+  const totalCalories = activityList.reduce((s, a) => s + (a.calories ?? 0), 0);
+  const totalDistance = round(activityList.reduce((s, a) => s + a.distance, 0));
   const avgDuration = totalSessions ? Math.round(totalDuration / totalSessions) : 0;
-  const hrActivities = activities.filter((a) => a.avgHr);
+  const hrActivities = activityList.filter((a) => a.avgHr);
   const avgHr = hrActivities.length
     ? Math.round(hrActivities.reduce((s, a) => s + (a.avgHr ?? 0), 0) / hrActivities.length)
     : null;
@@ -304,10 +276,10 @@ router.get('/category/:category', (req, res) => {
       subtitle: groupRow.subtitle,
       color: groupRow.color,
       icon: groupRow.icon,
-      metrics: JSON.parse(groupRow.metrics),
-      chartMetrics: JSON.parse(groupRow.chart_metrics),
+      metrics: groupRow.metrics,
+      chartMetrics: groupRow.chart_metrics,
     },
-    activities,
+    activities: activityList,
     stats: {
       totalSessions,
       totalDistance: hasDistance ? totalDistance : undefined,
@@ -326,10 +298,10 @@ router.get('/category/:category', (req, res) => {
 });
 
 // GET /api/activities/:id — full session detail from raw_json
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   const { id } = req.params;
-  const row = db.prepare('SELECT * FROM activities WHERE garmin_id = ?').get(id) as any;
-  if (!row) return res.status(404).json({ error: 'Activity not found' });
+  const [row] = await db.select().from(activities).where(eq(activities.garmin_id, id));
+  if (!row) { res.status(404).json({ error: 'Activity not found' }); return; }
 
   const raw = JSON.parse(row.raw_json ?? '{}');
 
@@ -353,7 +325,6 @@ router.get('/:id', (req, res) => {
     startLat: raw.startLatitude ?? null,
     startLon: raw.startLongitude ?? null,
     hasPolyline: raw.hasPolyline ?? false,
-    // Performance
     duration: Math.round((row.duration ?? 0) / 60),
     distance: round((row.distance ?? 0) / 1000),
     avgSpeed: raw.averageSpeed ? round(raw.averageSpeed * 3.6) : null,
@@ -361,13 +332,11 @@ router.get('/:id', (req, res) => {
     calories: row.calories ?? null,
     avgHr: row.avg_hr ?? null,
     maxHr: raw.maxHR ?? null,
-    // Training effect
     aerobicEffect: raw.aerobicTrainingEffect ? round(raw.aerobicTrainingEffect) : null,
     anaerobicEffect: raw.anaerobicTrainingEffect ? round(raw.anaerobicTrainingEffect) : null,
     trainingEffectLabel: raw.trainingEffectLabel ?? null,
     trainingLoad: raw.activityTrainingLoad ? Math.round(raw.activityTrainingLoad) : null,
     differenceBodyBattery: raw.differenceBodyBattery ?? null,
-    // HR Zones (seconds + % of total zone time)
     hrZones: hrZones.map((z) => ({
       ...z,
       pct: totalZoneSeconds > 0 ? Math.round((z.seconds / totalZoneSeconds) * 100) : 0,

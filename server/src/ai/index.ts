@@ -1,7 +1,9 @@
 // ai/index.ts — Unified handler for /api/ai/analyze
 
 import { Request, Response } from 'express';
-import db from '../db.js';
+import { eq } from 'drizzle-orm';
+import db from '../db/client.js';
+import { ai_cache } from '../db/schema/core.js';
 import { buildAnalyzeContext, getCacheKey, type AnalyzeMode } from './context.js';
 import { PROMPTS } from './prompts.js';
 import { pickProviderFromReq, isAIConfigured } from './providers/index.js';
@@ -31,9 +33,9 @@ export async function handleAnalyze(req: Request, res: Response) {
   const analyzeMode = mode as AnalyzeMode;
   const cacheKey = getCacheKey(analyzeMode, payload);
 
-  // Check cache (unless force=true)
   if (!force) {
-    const cached = db.prepare('SELECT content, created_at FROM ai_cache WHERE cache_key = ?').get(cacheKey) as any;
+    const [cached] = await db.select({ content: ai_cache.content, created_at: ai_cache.created_at })
+      .from(ai_cache).where(eq(ai_cache.cache_key, cacheKey)).limit(1);
     if (cached) {
       console.log(`[ai] Cache hit: ${cacheKey}`);
       res.json({
@@ -46,8 +48,7 @@ export async function handleAnalyze(req: Request, res: Response) {
     }
   }
 
-  // Build context and prompt
-  const context = buildAnalyzeContext(analyzeMode, payload);
+  const context = await buildAnalyzeContext(analyzeMode, payload);
   const systemPrompt = `${PROMPTS[analyzeMode] || PROMPTS.chat}\n\nUser data:\n${context || 'No data available.'}`;
   const userMessage = getDefaultUserMessage(analyzeMode, payload);
 
@@ -59,11 +60,22 @@ export async function handleAnalyze(req: Request, res: Response) {
     systemPrompt,
     messages: [{ role: 'user', content: userMessage }],
     res,
-    beforeDone: (fullContent) => {
+    beforeDone: async (fullContent) => {
       if (fullContent.length > 0) {
-        db.prepare(
-          'INSERT OR REPLACE INTO ai_cache (cache_key, mode, content, model, created_at) VALUES (?, ?, ?, ?, ?)'
-        ).run(cacheKey, analyzeMode, fullContent, provider.name, new Date().toISOString());
+        await db.insert(ai_cache).values({
+          cache_key: cacheKey,
+          mode: analyzeMode,
+          content: fullContent,
+          model: provider.name,
+          created_at: new Date().toISOString(),
+        }).onConflictDoUpdate({
+          target: ai_cache.cache_key,
+          set: {
+            content: fullContent,
+            model: provider.name,
+            created_at: new Date().toISOString(),
+          },
+        });
         console.log(`[ai] Cached: ${cacheKey} (${fullContent.length} chars)`);
       }
       res.write(`data: ${JSON.stringify({ done: true, cached: false, generatedAt: new Date().toISOString() })}\n\n`);

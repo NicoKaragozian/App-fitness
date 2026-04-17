@@ -1,6 +1,8 @@
 // insights/index.ts — Orchestrator: queries DB, computes stats, evaluates rules
 
-import db from '../db.js';
+import { desc, sql } from 'drizzle-orm';
+import db from '../db/client.js';
+import { sleep, hrv, stress, daily_summary, activities, weekly_plan } from '../db/schema/index.js';
 import {
   rollingAverage, mean, standardDeviation, zScore, trend,
   consecutiveTrainingDays, daysSinceLastTraining, trainingLoad,
@@ -18,85 +20,73 @@ interface InsightsResult {
   };
 }
 
-export function computeInsights(): InsightsResult {
+export async function computeInsights(): Promise<InsightsResult> {
   const today = new Date().toISOString().slice(0, 10);
 
-  // --- Sleep (last 30 days) ---
-  const sleepRows = db.prepare(
-    `SELECT date, score FROM sleep WHERE score IS NOT NULL ORDER BY date DESC LIMIT 30`
-  ).all() as { date: string; score: number }[];
+  const sleepRows = await db.select({ date: sleep.date, score: sleep.score })
+    .from(sleep).where(sql`${sleep.score} IS NOT NULL`).orderBy(desc(sleep.date)).limit(30);
 
-  const sleepValues = [...sleepRows].reverse().map(r => r.score);
+  const sleepValues = [...sleepRows].reverse().map(r => r.score!);
   const sleepToday = sleepRows[0]?.score ?? null;
   const sleep7d = sleepValues.length >= 3 ? rollingAverage(sleepValues, 7) : null;
   const sleepBaseline = sleepValues.length >= 3 ? mean(sleepValues) : null;
   const sleepStddev = sleepValues.length >= 3 ? standardDeviation(sleepValues) : null;
   const sleepZScore = (sleepToday !== null && sleepBaseline !== null && sleepStddev !== null)
-    ? zScore(sleepToday, sleepBaseline, sleepStddev)
-    : null;
+    ? zScore(sleepToday, sleepBaseline, sleepStddev) : null;
   const sleepTrend = sleepValues.length >= 5 ? trend(sleepValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
 
-  // --- HRV (last 30 days) ---
-  const hrvRows = db.prepare(
-    `SELECT date, nightly_avg, status FROM hrv WHERE nightly_avg IS NOT NULL ORDER BY date DESC LIMIT 30`
-  ).all() as { date: string; nightly_avg: number; status: string }[];
+  const hrvRows = await db.select({ date: hrv.date, nightly_avg: hrv.nightly_avg, status: hrv.status })
+    .from(hrv).where(sql`${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(30);
 
-  const hrvValues = [...hrvRows].reverse().map(r => r.nightly_avg);
+  const hrvValues = [...hrvRows].reverse().map(r => r.nightly_avg!);
   const hrvToday = hrvRows[0]?.nightly_avg ?? null;
   const hrv7d = hrvValues.length >= 3 ? rollingAverage(hrvValues, 7) : null;
   const hrvBaseline = hrvValues.length >= 3 ? mean(hrvValues) : null;
   const hrvStddev = hrvValues.length >= 3 ? standardDeviation(hrvValues) : null;
   const hrvZScore = (hrvToday !== null && hrvBaseline !== null && hrvStddev !== null)
-    ? zScore(hrvToday, hrvBaseline, hrvStddev)
-    : null;
+    ? zScore(hrvToday, hrvBaseline, hrvStddev) : null;
   const hrvTrend = hrvValues.length >= 5 ? trend(hrvValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
   const hrvStatus = hrvRows[0]?.status ?? null;
 
-  // --- Stress (last 30 days) ---
-  const stressRows = db.prepare(
-    `SELECT date, avg_stress FROM stress WHERE avg_stress IS NOT NULL ORDER BY date DESC LIMIT 30`
-  ).all() as { date: string; avg_stress: number }[];
+  const stressRows = await db.select({ date: stress.date, avg_stress: stress.avg_stress })
+    .from(stress).where(sql`${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(30);
 
-  const stressValues = [...stressRows].reverse().map(r => r.avg_stress);
+  const stressValues = [...stressRows].reverse().map(r => r.avg_stress!);
   const stressToday = stressRows[0]?.avg_stress ?? null;
   const stress7d = stressValues.length >= 3 ? rollingAverage(stressValues, 7) : null;
   const stressBaseline = stressValues.length >= 3 ? mean(stressValues) : null;
-  // For stress: "improving" in slope = values GOING DOWN (better). We invert the signal.
   const stressTrendRaw = stressValues.length >= 5 ? trend(stressValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
   const stressTrendDir = stressTrendRaw.direction === 'improving' ? 'declining'
     : stressTrendRaw.direction === 'declining' ? 'improving'
     : 'stable';
 
-  // --- Resting HR (last 14 days) ---
-  const hrRows = db.prepare(
-    `SELECT date, resting_hr FROM daily_summary WHERE resting_hr IS NOT NULL ORDER BY date DESC LIMIT 14`
-  ).all() as { date: string; resting_hr: number }[];
+  const hrRows = await db.select({ date: daily_summary.date, resting_hr: daily_summary.resting_hr })
+    .from(daily_summary).where(sql`${daily_summary.resting_hr} IS NOT NULL`).orderBy(desc(daily_summary.date)).limit(14);
 
-  const hrValues = [...hrRows].reverse().map(r => r.resting_hr);
+  const hrValues = [...hrRows].reverse().map(r => r.resting_hr!);
   const hrToday = hrRows[0]?.resting_hr ?? null;
   const hr7d = hrValues.length >= 3 ? rollingAverage(hrValues, 7) : null;
-  // For resting HR: positive slope = bad sign (HR rising)
   const hrTrendRaw = hrValues.length >= 5 ? trend(hrValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
 
-  // --- Activities (last 30 days) ---
-  const actRows = db.prepare(
-    `SELECT date(start_time) as date, duration, avg_hr FROM activities ORDER BY start_time DESC LIMIT 100`
-  ).all() as { date: string; duration: number; avg_hr: number | null }[];
+  const actRows = await db.select({
+    date: sql<string>`LEFT(${activities.start_time}, 10)`,
+    duration: activities.duration,
+    avg_hr: activities.avg_hr,
+  }).from(activities).orderBy(desc(activities.start_time)).limit(100);
 
   const actDates = actRows.map(r => r.date);
   const consecutiveDays = consecutiveTrainingDays(actDates);
   const daysSinceLast = daysSinceLastTraining(actDates);
-  const load3d = trainingLoad(actRows, 3);
-  const load7d = trainingLoad(actRows, 7);
+  const load3d = trainingLoad(actRows as any, 3);
+  const load7d = trainingLoad(actRows as any, 7);
 
-  // --- Today's plan ---
   const todayName = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][new Date().getDay()];
-  const planRow = db.prepare(
-    `SELECT sport, detail FROM weekly_plan WHERE day = ? AND completed = 0 LIMIT 1`
-  ).get(todayName) as { sport: string; detail: string | null } | undefined;
+  const [planRow] = await db.select({ sport: weekly_plan.sport, detail: weekly_plan.detail })
+    .from(weekly_plan)
+    .where(sql`${weekly_plan.day} = ${todayName} AND ${weekly_plan.completed} = FALSE`)
+    .limit(1);
   const todayPlan = planRow ?? null;
 
-  // --- Build InsightStats ---
   const stats: InsightStats = {
     sleep: {
       current: sleepToday,

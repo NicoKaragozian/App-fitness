@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import db from '../db.js';
+import { eq, desc, asc, and, sql, count } from 'drizzle-orm';
+import db from '../db/client.js';
+import {
+  training_plans, training_sessions, training_exercises,
+  workout_logs, workout_sets,
+} from '../db/schema/index.js';
 import { buildTrainingContext } from '../ai/context.js';
 import { getPrompt } from '../ai/prompts.js';
 import { pickProviderFromReq, pickLanguageFromReq, isAIConfigured } from '../ai/providers/index.js';
@@ -42,86 +47,98 @@ export function validatePlan(obj: any): AIPlan {
   return obj as AIPlan;
 }
 
-// Saves an AIPlan to DB and returns the inserted ID
-export function savePlanToDB(plan: AIPlan, rawContent: string, modelName?: string): number {
-  const insertPlan = db.prepare(
-    'INSERT INTO training_plans (title, objective, frequency, ai_model, raw_ai_response) VALUES (?,?,?,?,?)'
-  );
-  const insertSession = db.prepare(
-    'INSERT INTO training_sessions (plan_id, name, type, sort_order, notes) VALUES (?,?,?,?,?)'
-  );
-  const insertExercise = db.prepare(
-    'INSERT INTO training_exercises (session_id, name, type, category, target_sets, target_reps, target_duration_seconds, target_distance_meters, target_pace, notes, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)'
-  );
+export async function savePlanToDB(plan: AIPlan, rawContent: string, modelName?: string): Promise<number> {
+  return await db.transaction(async (tx) => {
+    const [planRow] = await tx.insert(training_plans).values({
+      title: plan.title,
+      objective: plan.objective ?? null,
+      frequency: plan.frequency ?? null,
+      ai_model: modelName ?? 'unknown',
+      raw_ai_response: rawContent,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).returning({ id: training_plans.id });
 
-  let savedPlanId!: number;
-  const save = db.transaction(() => {
-    const planResult = insertPlan.run(
-      plan.title,
-      plan.objective ?? null,
-      plan.frequency ?? null,
-      modelName ?? 'unknown',
-      rawContent,
-    );
-    savedPlanId = planResult.lastInsertRowid as number;
+    const planId = planRow.id;
 
-    (plan.sessions ?? []).forEach((session, si) => {
-      const sessionResult = insertSession.run(savedPlanId, session.name, session.type ?? null, si, session.notes ?? null);
-      const sessionId = sessionResult.lastInsertRowid as number;
+    for (let si = 0; si < (plan.sessions ?? []).length; si++) {
+      const session = plan.sessions![si];
+      const [sessionRow] = await tx.insert(training_sessions).values({
+        plan_id: planId,
+        name: session.name,
+        type: session.type ?? null,
+        sort_order: si,
+        notes: session.notes ?? null,
+      }).returning({ id: training_sessions.id });
 
-      (session.exercises ?? []).forEach((ex, ei) => {
+      const sessionId = sessionRow.id;
+      for (let ei = 0; ei < (session.exercises ?? []).length; ei++) {
+        const ex = session.exercises![ei];
         const reps = ex.reps != null ? String(ex.reps) : null;
         const sets = typeof ex.sets === 'number' ? ex.sets : null;
-        insertExercise.run(
-          sessionId,
-          ex.name,
-          ex.type ?? 'strength',
-          ex.category ?? 'main',
-          sets,
-          reps,
-          ex.duration_seconds ?? null,
-          ex.distance_meters ?? null,
-          ex.pace ?? null,
-          ex.notes ?? null,
-          ei,
-        );
-      });
-    });
+        await tx.insert(training_exercises).values({
+          session_id: sessionId,
+          name: ex.name,
+          type: ex.type ?? 'strength',
+          category: ex.category ?? 'main',
+          target_sets: sets,
+          target_reps: reps,
+          target_duration_seconds: ex.duration_seconds ?? null,
+          target_distance_meters: ex.distance_meters ?? null,
+          target_pace: ex.pace ?? null,
+          notes: ex.notes ?? null,
+          sort_order: ei,
+        });
+      }
+    }
+
+    return planId;
   });
-  save();
-  return savedPlanId;
 }
 
-// POST /api/training/generate — Generate plan via AI with streaming SSE
-// Emits "analysis" tokens for user feedback, then JSON plan at the end.
-// SSE Protocol:
-//   data: {"token":"..."}                         — analysis text (visible to the user)
-//   data: {"plan":{...},"recommendations":"..."}  — plan saved, before [DONE]
-//   data: {"error":"..."}                         — if JSON parse fails
-//   data: [DONE]                                  — end of stream
+export async function getPlanById(id: number) {
+  const [plan] = await db.select().from(training_plans).where(eq(training_plans.id, id));
+  if (!plan) return null;
+
+  const sessions = await db.select().from(training_sessions)
+    .where(eq(training_sessions.plan_id, id))
+    .orderBy(asc(training_sessions.sort_order));
+
+  const planWithSessions = {
+    ...plan,
+    sessions: await Promise.all(sessions.map(async (s) => {
+      const exercises = await db.select().from(training_exercises)
+        .where(eq(training_exercises.session_id, s.id))
+        .orderBy(asc(training_exercises.sort_order));
+      return { ...s, exercises };
+    })),
+  };
+
+  return planWithSessions;
+}
+
+// POST /api/training/generate
 router.post('/generate', async (req: Request, res: Response) => {
   const { goal } = req.body as { goal: string };
   if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
-    res.status(400).json({ error: '"goal" field is required' });
-    return;
+    res.status(400).json({ error: '"goal" field is required' }); return;
   }
 
   const provider = pickProviderFromReq(req);
   if (!(await isAIConfigured(provider.name))) {
     const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
-    res.status(503).json({ error: `${label} is not available. Check your setup.` });
-    return;
+    res.status(503).json({ error: `${label} is not available. Check your setup.` }); return;
   }
 
   const lang = pickLanguageFromReq(req);
-  const context = buildTrainingContext(goal.trim());
+  const context = await buildTrainingContext(goal.trim());
   const systemPrompt = `${getPrompt('training_plan', lang)}\n\nUser data:\n${context}`;
   const userMessage = `Generate my personalized training plan. Goal: ${goal.trim()}`;
   const modelName = modelNameFor(provider.name);
 
   await provider.streamGenerate(systemPrompt, userMessage, res, {
     maxTokens: 4096,
-    beforeDone: (fullContent) => {
+    beforeDone: async (fullContent) => {
       const DELIMITER = '---PLAN_JSON---';
       const delimIdx = fullContent.indexOf(DELIMITER);
       let jsonStr = delimIdx >= 0
@@ -135,8 +152,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       try {
         const parsed = JSON.parse(jsonStr);
         const plan = validatePlan(parsed);
-        const savedPlanId = savePlanToDB(plan, fullContent, modelName);
-        const fullPlan = getPlanById(savedPlanId);
+        const savedPlanId = await savePlanToDB(plan, fullContent, modelName);
+        const fullPlan = await getPlanById(savedPlanId);
         res.write(`data: ${JSON.stringify({ plan: fullPlan, recommendations: plan.recommendations ?? null })}\n\n`);
       } catch (err: any) {
         console.error('[training] Error parsing AI response:', err.message);
@@ -146,219 +163,247 @@ router.post('/generate', async (req: Request, res: Response) => {
   });
 });
 
-// Helpers to read full plan
-export function getPlanById(id: number) {
-  const plan = db.prepare('SELECT * FROM training_plans WHERE id = ?').get(id) as any;
-  if (!plan) return null;
+// GET /api/training/plans
+router.get('/plans', async (_req: Request, res: Response) => {
+  const plans = await db.select().from(training_plans).orderBy(desc(training_plans.created_at));
 
-  const sessions = db.prepare(
-    'SELECT * FROM training_sessions WHERE plan_id = ? ORDER BY sort_order'
-  ).all(id) as any[];
+  const result = await Promise.all(plans.map(async (p) => {
+    const [{ c: sessionCount }] = await db.select({ c: count() }).from(training_sessions).where(eq(training_sessions.plan_id, p.id));
+    const [lastWorkout] = await db.select({ completed_at: workout_logs.completed_at })
+      .from(workout_logs)
+      .where(and(eq(workout_logs.plan_id, p.id), sql`${workout_logs.completed_at} IS NOT NULL`))
+      .orderBy(desc(workout_logs.completed_at))
+      .limit(1);
+    const [{ c: workoutCount }] = await db.select({ c: count() })
+      .from(workout_logs)
+      .where(and(eq(workout_logs.plan_id, p.id), sql`${workout_logs.completed_at} IS NOT NULL`));
+    const sessionTypes = (await db.selectDistinct({ type: training_sessions.type })
+      .from(training_sessions)
+      .where(and(eq(training_sessions.plan_id, p.id), sql`${training_sessions.type} IS NOT NULL`)))
+      .map((r) => r.type as string);
 
-  plan.sessions = sessions.map((s: any) => {
-    const exercises = db.prepare(
-      'SELECT * FROM training_exercises WHERE session_id = ? ORDER BY sort_order'
-    ).all(s.id) as any[];
-    return { ...s, exercises };
-  });
-
-  return plan;
-}
-
-// GET /api/training/plans — List plans
-router.get('/plans', (_req: Request, res: Response) => {
-  const plans = db.prepare(
-    'SELECT * FROM training_plans ORDER BY created_at DESC'
-  ).all() as any[];
-
-  const result = plans.map((p: any) => {
-    const sessionCount = (db.prepare('SELECT COUNT(*) as c FROM training_sessions WHERE plan_id = ?').get(p.id) as any).c;
-    const lastWorkout = db.prepare(
-      'SELECT completed_at FROM workout_logs WHERE plan_id = ? AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT 1'
-    ).get(p.id) as any;
-    const workoutCount = (db.prepare('SELECT COUNT(*) as c FROM workout_logs WHERE plan_id = ? AND completed_at IS NOT NULL').get(p.id) as any).c;
-    const sessionTypes = (db.prepare('SELECT DISTINCT type FROM training_sessions WHERE plan_id = ? AND type IS NOT NULL').all(p.id) as any[]).map((r: any) => r.type as string);
     return { ...p, sessionCount, lastWorkout: lastWorkout?.completed_at ?? null, workoutCount, sessionTypes };
-  });
+  }));
 
   res.json(result);
 });
 
-// GET /api/training/plans/:id — Plan completo
-router.get('/plans/:id', (req: Request, res: Response) => {
+// GET /api/training/plans/:id
+router.get('/plans/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  const plan = getPlanById(id);
+  const plan = await getPlanById(id);
   if (!plan) { res.status(404).json({ error: 'Plan not found' }); return; }
   res.json(plan);
 });
 
-// PUT /api/training/plans/:id — Update plan (title, status)
-router.put('/plans/:id', (req: Request, res: Response) => {
+// PUT /api/training/plans/:id
+router.put('/plans/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { title, objective, frequency, status } = req.body as any;
-  db.prepare(`
-    UPDATE training_plans SET
-      title = COALESCE(?, title),
-      objective = COALESCE(?, objective),
-      frequency = COALESCE(?, frequency),
-      status = COALESCE(?, status),
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(title ?? null, objective ?? null, frequency ?? null, status ?? null, id);
+
+  const updates: Partial<typeof training_plans.$inferInsert> = { updated_at: new Date().toISOString() };
+  if (title != null) updates.title = title;
+  if (objective != null) updates.objective = objective;
+  if (frequency != null) updates.frequency = frequency;
+  if (status != null) updates.status = status;
+
+  await db.update(training_plans).set(updates).where(eq(training_plans.id, id));
   res.json({ ok: true });
 });
 
-// DELETE /api/training/plans/:id — Delete plan
-router.delete('/plans/:id', (req: Request, res: Response) => {
+// DELETE /api/training/plans/:id
+router.delete('/plans/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  // workout_logs doesn't have ON DELETE CASCADE, must delete before (its sets are deleted via CASCADE)
-  db.transaction(() => {
-    db.prepare('DELETE FROM workout_logs WHERE plan_id = ?').run(id);
-    db.prepare('DELETE FROM training_plans WHERE id = ?').run(id);
-  })();
+  await db.transaction(async (tx) => {
+    await tx.delete(workout_logs).where(eq(workout_logs.plan_id, id));
+    await tx.delete(training_plans).where(eq(training_plans.id, id));
+  });
   res.json({ ok: true });
 });
 
-// PUT /api/training/exercises/:id — Edit exercise targets
-router.put('/exercises/:id', (req: Request, res: Response) => {
+// PUT /api/training/exercises/:id
+router.put('/exercises/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { name, type, target_sets, target_reps, target_duration_seconds, target_distance_meters, target_pace, notes, category } = req.body as any;
-  db.prepare(`
-    UPDATE training_exercises SET
-      name = COALESCE(?, name),
-      type = COALESCE(?, type),
-      target_sets = COALESCE(?, target_sets),
-      target_reps = COALESCE(?, target_reps),
-      target_duration_seconds = COALESCE(?, target_duration_seconds),
-      target_distance_meters = COALESCE(?, target_distance_meters),
-      target_pace = COALESCE(?, target_pace),
-      notes = COALESCE(?, notes),
-      category = COALESCE(?, category)
-    WHERE id = ?
-  `).run(name ?? null, type ?? null, target_sets ?? null, target_reps ?? null, target_duration_seconds ?? null, target_distance_meters ?? null, target_pace ?? null, notes ?? null, category ?? null, id);
+
+  const updates: Partial<typeof training_exercises.$inferInsert> = {};
+  if (name != null) updates.name = name;
+  if (type != null) updates.type = type;
+  if (target_sets != null) updates.target_sets = target_sets;
+  if (target_reps != null) updates.target_reps = target_reps;
+  if (target_duration_seconds != null) updates.target_duration_seconds = target_duration_seconds;
+  if (target_distance_meters != null) updates.target_distance_meters = target_distance_meters;
+  if (target_pace != null) updates.target_pace = target_pace;
+  if (notes != null) updates.notes = notes;
+  if (category != null) updates.category = category;
+
+  if (Object.keys(updates).length > 0) {
+    await db.update(training_exercises).set(updates).where(eq(training_exercises.id, id));
+  }
   res.json({ ok: true });
 });
 
-// POST /api/training/workouts — Start workout
-router.post('/workouts', (req: Request, res: Response) => {
+// POST /api/training/workouts
+router.post('/workouts', async (req: Request, res: Response) => {
   const { planId, sessionId } = req.body as { planId: number; sessionId: number };
   if (!planId || !sessionId) { res.status(400).json({ error: 'planId and sessionId required' }); return; }
-  const now = new Date().toISOString();
-  const result = db.prepare(
-    'INSERT INTO workout_logs (plan_id, session_id, started_at) VALUES (?,?,?)'
-  ).run(planId, sessionId, now);
-  res.json({ workoutId: result.lastInsertRowid });
+  const [log] = await db.insert(workout_logs).values({
+    plan_id: planId,
+    session_id: sessionId,
+    started_at: new Date().toISOString(),
+  }).returning({ id: workout_logs.id });
+  res.json({ workoutId: log.id });
 });
 
-// PUT /api/training/workouts/:id — Finish workout
-router.put('/workouts/:id', (req: Request, res: Response) => {
+// PUT /api/training/workouts/:id
+router.put('/workouts/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { notes } = req.body as any;
-  const now = new Date().toISOString();
-  db.prepare(
-    'UPDATE workout_logs SET completed_at = ?, notes = COALESCE(?, notes) WHERE id = ?'
-  ).run(now, notes ?? null, id);
+  await db.update(workout_logs).set({
+    completed_at: new Date().toISOString(),
+    notes: notes ?? null,
+  }).where(eq(workout_logs.id, id));
   res.json({ ok: true });
 });
 
-// GET /api/training/workouts — Workout history
-router.get('/workouts', (req: Request, res: Response) => {
+// GET /api/training/workouts
+router.get('/workouts', async (req: Request, res: Response) => {
   const { planId, sessionId } = req.query as any;
-  let query = 'SELECT wl.*, ts.name as session_name FROM workout_logs wl JOIN training_sessions ts ON ts.id = wl.session_id WHERE 1=1';
-  const params: any[] = [];
-  if (planId) { query += ' AND wl.plan_id = ?'; params.push(parseInt(planId)); }
-  if (sessionId) { query += ' AND wl.session_id = ?'; params.push(parseInt(sessionId)); }
-  query += ' ORDER BY wl.started_at DESC';
-  const logs = db.prepare(query).all(...params) as any[];
+  const conditions = [];
+  if (planId) conditions.push(eq(workout_logs.plan_id, parseInt(planId)));
+  if (sessionId) conditions.push(eq(workout_logs.session_id, parseInt(sessionId)));
+
+  const logs = await db.select({
+    id: workout_logs.id,
+    plan_id: workout_logs.plan_id,
+    session_id: workout_logs.session_id,
+    started_at: workout_logs.started_at,
+    completed_at: workout_logs.completed_at,
+    notes: workout_logs.notes,
+    session_name: training_sessions.name,
+  })
+    .from(workout_logs)
+    .innerJoin(training_sessions, eq(training_sessions.id, workout_logs.session_id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(workout_logs.started_at));
+
   res.json(logs);
 });
 
-// GET /api/training/workouts/:id — Workout detail with its sets
-router.get('/workouts/:id', (req: Request, res: Response) => {
+// GET /api/training/workouts/:id
+router.get('/workouts/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  const log = db.prepare('SELECT * FROM workout_logs WHERE id = ?').get(id) as any;
+  const [log] = await db.select().from(workout_logs).where(eq(workout_logs.id, id));
   if (!log) { res.status(404).json({ error: 'Workout not found' }); return; }
-  const sets = db.prepare(`
-    SELECT ws.*, te.name as exercise_name, te.sort_order as exercise_sort_order
-    FROM workout_sets ws
-    LEFT JOIN training_exercises te ON te.id = ws.exercise_id
-    WHERE ws.workout_log_id = ?
-    ORDER BY te.sort_order, ws.set_number
-  `).all(id) as any[];
+
+  const sets = await db.select({
+    id: workout_sets.id,
+    workout_log_id: workout_sets.workout_log_id,
+    exercise_id: workout_sets.exercise_id,
+    set_number: workout_sets.set_number,
+    reps: workout_sets.reps,
+    weight: workout_sets.weight,
+    completed: workout_sets.completed,
+    notes: workout_sets.notes,
+    duration_seconds: workout_sets.duration_seconds,
+    distance_meters: workout_sets.distance_meters,
+    exercise_name: training_exercises.name,
+    exercise_sort_order: training_exercises.sort_order,
+  })
+    .from(workout_sets)
+    .leftJoin(training_exercises, eq(training_exercises.id, workout_sets.exercise_id))
+    .where(eq(workout_sets.workout_log_id, id))
+    .orderBy(asc(training_exercises.sort_order), asc(workout_sets.set_number));
+
   res.json({ ...log, sets });
 });
 
-// DELETE /api/training/workouts/:id — Delete workout log (CASCADE to sets)
-router.delete('/workouts/:id', (req: Request, res: Response) => {
+// DELETE /api/training/workouts/:id
+router.delete('/workouts/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  db.prepare('DELETE FROM workout_logs WHERE id = ?').run(id);
+  await db.delete(workout_logs).where(eq(workout_logs.id, id));
   res.json({ ok: true });
 });
 
-// POST /api/training/workouts/:id/sets — Log a set
-router.post('/workouts/:id/sets', (req: Request, res: Response) => {
+// POST /api/training/workouts/:id/sets
+router.post('/workouts/:id/sets', async (req: Request, res: Response) => {
   const workoutId = parseInt(req.params.id as string);
   if (isNaN(workoutId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { exerciseId, setNumber, reps, weight, completed, notes, duration_seconds, distance_meters } = req.body as any;
   if (!exerciseId || setNumber == null) {
-    res.status(400).json({ error: 'exerciseId and setNumber required' });
-    return;
+    res.status(400).json({ error: 'exerciseId and setNumber required' }); return;
   }
-  const result = db.prepare(
-    'INSERT INTO workout_sets (workout_log_id, exercise_id, set_number, reps, weight, completed, notes, duration_seconds, distance_meters) VALUES (?,?,?,?,?,?,?,?,?)'
-  ).run(workoutId, exerciseId, setNumber, reps ?? null, weight ?? null, completed ? 1 : 0, notes ?? null, duration_seconds ?? null, distance_meters ?? null);
-  res.json({ setId: result.lastInsertRowid });
+  const [s] = await db.insert(workout_sets).values({
+    workout_log_id: workoutId,
+    exercise_id: exerciseId,
+    set_number: setNumber,
+    reps: reps ?? null,
+    weight: weight ?? null,
+    completed: Boolean(completed),
+    notes: notes ?? null,
+    duration_seconds: duration_seconds ?? null,
+    distance_meters: distance_meters ?? null,
+  }).returning({ id: workout_sets.id });
+  res.json({ setId: s.id });
 });
 
-// PUT /api/training/sets/:id — Update a set
-router.put('/sets/:id', (req: Request, res: Response) => {
+// PUT /api/training/sets/:id
+router.put('/sets/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const body = req.body as any;
-  const updates: string[] = [];
-  const params: any[] = [];
-  if ('reps' in body) { updates.push('reps = ?'); params.push(body.reps ?? null); }
-  if ('weight' in body) { updates.push('weight = ?'); params.push(body.weight ?? null); }
-  if ('completed' in body) { updates.push('completed = ?'); params.push(body.completed ? 1 : 0); }
-  if ('notes' in body) { updates.push('notes = ?'); params.push(body.notes ?? null); }
-  if ('duration_seconds' in body) { updates.push('duration_seconds = ?'); params.push(body.duration_seconds ?? null); }
-  if ('distance_meters' in body) { updates.push('distance_meters = ?'); params.push(body.distance_meters ?? null); }
-  if (updates.length === 0) { res.json({ ok: true }); return; }
-  params.push(id);
-  db.prepare(`UPDATE workout_sets SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  const updates: Partial<typeof workout_sets.$inferInsert> = {};
+  if ('reps' in body) updates.reps = body.reps ?? null;
+  if ('weight' in body) updates.weight = body.weight ?? null;
+  if ('completed' in body) updates.completed = Boolean(body.completed);
+  if ('notes' in body) updates.notes = body.notes ?? null;
+  if ('duration_seconds' in body) updates.duration_seconds = body.duration_seconds ?? null;
+  if ('distance_meters' in body) updates.distance_meters = body.distance_meters ?? null;
+
+  if (Object.keys(updates).length > 0) {
+    await db.update(workout_sets).set(updates).where(eq(workout_sets.id, id));
+  }
   res.json({ ok: true });
 });
 
-// DELETE /api/training/sets/:id — Delete an individual set
-router.delete('/sets/:id', (req: Request, res: Response) => {
+// DELETE /api/training/sets/:id
+router.delete('/sets/:id', async (req: Request, res: Response) => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  db.prepare('DELETE FROM workout_sets WHERE id = ?').run(id);
+  await db.delete(workout_sets).where(eq(workout_sets.id, id));
   res.json({ ok: true });
 });
 
-// GET /api/training/exercises/:id/history — Progressive overload history (adapts to exercise type)
-router.get('/exercises/:id/history', (req: Request, res: Response) => {
+// GET /api/training/exercises/:id/history
+router.get('/exercises/:id/history', async (req: Request, res: Response) => {
   const exerciseId = parseInt(req.params.id as string);
   if (isNaN(exerciseId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
 
-  const exercise = db.prepare('SELECT type FROM training_exercises WHERE id = ?').get(exerciseId) as { type: string } | undefined;
+  const [exercise] = await db.select({ type: training_exercises.type }).from(training_exercises).where(eq(training_exercises.id, exerciseId));
   const exType = exercise?.type ?? 'strength';
 
-  const rows = db.prepare(`
-    SELECT ws.set_number, ws.reps, ws.weight, ws.duration_seconds, ws.distance_meters, ws.completed, wl.started_at, wl.id as workout_log_id
-    FROM workout_sets ws
-    JOIN workout_logs wl ON wl.id = ws.workout_log_id
-    WHERE ws.exercise_id = ? AND ws.completed = 1
-    ORDER BY wl.started_at ASC, ws.set_number ASC
-  `).all(exerciseId) as any[];
+  const rows = await db.select({
+    set_number: workout_sets.set_number,
+    reps: workout_sets.reps,
+    weight: workout_sets.weight,
+    duration_seconds: workout_sets.duration_seconds,
+    distance_meters: workout_sets.distance_meters,
+    completed: workout_sets.completed,
+    started_at: workout_logs.started_at,
+    workout_log_id: workout_logs.id,
+  })
+    .from(workout_sets)
+    .innerJoin(workout_logs, eq(workout_logs.id, workout_sets.workout_log_id))
+    .where(and(eq(workout_sets.exercise_id, exerciseId), eq(workout_sets.completed, true)))
+    .orderBy(asc(workout_logs.started_at), asc(workout_sets.set_number));
 
   const byWorkout: Record<string, { date: string; sets: any[] }> = {};
   for (const row of rows) {
@@ -386,10 +431,8 @@ router.get('/exercises/:id/history', (req: Request, res: Response) => {
     }
     if (exType === 'timed') {
       const totalDuration = w.sets.reduce((sum: number, s: any) => sum + (s.duration_seconds ?? 0), 0);
-      const setsCompleted = w.sets.length;
-      return { ...base, totalDuration, setsCompleted, maxWeight: 0, totalReps: 0 };
+      return { ...base, totalDuration, setsCompleted: w.sets.length, maxWeight: 0, totalReps: 0 };
     }
-    // strength (default)
     return {
       ...base,
       maxWeight: Math.max(...w.sets.map((s: any) => s.weight ?? 0)),
@@ -400,19 +443,18 @@ router.get('/exercises/:id/history', (req: Request, res: Response) => {
   res.json(history);
 });
 
-// POST /api/training/exercises/:id/describe — Generate description of how to perform the exercise
+// POST /api/training/exercises/:id/describe
 router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
   const exerciseId = parseInt(req.params.id as string);
   if (isNaN(exerciseId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
 
-  const exercise = db.prepare('SELECT * FROM training_exercises WHERE id = ?').get(exerciseId) as any;
+  const [exercise] = await db.select().from(training_exercises).where(eq(training_exercises.id, exerciseId));
   if (!exercise) { res.status(404).json({ error: 'Exercise not found' }); return; }
 
   const provider = pickProviderFromReq(req);
   if (!(await isAIConfigured(provider.name))) {
     const label = provider.name === 'gemma' ? 'Ollama (gemma4:e2b)' : 'Claude API';
-    res.status(503).json({ error: `${label} is not available. Check your setup.` });
-    return;
+    res.status(503).json({ error: `${label} is not available. Check your setup.` }); return;
   }
 
   const systemPrompt = 'Respond in English. Be concise and technically precise.';
@@ -422,13 +464,10 @@ router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
   try {
     description = (await provider.chat(systemPrompt, prompt, 512)).trim();
   } catch (err: any) {
-    res.status(502).json({ error: err.message || 'Error generating description' });
-    return;
+    res.status(502).json({ error: err.message || 'Error generating description' }); return;
   }
 
-  // Save to DB
-  db.prepare('UPDATE training_exercises SET description = ? WHERE id = ?').run(description, exerciseId);
-
+  await db.update(training_exercises).set({ description }).where(eq(training_exercises.id, exerciseId));
   res.json({ description });
 });
 
