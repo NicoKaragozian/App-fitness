@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { toNodeHandler } from 'better-auth/node';
 import { auth } from './auth.js';
 import authRoutes from './routes/auth.js';
+import publicMetaRoutes from './routes/public-meta.js';
 import activitiesRoutes from './routes/activities.js';
 import healthRoutes from './routes/health.js';
 import syncRoutes from './routes/sync.js';
@@ -40,6 +41,9 @@ if (process.env.NODE_ENV !== 'production') {
     credentials: true,
   }));
 }
+
+// Public auth feature flags (before Better Auth catch-all)
+app.use('/api/meta', publicMetaRoutes);
 
 // Better Auth handler — must be mounted BEFORE express.json()
 app.all('/api/auth/*', toNodeHandler(auth));

@@ -85,13 +85,20 @@ The `category` column in `activities` is **legacy** — source of truth: `sport_
 - Garmin `maxSpeed`: **m/s** → multiply × 3.6 for KM/H
 - Sleep: display as `Xh Xm` (never decimal): `` `${Math.floor(h)}h ${Math.round((h%1)*60)}m` ``
 
-## Auth — Login with Playwright
+## Better Auth (app login)
+
+- Email/password and optional **Google OAuth** (`server/src/auth.ts`, cookies via Better Auth).
+- Env: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (public origin of the **API**, e.g. `http://localhost:3001`), `APP_URL` (Vite origin).
+- **Google**: set both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. In Google Cloud Console, add **Authorized redirect URI** exactly: `{BETTER_AUTH_URL}/api/auth/callback/google`. Restart the server after editing `.env`.
+- `GET /api/meta/auth-features` returns `{ google: boolean }`; Login/Signup only show “Continue with Google” when Google is configured.
+
+## Auth — Garmin (Playwright / get-tokens)
 
 Garmin blocked programmatic SSO (Cloudflare WAF, March 2026). Requires real browser.
 
-**Flow**: `npx tsx server/src/get-tokens.ts` → opens Chrome → manual login → captures ticket from redirect (aborts before it's consumed) → saves `oauth1_token.json` + `oauth2_token.json` → polling in AuthContext auto-detects tokens (every 3s).
+**Flow**: `npx tsx server/src/get-tokens.ts --email=you@...` → opens Chrome → manual login → tokens saved encrypted in DB (`garmin_tokens`).
 
-**Tokens last ~90 days**. `tryRestoreSession()` loads them on server restart.
+**Tokens last ~90 days**.
 
 ## Deploy (Render)
 

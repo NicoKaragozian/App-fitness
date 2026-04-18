@@ -37,7 +37,8 @@ services:
         sync: false
       - key: APP_URL
         sync: false
-      # Google OAuth (optional)
+      # Google OAuth — set in dashboard; redirect URI in Google Console must be
+      # ${BETTER_AUTH_URL}/api/auth/callback/google (same host as this service URL)
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
