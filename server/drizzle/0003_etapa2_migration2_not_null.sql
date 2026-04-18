@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "idx_user_assessment_user_id" ON "user_assessment" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "idx_user_profile_user_id" ON "user_profile" USING btree ("user_id");

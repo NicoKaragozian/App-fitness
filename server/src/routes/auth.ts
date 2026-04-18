@@ -1,47 +1,65 @@
 import { Router } from 'express';
-import * as garmin from '../garmin.js';
-import { syncInitial, startPeriodicSync, isSyncing, lastSync, signalAbortSync } from '../sync.js';
+import { eq, sql } from 'drizzle-orm';
 import db from '../db/client.js';
 import { activities, sleep, stress, hrv, daily_summary, sync_log } from '../db/schema/index.js';
+import { garmin_tokens } from '../db/schema/auth.js';
+import { deleteTokensForUser, hasTokensForUser } from '../garmin.js';
+import { syncInitial as doSyncInitial, signalAbortSync, isSyncing, lastSync } from '../sync.js';
+import { requireUser, optionalUser } from '../middleware/auth.js';
 
 const router = Router();
 
-router.post('/token-login', async (_req, res) => {
-  try {
-    const ok = await garmin.tryRestoreSession();
-    if (!ok) {
-      res.status(401).json({ error: 'No valid tokens found. Run npx tsx server/src/get-tokens.ts first.' });
-      return;
-    }
-    syncInitial().then(() => startPeriodicSync());
-    res.json({ success: true, message: 'Session restored, syncing data...' });
-  } catch (err: any) {
-    console.error('Token login error:', err);
-    res.status(500).json({ error: err.message || 'Error restoring session' });
+// GET /api/auth/status — public (no auth required)
+router.get('/status', optionalUser, async (req, res) => {
+  const userId = req.userId;
+  let garminConnected = false;
+  if (userId) {
+    garminConnected = await hasTokensForUser(userId);
   }
-});
-
-router.get('/status', (_req, res) => {
   res.json({
-    authenticated: garmin.getStatus(),
+    authenticated: !!userId,
+    userId: userId ?? null,
+    role: req.userRole ?? null,
+    garminConnected,
     syncing: isSyncing,
     lastSync,
   });
 });
 
-router.post('/logout', async (_req, res) => {
-  signalAbortSync();
-  garmin.logout();
-  try {
-    await db.delete(activities);
-    await db.delete(sleep);
-    await db.delete(stress);
-    await db.delete(hrv);
-    await db.delete(daily_summary);
-    await db.delete(sync_log);
-  } catch (err) {
-    console.error('DB wipe error on logout:', err);
+// POST /api/auth/sync-garmin — trigger initial sync for the current user
+router.post('/sync-garmin', requireUser, async (req, res) => {
+  const { userId } = req;
+  const hasTokens = await hasTokensForUser(userId);
+  if (!hasTokens) {
+    res.status(400).json({ error: 'No Garmin tokens — run get-tokens.ts first' });
+    return;
   }
+  doSyncInitial(userId);
+  res.json({ success: true, message: 'Sync started' });
+});
+
+// DELETE /api/garmin/disconnect — remove Garmin tokens + wipe Garmin data for user
+router.delete('/garmin-disconnect', requireUser, async (req, res) => {
+  const { userId } = req;
+  signalAbortSync();
+  await deleteTokensForUser(userId);
+  try {
+    await db.delete(activities).where(eq(activities.user_id, userId));
+    await db.delete(sleep).where(eq(sleep.user_id, userId));
+    await db.delete(stress).where(eq(stress.user_id, userId));
+    await db.delete(hrv).where(eq(hrv.user_id, userId));
+    await db.delete(daily_summary).where(eq(daily_summary.user_id, userId));
+    await db.delete(sync_log).where(eq(sync_log.user_id, userId));
+  } catch (err) {
+    console.error('[auth] garmin-disconnect wipe error:', err);
+  }
+  res.json({ success: true });
+});
+
+// POST /api/auth/logout — sign out (Better Auth handles cookie; we just respond)
+router.post('/logout', async (_req, res) => {
+  // Session invalidation is handled by Better Auth at /api/auth/sign-out
+  // This endpoint exists for backward compatibility
   res.json({ success: true });
 });
 

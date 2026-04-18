@@ -3,6 +3,7 @@ import { MarkdownText } from './ui/MarkdownText';
 import { TTSButton } from './ui/TTSButton';
 import { STTButton } from './ui/STTButton';
 import type { MacroTotals, MacroTargets, NutritionLog } from '../hooks/useNutrition';
+import { apiFetchRaw } from '../api/client';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -67,7 +68,7 @@ export const NutritionChat: React.FC<NutritionChatProps> = ({ date, totals, targ
 
     try {
       const language = (() => { try { return localStorage.getItem('drift_language') || 'en'; } catch { return 'en'; } })();
-      const res = await fetch('/api/nutrition/chat', {
+      const res = await apiFetchRaw('/nutrition/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Language': language },
         body: JSON.stringify({ messages: newMessages, date, language }),

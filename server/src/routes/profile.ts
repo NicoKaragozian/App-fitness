@@ -3,15 +3,20 @@ import { eq } from 'drizzle-orm';
 import db from '../db/client.js';
 import { user_profile } from '../db/schema/index.js';
 import { computeMacroTargets } from '../lib/macros.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/', async (_req: Request, res: Response) => {
-  const [row] = await db.select().from(user_profile).where(eq(user_profile.id, 1));
+router.use(requireUser);
+
+router.get('/', async (req: Request, res: Response) => {
+  const { userId } = req;
+  const [row] = await db.select().from(user_profile).where(eq(user_profile.user_id, userId));
   res.json(row ?? null);
 });
 
 router.put('/', async (req: Request, res: Response) => {
+  const { userId } = req;
   const p = req.body;
   const now = new Date().toISOString();
 
@@ -34,34 +39,11 @@ router.put('/', async (req: Request, res: Response) => {
     macros = computed;
   }
 
-  const [existing] = await db.select({ onboarded_at: user_profile.onboarded_at }).from(user_profile).where(eq(user_profile.id, 1));
+  const [existing] = await db.select({ id: user_profile.id, onboarded_at: user_profile.onboarded_at })
+    .from(user_profile).where(eq(user_profile.user_id, userId));
 
-  await db.insert(user_profile).values({
-    id: 1,
-    has_wearable: Boolean(p.has_wearable ?? false),
-    name: p.name ?? null,
-    age: p.age ?? null,
-    sex: p.sex ?? null,
-    height_cm: p.height_cm ?? null,
-    weight_kg: p.weight_kg ?? null,
-    experience_level: p.experience_level ?? null,
-    primary_goal: p.primary_goal ?? null,
-    secondary_goals: p.secondary_goals || [],
-    sports: p.sports || [],
-    training_days_per_week: p.training_days_per_week ?? null,
-    session_duration_min: p.session_duration_min ?? null,
-    equipment: p.equipment || [],
-    injuries: p.injuries ?? null,
-    dietary_preferences: p.dietary_preferences || [],
-    daily_calorie_target: macros.daily_calorie_target,
-    daily_protein_g: macros.daily_protein_g,
-    daily_carbs_g: macros.daily_carbs_g,
-    daily_fat_g: macros.daily_fat_g,
-    onboarded_at: existing?.onboarded_at ?? now,
-    updated_at: now,
-  }).onConflictDoUpdate({
-    target: user_profile.id,
-    set: {
+  if (existing) {
+    await db.update(user_profile).set({
       has_wearable: Boolean(p.has_wearable ?? false),
       name: p.name ?? null,
       age: p.age ?? null,
@@ -82,10 +64,38 @@ router.put('/', async (req: Request, res: Response) => {
       daily_carbs_g: macros.daily_carbs_g,
       daily_fat_g: macros.daily_fat_g,
       updated_at: now,
-    },
-  });
+    }).where(eq(user_profile.user_id, userId));
+  } else {
+    // Use a sequence-like id for new users
+    const nextId = Date.now();
+    await db.insert(user_profile).values({
+      id: nextId,
+      user_id: userId,
+      has_wearable: Boolean(p.has_wearable ?? false),
+      name: p.name ?? null,
+      age: p.age ?? null,
+      sex: p.sex ?? null,
+      height_cm: p.height_cm ?? null,
+      weight_kg: p.weight_kg ?? null,
+      experience_level: p.experience_level ?? null,
+      primary_goal: p.primary_goal ?? null,
+      secondary_goals: p.secondary_goals || [],
+      sports: p.sports || [],
+      training_days_per_week: p.training_days_per_week ?? null,
+      session_duration_min: p.session_duration_min ?? null,
+      equipment: p.equipment || [],
+      injuries: p.injuries ?? null,
+      dietary_preferences: p.dietary_preferences || [],
+      daily_calorie_target: macros.daily_calorie_target,
+      daily_protein_g: macros.daily_protein_g,
+      daily_carbs_g: macros.daily_carbs_g,
+      daily_fat_g: macros.daily_fat_g,
+      onboarded_at: now,
+      updated_at: now,
+    });
+  }
 
-  const [updated] = await db.select().from(user_profile).where(eq(user_profile.id, 1));
+  const [updated] = await db.select().from(user_profile).where(eq(user_profile.user_id, userId));
   res.json(updated);
 });
 

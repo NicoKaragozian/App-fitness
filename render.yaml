@@ -30,3 +30,18 @@ services:
       # AI provider (gemma = local Ollama, claude = Anthropic API)
       - key: AI_PROVIDER
         value: claude
+      # Better Auth — set in Render dashboard
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: APP_URL
+        sync: false
+      # Google OAuth (optional)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Garmin token encryption key
+      - key: GARMIN_ENCRYPTION_KEY
+        sync: false

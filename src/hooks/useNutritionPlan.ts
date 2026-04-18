@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiFetch } from '../api/client';
+import { apiFetch, apiFetchRaw } from '../api/client';
 
 export interface DietaryPreferences {
   diet_type: string;
@@ -71,7 +71,7 @@ export function useNutritionPlan() {
 
     try {
       const language = (() => { try { return localStorage.getItem('drift_language') || 'en'; } catch { return 'en'; } })();
-      const response = await fetch('/api/nutrition/plans/generate', {
+      const response = await apiFetchRaw('/nutrition/plans/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Language': language },
         body: JSON.stringify({ strategy, linkedTrainingPlanId, dietaryPreferences, provider, language }),

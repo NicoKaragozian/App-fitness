@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiFetch } from '../api/client';
+import { apiFetch, apiFetchRaw } from '../api/client';
 
 export interface NutritionLog {
   id: number;
@@ -105,7 +105,7 @@ export function useNutrition(date?: string) {
     let accumulatedText = '';
 
     try {
-      const response = await fetch('/api/nutrition/analyze', {
+      const response = await apiFetchRaw('/nutrition/analyze', {
         method: 'POST',
         headers: { 'X-Language': language },
         body: formData,

@@ -11,6 +11,7 @@ import { pickProviderFromReq, isAIConfigured } from './providers/index.js';
 const VALID_MODES: AnalyzeMode[] = ['session', 'sleep', 'wellness', 'sport', 'monthly', 'daily'];
 
 export async function handleAnalyze(req: Request, res: Response) {
+  const userId = req.userId!;
   const { mode, payload = {}, force } = req.body as {
     mode: string;
     payload?: Record<string, string>;
@@ -31,11 +32,13 @@ export async function handleAnalyze(req: Request, res: Response) {
   }
 
   const analyzeMode = mode as AnalyzeMode;
-  const cacheKey = getCacheKey(analyzeMode, payload);
+  const cacheKey = getCacheKey(analyzeMode, payload, userId);
 
   if (!force) {
     const [cached] = await db.select({ content: ai_cache.content, created_at: ai_cache.created_at })
-      .from(ai_cache).where(eq(ai_cache.cache_key, cacheKey)).limit(1);
+      .from(ai_cache)
+      .where(eq(ai_cache.cache_key, cacheKey))
+      .limit(1);
     if (cached) {
       console.log(`[ai] Cache hit: ${cacheKey}`);
       res.json({
@@ -48,7 +51,7 @@ export async function handleAnalyze(req: Request, res: Response) {
     }
   }
 
-  const context = await buildAnalyzeContext(analyzeMode, payload);
+  const context = await buildAnalyzeContext(analyzeMode, payload, userId);
   const systemPrompt = `${PROMPTS[analyzeMode] || PROMPTS.chat}\n\nUser data:\n${context || 'No data available.'}`;
   const userMessage = getDefaultUserMessage(analyzeMode, payload);
 
@@ -63,6 +66,7 @@ export async function handleAnalyze(req: Request, res: Response) {
     beforeDone: async (fullContent) => {
       if (fullContent.length > 0) {
         await db.insert(ai_cache).values({
+          user_id: userId,
           cache_key: cacheKey,
           mode: analyzeMode,
           content: fullContent,

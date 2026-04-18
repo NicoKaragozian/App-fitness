@@ -10,8 +10,11 @@ import { buildTrainingContext } from '../ai/context.js';
 import { getPrompt } from '../ai/prompts.js';
 import { pickProviderFromReq, pickLanguageFromReq, isAIConfigured } from '../ai/providers/index.js';
 import { modelNameFor } from '../ai/config.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = Router();
+
+router.use(requireUser);
 
 export interface AIExercise {
   name: string;
@@ -47,7 +50,7 @@ export function validatePlan(obj: any): AIPlan {
   return obj as AIPlan;
 }
 
-export async function savePlanToDB(plan: AIPlan, rawContent: string, modelName?: string): Promise<number> {
+export async function savePlanToDB(plan: AIPlan, rawContent: string, modelName: string | undefined, userId: string): Promise<number> {
   return await db.transaction(async (tx) => {
     const [planRow] = await tx.insert(training_plans).values({
       title: plan.title,
@@ -57,6 +60,7 @@ export async function savePlanToDB(plan: AIPlan, rawContent: string, modelName?:
       raw_ai_response: rawContent,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      user_id: userId,
     }).returning({ id: training_plans.id });
 
     const planId = planRow.id;
@@ -69,6 +73,7 @@ export async function savePlanToDB(plan: AIPlan, rawContent: string, modelName?:
         type: session.type ?? null,
         sort_order: si,
         notes: session.notes ?? null,
+        user_id: userId,
       }).returning({ id: training_sessions.id });
 
       const sessionId = sessionRow.id;
@@ -88,6 +93,7 @@ export async function savePlanToDB(plan: AIPlan, rawContent: string, modelName?:
           target_pace: ex.pace ?? null,
           notes: ex.notes ?? null,
           sort_order: ei,
+          user_id: userId,
         });
       }
     }
@@ -96,29 +102,29 @@ export async function savePlanToDB(plan: AIPlan, rawContent: string, modelName?:
   });
 }
 
-export async function getPlanById(id: number) {
-  const [plan] = await db.select().from(training_plans).where(eq(training_plans.id, id));
+export async function getPlanById(id: number, userId: string) {
+  const [plan] = await db.select().from(training_plans)
+    .where(and(eq(training_plans.id, id), eq(training_plans.user_id, userId)));
   if (!plan) return null;
 
   const sessions = await db.select().from(training_sessions)
-    .where(eq(training_sessions.plan_id, id))
+    .where(and(eq(training_sessions.plan_id, id), eq(training_sessions.user_id, userId)))
     .orderBy(asc(training_sessions.sort_order));
 
-  const planWithSessions = {
+  return {
     ...plan,
     sessions: await Promise.all(sessions.map(async (s) => {
       const exercises = await db.select().from(training_exercises)
-        .where(eq(training_exercises.session_id, s.id))
+        .where(and(eq(training_exercises.session_id, s.id), eq(training_exercises.user_id, userId)))
         .orderBy(asc(training_exercises.sort_order));
       return { ...s, exercises };
     })),
   };
-
-  return planWithSessions;
 }
 
 // POST /api/training/generate
 router.post('/generate', async (req: Request, res: Response) => {
+  const { userId } = req;
   const { goal } = req.body as { goal: string };
   if (!goal || typeof goal !== 'string' || goal.trim().length === 0) {
     res.status(400).json({ error: '"goal" field is required' }); return;
@@ -131,7 +137,7 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 
   const lang = pickLanguageFromReq(req);
-  const context = await buildTrainingContext(goal.trim());
+  const context = await buildTrainingContext(goal.trim(), userId);
   const systemPrompt = `${getPrompt('training_plan', lang)}\n\nUser data:\n${context}`;
   const userMessage = `Generate my personalized training plan. Goal: ${goal.trim()}`;
   const modelName = modelNameFor(provider.name);
@@ -152,8 +158,8 @@ router.post('/generate', async (req: Request, res: Response) => {
       try {
         const parsed = JSON.parse(jsonStr);
         const plan = validatePlan(parsed);
-        const savedPlanId = await savePlanToDB(plan, fullContent, modelName);
-        const fullPlan = await getPlanById(savedPlanId);
+        const savedPlanId = await savePlanToDB(plan, fullContent, modelName, userId);
+        const fullPlan = await getPlanById(savedPlanId, userId);
         res.write(`data: ${JSON.stringify({ plan: fullPlan, recommendations: plan.recommendations ?? null })}\n\n`);
       } catch (err: any) {
         console.error('[training] Error parsing AI response:', err.message);
@@ -164,22 +170,26 @@ router.post('/generate', async (req: Request, res: Response) => {
 });
 
 // GET /api/training/plans
-router.get('/plans', async (_req: Request, res: Response) => {
-  const plans = await db.select().from(training_plans).orderBy(desc(training_plans.created_at));
+router.get('/plans', async (req: Request, res: Response) => {
+  const { userId } = req;
+  const plans = await db.select().from(training_plans)
+    .where(eq(training_plans.user_id, userId))
+    .orderBy(desc(training_plans.created_at));
 
   const result = await Promise.all(plans.map(async (p) => {
-    const [{ c: sessionCount }] = await db.select({ c: count() }).from(training_sessions).where(eq(training_sessions.plan_id, p.id));
+    const [{ c: sessionCount }] = await db.select({ c: count() }).from(training_sessions)
+      .where(and(eq(training_sessions.plan_id, p.id), eq(training_sessions.user_id, userId)));
     const [lastWorkout] = await db.select({ completed_at: workout_logs.completed_at })
       .from(workout_logs)
-      .where(and(eq(workout_logs.plan_id, p.id), sql`${workout_logs.completed_at} IS NOT NULL`))
+      .where(and(eq(workout_logs.plan_id, p.id), eq(workout_logs.user_id, userId), sql`${workout_logs.completed_at} IS NOT NULL`))
       .orderBy(desc(workout_logs.completed_at))
       .limit(1);
     const [{ c: workoutCount }] = await db.select({ c: count() })
       .from(workout_logs)
-      .where(and(eq(workout_logs.plan_id, p.id), sql`${workout_logs.completed_at} IS NOT NULL`));
+      .where(and(eq(workout_logs.plan_id, p.id), eq(workout_logs.user_id, userId), sql`${workout_logs.completed_at} IS NOT NULL`));
     const sessionTypes = (await db.selectDistinct({ type: training_sessions.type })
       .from(training_sessions)
-      .where(and(eq(training_sessions.plan_id, p.id), sql`${training_sessions.type} IS NOT NULL`)))
+      .where(and(eq(training_sessions.plan_id, p.id), eq(training_sessions.user_id, userId), sql`${training_sessions.type} IS NOT NULL`)))
       .map((r) => r.type as string);
 
     return { ...p, sessionCount, lastWorkout: lastWorkout?.completed_at ?? null, workoutCount, sessionTypes };
@@ -190,15 +200,17 @@ router.get('/plans', async (_req: Request, res: Response) => {
 
 // GET /api/training/plans/:id
 router.get('/plans/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  const plan = await getPlanById(id);
+  const plan = await getPlanById(id, userId);
   if (!plan) { res.status(404).json({ error: 'Plan not found' }); return; }
   res.json(plan);
 });
 
 // PUT /api/training/plans/:id
 router.put('/plans/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { title, objective, frequency, status } = req.body as any;
@@ -209,23 +221,31 @@ router.put('/plans/:id', async (req: Request, res: Response) => {
   if (frequency != null) updates.frequency = frequency;
   if (status != null) updates.status = status;
 
-  await db.update(training_plans).set(updates).where(eq(training_plans.id, id));
+  await db.update(training_plans).set(updates)
+    .where(and(eq(training_plans.id, id), eq(training_plans.user_id, userId)));
   res.json({ ok: true });
 });
 
 // DELETE /api/training/plans/:id
 router.delete('/plans/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
+
+  const [plan] = await db.select({ id: training_plans.id }).from(training_plans)
+    .where(and(eq(training_plans.id, id), eq(training_plans.user_id, userId)));
+  if (!plan) { res.status(404).json({ error: 'Plan not found' }); return; }
+
   await db.transaction(async (tx) => {
-    await tx.delete(workout_logs).where(eq(workout_logs.plan_id, id));
-    await tx.delete(training_plans).where(eq(training_plans.id, id));
+    await tx.delete(workout_logs).where(and(eq(workout_logs.plan_id, id), eq(workout_logs.user_id, userId)));
+    await tx.delete(training_plans).where(and(eq(training_plans.id, id), eq(training_plans.user_id, userId)));
   });
   res.json({ ok: true });
 });
 
 // PUT /api/training/exercises/:id
 router.put('/exercises/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { name, type, target_sets, target_reps, target_duration_seconds, target_distance_meters, target_pace, notes, category } = req.body as any;
@@ -242,39 +262,44 @@ router.put('/exercises/:id', async (req: Request, res: Response) => {
   if (category != null) updates.category = category;
 
   if (Object.keys(updates).length > 0) {
-    await db.update(training_exercises).set(updates).where(eq(training_exercises.id, id));
+    await db.update(training_exercises).set(updates)
+      .where(and(eq(training_exercises.id, id), eq(training_exercises.user_id, userId)));
   }
   res.json({ ok: true });
 });
 
 // POST /api/training/workouts
 router.post('/workouts', async (req: Request, res: Response) => {
+  const { userId } = req;
   const { planId, sessionId } = req.body as { planId: number; sessionId: number };
   if (!planId || !sessionId) { res.status(400).json({ error: 'planId and sessionId required' }); return; }
   const [log] = await db.insert(workout_logs).values({
     plan_id: planId,
     session_id: sessionId,
     started_at: new Date().toISOString(),
+    user_id: userId,
   }).returning({ id: workout_logs.id });
   res.json({ workoutId: log.id });
 });
 
 // PUT /api/training/workouts/:id
 router.put('/workouts/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { notes } = req.body as any;
   await db.update(workout_logs).set({
     completed_at: new Date().toISOString(),
     notes: notes ?? null,
-  }).where(eq(workout_logs.id, id));
+  }).where(and(eq(workout_logs.id, id), eq(workout_logs.user_id, userId)));
   res.json({ ok: true });
 });
 
 // GET /api/training/workouts
 router.get('/workouts', async (req: Request, res: Response) => {
+  const { userId } = req;
   const { planId, sessionId } = req.query as any;
-  const conditions = [];
+  const conditions: any[] = [eq(workout_logs.user_id, userId)];
   if (planId) conditions.push(eq(workout_logs.plan_id, parseInt(planId)));
   if (sessionId) conditions.push(eq(workout_logs.session_id, parseInt(sessionId)));
 
@@ -289,7 +314,7 @@ router.get('/workouts', async (req: Request, res: Response) => {
   })
     .from(workout_logs)
     .innerJoin(training_sessions, eq(training_sessions.id, workout_logs.session_id))
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(workout_logs.started_at));
 
   res.json(logs);
@@ -297,9 +322,11 @@ router.get('/workouts', async (req: Request, res: Response) => {
 
 // GET /api/training/workouts/:id
 router.get('/workouts/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  const [log] = await db.select().from(workout_logs).where(eq(workout_logs.id, id));
+  const [log] = await db.select().from(workout_logs)
+    .where(and(eq(workout_logs.id, id), eq(workout_logs.user_id, userId)));
   if (!log) { res.status(404).json({ error: 'Workout not found' }); return; }
 
   const sets = await db.select({
@@ -318,7 +345,7 @@ router.get('/workouts/:id', async (req: Request, res: Response) => {
   })
     .from(workout_sets)
     .leftJoin(training_exercises, eq(training_exercises.id, workout_sets.exercise_id))
-    .where(eq(workout_sets.workout_log_id, id))
+    .where(and(eq(workout_sets.workout_log_id, id), eq(workout_sets.user_id, userId)))
     .orderBy(asc(training_exercises.sort_order), asc(workout_sets.set_number));
 
   res.json({ ...log, sets });
@@ -326,14 +353,16 @@ router.get('/workouts/:id', async (req: Request, res: Response) => {
 
 // DELETE /api/training/workouts/:id
 router.delete('/workouts/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  await db.delete(workout_logs).where(eq(workout_logs.id, id));
+  await db.delete(workout_logs).where(and(eq(workout_logs.id, id), eq(workout_logs.user_id, userId)));
   res.json({ ok: true });
 });
 
 // POST /api/training/workouts/:id/sets
 router.post('/workouts/:id/sets', async (req: Request, res: Response) => {
+  const { userId } = req;
   const workoutId = parseInt(req.params.id as string);
   if (isNaN(workoutId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const { exerciseId, setNumber, reps, weight, completed, notes, duration_seconds, distance_meters } = req.body as any;
@@ -350,12 +379,14 @@ router.post('/workouts/:id/sets', async (req: Request, res: Response) => {
     notes: notes ?? null,
     duration_seconds: duration_seconds ?? null,
     distance_meters: distance_meters ?? null,
+    user_id: userId,
   }).returning({ id: workout_sets.id });
   res.json({ setId: s.id });
 });
 
 // PUT /api/training/sets/:id
 router.put('/sets/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
   const body = req.body as any;
@@ -369,25 +400,30 @@ router.put('/sets/:id', async (req: Request, res: Response) => {
   if ('distance_meters' in body) updates.distance_meters = body.distance_meters ?? null;
 
   if (Object.keys(updates).length > 0) {
-    await db.update(workout_sets).set(updates).where(eq(workout_sets.id, id));
+    await db.update(workout_sets).set(updates)
+      .where(and(eq(workout_sets.id, id), eq(workout_sets.user_id, userId)));
   }
   res.json({ ok: true });
 });
 
 // DELETE /api/training/sets/:id
 router.delete('/sets/:id', async (req: Request, res: Response) => {
+  const { userId } = req;
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
-  await db.delete(workout_sets).where(eq(workout_sets.id, id));
+  await db.delete(workout_sets)
+    .where(and(eq(workout_sets.id, id), eq(workout_sets.user_id, userId)));
   res.json({ ok: true });
 });
 
 // GET /api/training/exercises/:id/history
 router.get('/exercises/:id/history', async (req: Request, res: Response) => {
+  const { userId } = req;
   const exerciseId = parseInt(req.params.id as string);
   if (isNaN(exerciseId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
 
-  const [exercise] = await db.select({ type: training_exercises.type }).from(training_exercises).where(eq(training_exercises.id, exerciseId));
+  const [exercise] = await db.select({ type: training_exercises.type }).from(training_exercises)
+    .where(and(eq(training_exercises.id, exerciseId), eq(training_exercises.user_id, userId)));
   const exType = exercise?.type ?? 'strength';
 
   const rows = await db.select({
@@ -402,7 +438,11 @@ router.get('/exercises/:id/history', async (req: Request, res: Response) => {
   })
     .from(workout_sets)
     .innerJoin(workout_logs, eq(workout_logs.id, workout_sets.workout_log_id))
-    .where(and(eq(workout_sets.exercise_id, exerciseId), eq(workout_sets.completed, true)))
+    .where(and(
+      eq(workout_sets.exercise_id, exerciseId),
+      eq(workout_sets.user_id, userId),
+      eq(workout_sets.completed, true),
+    ))
     .orderBy(asc(workout_logs.started_at), asc(workout_sets.set_number));
 
   const byWorkout: Record<string, { date: string; sets: any[] }> = {};
@@ -445,10 +485,12 @@ router.get('/exercises/:id/history', async (req: Request, res: Response) => {
 
 // POST /api/training/exercises/:id/describe
 router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
+  const { userId } = req;
   const exerciseId = parseInt(req.params.id as string);
   if (isNaN(exerciseId)) { res.status(400).json({ error: 'Invalid ID' }); return; }
 
-  const [exercise] = await db.select().from(training_exercises).where(eq(training_exercises.id, exerciseId));
+  const [exercise] = await db.select().from(training_exercises)
+    .where(and(eq(training_exercises.id, exerciseId), eq(training_exercises.user_id, userId)));
   if (!exercise) { res.status(404).json({ error: 'Exercise not found' }); return; }
 
   const provider = pickProviderFromReq(req);
@@ -467,7 +509,8 @@ router.post('/exercises/:id/describe', async (req: Request, res: Response) => {
     res.status(502).json({ error: err.message || 'Error generating description' }); return;
   }
 
-  await db.update(training_exercises).set({ description }).where(eq(training_exercises.id, exerciseId));
+  await db.update(training_exercises).set({ description })
+    .where(and(eq(training_exercises.id, exerciseId), eq(training_exercises.user_id, userId)));
   res.json({ description });
 });
 

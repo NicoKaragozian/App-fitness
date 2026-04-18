@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiFetch } from '../api/client';
+import { apiFetch, apiFetchRaw } from '../api/client';
 
 export interface TrainingPlanSummary {
   id: number;
@@ -44,7 +44,7 @@ export function useTrainingPlans() {
     abortRef.current = new AbortController();
 
     const language = (() => { try { return localStorage.getItem('drift_language') || 'en'; } catch { return 'en'; } })();
-    const response = await fetch('/api/training/generate', {
+    const response = await apiFetchRaw('/training/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Language': language },
       body: JSON.stringify({ goal, provider, language }),

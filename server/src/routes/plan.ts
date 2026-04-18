@@ -1,14 +1,19 @@
 import { Router } from 'express';
-import { eq, asc, sql, count } from 'drizzle-orm';
+import { eq, asc, and } from 'drizzle-orm';
 import db from '../db/client.js';
-import { weekly_plan, training_sessions } from '../db/schema/index.js';
+import { weekly_plan } from '../db/schema/index.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = Router();
 
-// Get all plan items
+router.use(requireUser);
+
 router.get('/', async (req, res) => {
+  const { userId } = req;
   try {
-    const items = await db.select().from(weekly_plan).orderBy(asc(weekly_plan.created_at));
+    const items = await db.select().from(weekly_plan)
+      .where(eq(weekly_plan.user_id, userId))
+      .orderBy(asc(weekly_plan.created_at));
     res.json(items);
   } catch (error) {
     console.error('Failed to get plan:', error);
@@ -16,8 +21,8 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create a new item
 router.post('/', async (req, res) => {
+  const { userId } = req;
   const { day, sport, detail, plan_id, session_id } = req.body;
   if (!day || !sport) { res.status(400).json({ error: 'Missing day or sport' }); return; }
 
@@ -30,6 +35,7 @@ router.post('/', async (req, res) => {
       plan_id: plan_id ?? null,
       session_id: session_id ?? null,
       created_at: new Date().toISOString(),
+      user_id: userId,
     }).returning();
 
     res.json({
@@ -46,8 +52,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Update an item
 router.put('/:id', async (req, res) => {
+  const { userId } = req;
   const { id } = req.params;
   const { day, sport, detail, completed, plan_id, session_id } = req.body;
 
@@ -60,44 +66,23 @@ router.put('/:id', async (req, res) => {
     if (plan_id !== undefined) updates.plan_id = plan_id;
     if (session_id !== undefined) updates.session_id = session_id;
 
-    await db.update(weekly_plan).set(updates).where(eq(weekly_plan.id, parseInt(id)));
+    await db.update(weekly_plan).set(updates)
+      .where(and(eq(weekly_plan.id, parseInt(id)), eq(weekly_plan.user_id, userId)));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Delete an item
 router.delete('/:id', async (req, res) => {
+  const { userId } = req;
   const { id } = req.params;
   try {
-    await db.delete(weekly_plan).where(eq(weekly_plan.id, parseInt(id)));
+    await db.delete(weekly_plan)
+      .where(and(eq(weekly_plan.id, parseInt(id)), eq(weekly_plan.user_id, userId)));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Initial seeder
-router.post('/seed', async (req, res) => {
-  const mockPlan = [
-    { day: 'MON', sport: 'GYM / STRENGTH', detail: 'UPPER BODY STRENGTH', completed: true },
-    { day: 'TUE', sport: 'WINGFOIL', detail: 'TECHNICAL SESSION - WIND 15KT', completed: true },
-    { day: 'WED', sport: 'TENNIS', detail: 'MATCH PLAY - 90 MIN', completed: true },
-    { day: 'THU', sport: 'GYM / STRENGTH', detail: 'LOWER BODY + CORE', completed: false },
-    { day: 'FRI', sport: 'TENNIS', detail: 'TECHNICAL TRAINING', completed: false },
-  ];
-
-  try {
-    const [{ c }] = await db.select({ c: count() }).from(weekly_plan);
-    if (Number(c) === 0) {
-      await db.insert(weekly_plan).values(
-        mockPlan.map(item => ({ ...item, created_at: new Date().toISOString() }))
-      );
-    }
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to seed' });
   }
 });
 

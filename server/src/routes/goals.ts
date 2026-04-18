@@ -1,16 +1,20 @@
 import express from 'express';
-import { eq, desc, asc, sql, count } from 'drizzle-orm';
+import { eq, desc, asc, sql, and } from 'drizzle-orm';
 import db from '../db/client.js';
 import { goals, goal_milestones } from '../db/schema/index.js';
 import { buildGoalContext } from '../ai/context.js';
 import { getPrompt } from '../ai/prompts.js';
 import { pickProviderFromReq, pickLanguageFromReq, isAIConfigured } from '../ai/providers/index.js';
 import { modelNameFor } from '../ai/config.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = express.Router();
 
+router.use(requireUser);
+
 // POST /api/goals/generate
 router.post('/generate', async (req, res) => {
+  const { userId } = req;
   const { objective, targetDate } = req.body;
   if (!objective?.trim()) { res.status(400).json({ error: 'objective required' }); return; }
 
@@ -21,7 +25,7 @@ router.post('/generate', async (req, res) => {
   }
 
   const lang = pickLanguageFromReq(req);
-  const context = await buildGoalContext(objective, targetDate);
+  const context = await buildGoalContext(objective, userId, targetDate);
   const systemPrompt = getPrompt('goal_plan', lang);
 
   try {
@@ -43,7 +47,7 @@ router.post('/generate', async (req, res) => {
       }
       parsed = JSON.parse(jsonStr);
     } catch {
-      res.status(502).json({ error: 'Claude did not generate valid JSON. Try again.' }); return;
+      res.status(502).json({ error: 'AI did not generate valid JSON. Try again.' }); return;
     }
 
     if (!parsed.title || !Array.isArray(parsed.phases) || parsed.phases.length === 0) {
@@ -62,6 +66,7 @@ router.post('/generate', async (req, res) => {
         raw_ai_response: raw,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        user_id: userId,
       }).returning({ id: goals.id });
 
       const gId = goalRow.id;
@@ -78,15 +83,17 @@ router.post('/generate', async (req, res) => {
           duration: p.duration ?? null,
           tips: Array.isArray(p.tips) ? p.tips : [],
           sort_order: i,
+          user_id: userId,
         });
       }
 
       return gId;
     });
 
-    const [goal] = await db.select().from(goals).where(eq(goals.id, goalId));
+    const [goal] = await db.select().from(goals)
+      .where(and(eq(goals.id, goalId), eq(goals.user_id, userId)));
     const milestones = await db.select().from(goal_milestones)
-      .where(eq(goal_milestones.goal_id, goalId))
+      .where(and(eq(goal_milestones.goal_id, goalId), eq(goal_milestones.user_id, userId)))
       .orderBy(asc(goal_milestones.sort_order));
 
     res.json({ ...goal, milestones });
@@ -97,6 +104,7 @@ router.post('/generate', async (req, res) => {
 
 // GET /api/goals
 router.get('/', async (req, res) => {
+  const { userId } = req;
   const rows = await db.select({
     id: goals.id,
     title: goals.title,
@@ -115,6 +123,7 @@ router.get('/', async (req, res) => {
   })
     .from(goals)
     .leftJoin(goal_milestones, eq(goal_milestones.goal_id, goals.id))
+    .where(eq(goals.user_id, userId))
     .groupBy(goals.id)
     .orderBy(desc(goals.created_at));
 
@@ -123,16 +132,19 @@ router.get('/', async (req, res) => {
 
 // GET /api/goals/:id
 router.get('/:id', async (req, res) => {
-  const [goal] = await db.select().from(goals).where(eq(goals.id, parseInt(req.params.id)));
+  const { userId } = req;
+  const [goal] = await db.select().from(goals)
+    .where(and(eq(goals.id, parseInt(req.params.id)), eq(goals.user_id, userId)));
   if (!goal) { res.status(404).json({ error: 'Goal not found' }); return; }
   const milestones = await db.select().from(goal_milestones)
-    .where(eq(goal_milestones.goal_id, goal.id))
+    .where(and(eq(goal_milestones.goal_id, goal.id), eq(goal_milestones.user_id, userId)))
     .orderBy(asc(goal_milestones.sort_order));
   res.json({ ...goal, milestones });
 });
 
 // PUT /api/goals/:id
 router.put('/:id', async (req, res) => {
+  const { userId } = req;
   const updates: Partial<typeof goals.$inferInsert> = { updated_at: new Date().toISOString() };
 
   if (req.body.title !== undefined) updates.title = req.body.title;
@@ -141,28 +153,41 @@ router.put('/:id', async (req, res) => {
 
   if (Object.keys(updates).length <= 1) { res.status(400).json({ error: 'No fields to update' }); return; }
 
-  await db.update(goals).set(updates).where(eq(goals.id, parseInt(req.params.id)));
-  const [goal] = await db.select().from(goals).where(eq(goals.id, parseInt(req.params.id)));
+  await db.update(goals).set(updates)
+    .where(and(eq(goals.id, parseInt(req.params.id)), eq(goals.user_id, userId)));
+  const [goal] = await db.select().from(goals)
+    .where(and(eq(goals.id, parseInt(req.params.id)), eq(goals.user_id, userId)));
   res.json(goal);
 });
 
 // DELETE /api/goals/:id
 router.delete('/:id', async (req, res) => {
-  await db.delete(goals).where(eq(goals.id, parseInt(req.params.id)));
+  const { userId } = req;
+  await db.delete(goals)
+    .where(and(eq(goals.id, parseInt(req.params.id)), eq(goals.user_id, userId)));
   res.json({ ok: true });
 });
 
 // PUT /api/goals/:goalId/milestones/:milestoneId
 router.put('/:goalId/milestones/:milestoneId', async (req, res) => {
+  const { userId } = req;
   const { completed } = req.body;
   const completedAt = completed ? new Date().toISOString() : null;
   await db.update(goal_milestones).set({
     completed: Boolean(completed),
     completed_at: completedAt,
   }).where(
-    sql`${goal_milestones.id} = ${parseInt(req.params.milestoneId)} AND ${goal_milestones.goal_id} = ${parseInt(req.params.goalId)}`
+    and(
+      eq(goal_milestones.id, parseInt(req.params.milestoneId)),
+      eq(goal_milestones.goal_id, parseInt(req.params.goalId)),
+      eq(goal_milestones.user_id, userId),
+    )
   );
-  const [milestone] = await db.select().from(goal_milestones).where(eq(goal_milestones.id, parseInt(req.params.milestoneId)));
+  const [milestone] = await db.select().from(goal_milestones)
+    .where(and(
+      eq(goal_milestones.id, parseInt(req.params.milestoneId)),
+      eq(goal_milestones.user_id, userId),
+    ));
   res.json(milestone);
 });
 

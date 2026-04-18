@@ -175,7 +175,7 @@ export const claudeProvider: Provider = {
     }
   },
 
-  async streamAgent({ systemPrompt, messages, res, maxTokens = 4096, maxIterations = 5 }: AgentOptions) {
+  async streamAgent({ systemPrompt, messages, res, maxTokens = 4096, maxIterations = 5, userId }: AgentOptions) {
     if (!this.isConfigured()) {
       res.status(503).json({ error: 'ANTHROPIC_API_KEY not configured in server/.env' });
       return;
@@ -227,7 +227,7 @@ export const claudeProvider: Provider = {
             const { result, isError } = await executeTool(
               toolUse.name,
               toolUse.input as Record<string, any>,
-              { provider: claudeProvider }
+              { provider: claudeProvider, userId }
             );
 
             res.write(`data: ${JSON.stringify({

@@ -1,5 +1,6 @@
 import { pgTable, serial, text, integer, index } from 'drizzle-orm/pg-core';
 import { training_plans } from './training.js';
+import { user } from './auth.js';
 
 export const nutrition_logs = pgTable('nutrition_logs', {
   id: serial('id').primaryKey(),
@@ -17,8 +18,10 @@ export const nutrition_logs = pgTable('nutrition_logs', {
   ai_model: text('ai_model'),
   ai_confidence: text('ai_confidence'),
   raw_ai_response: text('raw_ai_response'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (table) => [
   index('idx_nutrition_logs_date').on(table.date),
+  index('idx_nutrition_logs_user_id').on(table.user_id),
 ]);
 
 export const nutrition_plans = pgTable('nutrition_plans', {
@@ -34,7 +37,10 @@ export const nutrition_plans = pgTable('nutrition_plans', {
   ai_model: text('ai_model'),
   raw_ai_response: text('raw_ai_response'),
   created_at: text('created_at'),
-});
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+}, (table) => [
+  index('idx_nutrition_plans_user_id').on(table.user_id),
+]);
 
 export const nutrition_plan_meals = pgTable('nutrition_plan_meals', {
   id: serial('id').primaryKey(),
@@ -47,4 +53,5 @@ export const nutrition_plan_meals = pgTable('nutrition_plan_meals', {
   carbs_g: integer('carbs_g'),
   fat_g: integer('fat_g'),
   option_number: integer('option_number').default(1),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 });

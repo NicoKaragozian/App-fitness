@@ -23,12 +23,12 @@ export interface AnalyzePayload {
 }
 
 // --- Session context: individual activity + comparison ---
-async function buildSessionContext(payload: AnalyzePayload): Promise<string> {
+async function buildSessionContext(payload: AnalyzePayload, userId: string): Promise<string> {
   const { activityId } = payload;
   if (!activityId) return '';
 
   const [row] = await db.select().from(activitiesTable)
-    .where(eq(activitiesTable.garmin_id, activityId)).limit(1);
+    .where(and(eq(activitiesTable.user_id, userId), eq(activitiesTable.garmin_id, activityId))).limit(1);
   if (!row) return 'Activity not found.';
 
   const raw = JSON.parse(row.raw_json ?? '{}');
@@ -70,6 +70,7 @@ Location: ${raw.locationName ?? '-'}`);
     calories: activitiesTable.calories,
   }).from(activitiesTable)
     .where(and(
+      eq(activitiesTable.user_id, userId),
       eq(activitiesTable.sport_type, row.sport_type),
       sql`${activitiesTable.garmin_id} != ${activityId}`,
     ))
@@ -93,7 +94,7 @@ Average distance: ${avgDist > 0 ? `${avgDist.toFixed(1)}km` : '-'}`);
 }
 
 // --- Sleep context ---
-async function buildSleepContext(payload: AnalyzePayload): Promise<string> {
+async function buildSleepContext(payload: AnalyzePayload, userId: string): Promise<string> {
   const limit = payload.period === 'monthly' ? 30 : 14;
   const sections: string[] = [];
 
@@ -108,8 +109,8 @@ async function buildSleepContext(payload: AnalyzePayload): Promise<string> {
     hrv: hrvTable.nightly_avg,
     hrv_status: hrvTable.status,
   }).from(sleepTable)
-    .leftJoin(hrvTable, eq(sleepTable.date, hrvTable.date))
-    .where(sql`${sleepTable.score} IS NOT NULL`)
+    .leftJoin(hrvTable, and(eq(sleepTable.date, hrvTable.date), eq(hrvTable.user_id, userId)))
+    .where(and(eq(sleepTable.user_id, userId), sql`${sleepTable.score} IS NOT NULL`))
     .orderBy(desc(sleepTable.date))
     .limit(limit);
 
@@ -133,21 +134,27 @@ async function buildSleepContext(payload: AnalyzePayload): Promise<string> {
 }
 
 // --- Wellness context ---
-async function buildWellnessContext(payload: AnalyzePayload): Promise<string> {
+async function buildWellnessContext(payload: AnalyzePayload, userId: string): Promise<string> {
   const limit = payload.period === 'monthly' ? 30 : 14;
   const sections: string[] = [];
 
   const hrvRows = await db.select({
     date: hrvTable.date, nightly_avg: hrvTable.nightly_avg, status: hrvTable.status,
-  }).from(hrvTable).where(sql`${hrvTable.nightly_avg} IS NOT NULL`).orderBy(desc(hrvTable.date)).limit(limit);
+  }).from(hrvTable)
+    .where(and(eq(hrvTable.user_id, userId), sql`${hrvTable.nightly_avg} IS NOT NULL`))
+    .orderBy(desc(hrvTable.date)).limit(limit);
 
   const stressRows = await db.select({
     date: stressTable.date, avg_stress: stressTable.avg_stress, max_stress: stressTable.max_stress,
-  }).from(stressTable).where(sql`${stressTable.avg_stress} IS NOT NULL`).orderBy(desc(stressTable.date)).limit(limit);
+  }).from(stressTable)
+    .where(and(eq(stressTable.user_id, userId), sql`${stressTable.avg_stress} IS NOT NULL`))
+    .orderBy(desc(stressTable.date)).limit(limit);
 
   const summaryRows = await db.select({
     date: daily_summary.date, steps: daily_summary.steps, resting_hr: daily_summary.resting_hr,
-  }).from(daily_summary).where(sql`${daily_summary.steps} IS NOT NULL`).orderBy(desc(daily_summary.date)).limit(limit);
+  }).from(daily_summary)
+    .where(and(eq(daily_summary.user_id, userId), sql`${daily_summary.steps} IS NOT NULL`))
+    .orderBy(desc(daily_summary.date)).limit(limit);
 
   if (hrvRows.length > 0) {
     const lines = hrvRows.map(h => `${h.date} | HRV:${Number(h.nightly_avg).toFixed(0)}ms | status:${h.status || '-'}`);
@@ -166,11 +173,12 @@ async function buildWellnessContext(payload: AnalyzePayload): Promise<string> {
 }
 
 // --- Sport group context ---
-async function buildSportContext(payload: AnalyzePayload): Promise<string> {
+async function buildSportContext(payload: AnalyzePayload, userId: string): Promise<string> {
   const { groupId } = payload;
   if (!groupId) return '';
 
-  const [group] = await db.select().from(sport_groups).where(eq(sport_groups.id, groupId)).limit(1);
+  const [group] = await db.select().from(sport_groups)
+    .where(and(eq(sport_groups.user_id, userId), eq(sport_groups.id, groupId))).limit(1);
   if (!group) return 'Sport group not found.';
 
   const sportTypes: string[] = group.sport_types as string[];
@@ -185,7 +193,7 @@ async function buildSportContext(payload: AnalyzePayload): Promise<string> {
     avg_hr: activitiesTable.avg_hr,
     max_speed: activitiesTable.max_speed,
   }).from(activitiesTable)
-    .where(inArray(activitiesTable.sport_type, sportTypes))
+    .where(and(eq(activitiesTable.user_id, userId), inArray(activitiesTable.sport_type, sportTypes)))
     .orderBy(desc(activitiesTable.start_time))
     .limit(30);
 
@@ -226,7 +234,7 @@ Avg HR: ${avgHr ? `${avgHr}bpm` : '-'}`);
 }
 
 // --- Monthly summary context ---
-async function buildMonthlyContext(payload: AnalyzePayload): Promise<string> {
+async function buildMonthlyContext(payload: AnalyzePayload, userId: string): Promise<string> {
   const month = payload.month || new Date().toISOString().slice(0, 7);
   const startDate = `${month}-01`;
   const endDate = `${month}-31`;
@@ -241,6 +249,7 @@ async function buildMonthlyContext(payload: AnalyzePayload): Promise<string> {
     avg_hr: activitiesTable.avg_hr,
   }).from(activitiesTable)
     .where(and(
+      eq(activitiesTable.user_id, userId),
       gte(activitiesTable.start_time, `${startDate}T00:00:00`),
       lte(activitiesTable.start_time, `${endDate}T23:59:59`),
     ))
@@ -266,7 +275,12 @@ async function buildMonthlyContext(payload: AnalyzePayload): Promise<string> {
 
   const sleepRows = await db.select({ score: sleepTable.score, duration_seconds: sleepTable.duration_seconds })
     .from(sleepTable)
-    .where(and(gte(sleepTable.date, startDate), lte(sleepTable.date, endDate), sql`${sleepTable.score} IS NOT NULL`));
+    .where(and(
+      eq(sleepTable.user_id, userId),
+      gte(sleepTable.date, startDate),
+      lte(sleepTable.date, endDate),
+      sql`${sleepTable.score} IS NOT NULL`,
+    ));
 
   if (sleepRows.length > 0) {
     const avgScore = Math.round(sleepRows.reduce((s, r) => s + r.score!, 0) / sleepRows.length);
@@ -276,7 +290,12 @@ async function buildMonthlyContext(payload: AnalyzePayload): Promise<string> {
 
   const stressRows = await db.select({ avg_stress: stressTable.avg_stress })
     .from(stressTable)
-    .where(and(gte(stressTable.date, startDate), lte(stressTable.date, endDate), sql`${stressTable.avg_stress} IS NOT NULL`));
+    .where(and(
+      eq(stressTable.user_id, userId),
+      gte(stressTable.date, startDate),
+      lte(stressTable.date, endDate),
+      sql`${stressTable.avg_stress} IS NOT NULL`,
+    ));
 
   if (stressRows.length > 0) {
     const avgStress = Math.round(stressRows.reduce((s, r) => s + r.avg_stress!, 0) / stressRows.length);
@@ -287,8 +306,8 @@ async function buildMonthlyContext(payload: AnalyzePayload): Promise<string> {
 }
 
 // --- Daily briefing context (uses computeInsights) ---
-async function buildDailyContext(): Promise<string> {
-  const { stats, recommendations } = await computeInsights();
+async function buildDailyContext(userId: string): Promise<string> {
+  const { stats, recommendations } = await computeInsights(userId);
   const sections: string[] = [];
 
   sections.push(`## Current status
@@ -305,7 +324,8 @@ Load 3d: ${stats.trainingLoad.last3d}min | Load 7d: ${stats.trainingLoad.last7d}
 
   const todayName = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][new Date().getDay()];
   const plans = await db.select({ sport: weekly_plan.sport, detail: weekly_plan.detail, completed: weekly_plan.completed })
-    .from(weekly_plan).where(eq(weekly_plan.day, todayName));
+    .from(weekly_plan)
+    .where(and(eq(weekly_plan.user_id, userId), eq(weekly_plan.day, todayName)));
   if (plans.length > 0) {
     const planStr = plans.map(p => `- ${p.sport}${p.detail ? `: ${p.detail}` : ''} ${p.completed ? '✓' : '○'}`).join('\n');
     sections.push(`## Plan for today (${todayName})\n${planStr}`);
@@ -318,7 +338,8 @@ Load 3d: ${stats.trainingLoad.last3d}min | Load 7d: ${stats.trainingLoad.last7d}
     carbs: sql<number>`SUM(${nutrition_logs.carbs_g})`,
     fat: sql<number>`SUM(${nutrition_logs.fat_g})`,
     meals: sql<number>`COUNT(*)`,
-  }).from(nutrition_logs).where(eq(nutrition_logs.date, todayStr));
+  }).from(nutrition_logs)
+    .where(and(eq(nutrition_logs.user_id, userId), eq(nutrition_logs.date, todayStr)));
 
   if (nutritionToday?.meals > 0) {
     sections.push(`## Today's nutrition\n${nutritionToday.meals} meals | ${nutritionToday.cals || 0}kcal | prot:${nutritionToday.prot || 0}g | carbs:${nutritionToday.carbs || 0}g | fat:${nutritionToday.fat || 0}g`);
@@ -328,8 +349,9 @@ Load 3d: ${stats.trainingLoad.last3d}min | Load 7d: ${stats.trainingLoad.last7d}
 }
 
 // --- User assessment context ---
-export async function getAssessmentContext(): Promise<string> {
-  const [row] = await db.select().from(user_assessment).where(eq(user_assessment.id, 1)).limit(1);
+export async function getAssessmentContext(userId: string): Promise<string> {
+  const [row] = await db.select().from(user_assessment)
+    .where(eq(user_assessment.user_id, userId)).limit(1);
   if (!row) return '';
 
   const lines: string[] = [];
@@ -365,11 +387,11 @@ export async function getAssessmentContext(): Promise<string> {
 }
 
 // --- Training plan context ---
-export async function buildTrainingContext(goal: string): Promise<string> {
+export async function buildTrainingContext(goal: string, userId: string): Promise<string> {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const sections: string[] = [];
 
-  const assessmentCtx = await getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext(userId);
   if (assessmentCtx) sections.push(assessmentCtx);
 
   sections.push(`## User's goal\n${goal}`);
@@ -383,7 +405,7 @@ export async function buildTrainingContext(goal: string): Promise<string> {
     max_speed: activitiesTable.max_speed,
     calories: activitiesTable.calories,
   }).from(activitiesTable)
-    .where(gte(activitiesTable.start_time, `${cutoff}T00:00:00`))
+    .where(and(eq(activitiesTable.user_id, userId), gte(activitiesTable.start_time, `${cutoff}T00:00:00`)))
     .orderBy(desc(activitiesTable.start_time))
     .limit(40);
 
@@ -398,7 +420,7 @@ export async function buildTrainingContext(goal: string): Promise<string> {
   }
 
   const groups = await db.select({ name: sport_groups.name, sport_types: sport_groups.sport_types })
-    .from(sport_groups).orderBy(sport_groups.sort_order);
+    .from(sport_groups).where(eq(sport_groups.user_id, userId)).orderBy(sport_groups.sort_order);
   if (groups.length > 0) {
     const groupStr = groups.map(g => `- ${g.name}: ${(g.sport_types as string[]).join(', ')}`).join('\n');
     sections.push(`## User's sport categories\n${groupStr}`);
@@ -408,7 +430,7 @@ export async function buildTrainingContext(goal: string): Promise<string> {
     date: sleepTable.date, score: sleepTable.score, duration_seconds: sleepTable.duration_seconds,
     deep_seconds: sleepTable.deep_seconds, rem_seconds: sleepTable.rem_seconds,
   }).from(sleepTable)
-    .where(and(gte(sleepTable.date, cutoff), sql`${sleepTable.score} IS NOT NULL`))
+    .where(and(eq(sleepTable.user_id, userId), gte(sleepTable.date, cutoff), sql`${sleepTable.score} IS NOT NULL`))
     .orderBy(desc(sleepTable.date)).limit(14);
 
   if (sleepRows.length > 0) {
@@ -422,7 +444,7 @@ export async function buildTrainingContext(goal: string): Promise<string> {
 
   const hrvRows = await db.select({ date: hrvTable.date, nightly_avg: hrvTable.nightly_avg, status: hrvTable.status })
     .from(hrvTable)
-    .where(and(gte(hrvTable.date, cutoff), sql`${hrvTable.nightly_avg} IS NOT NULL`))
+    .where(and(eq(hrvTable.user_id, userId), gte(hrvTable.date, cutoff), sql`${hrvTable.nightly_avg} IS NOT NULL`))
     .orderBy(desc(hrvTable.date)).limit(7);
 
   if (hrvRows.length > 0) {
@@ -432,7 +454,7 @@ export async function buildTrainingContext(goal: string): Promise<string> {
 
   const stressRows = await db.select({ date: stressTable.date, avg_stress: stressTable.avg_stress })
     .from(stressTable)
-    .where(and(gte(stressTable.date, cutoff), sql`${stressTable.avg_stress} IS NOT NULL`))
+    .where(and(eq(stressTable.user_id, userId), gte(stressTable.date, cutoff), sql`${stressTable.avg_stress} IS NOT NULL`))
     .orderBy(desc(stressTable.date)).limit(7);
 
   if (stressRows.length > 0) {
@@ -446,7 +468,8 @@ export async function buildTrainingContext(goal: string): Promise<string> {
     carbs: sql<number>`SUM(${nutrition_logs.carbs_g})`,
     fat: sql<number>`SUM(${nutrition_logs.fat_g})`,
     days: sql<number>`COUNT(DISTINCT ${nutrition_logs.date})`,
-  }).from(nutrition_logs).where(gte(nutrition_logs.date, cutoff));
+  }).from(nutrition_logs)
+    .where(and(eq(nutrition_logs.user_id, userId), gte(nutrition_logs.date, cutoff)));
 
   if (nutritionRow?.days > 0) {
     const avgCals = Math.round(nutritionRow.cals / nutritionRow.days);
@@ -460,12 +483,12 @@ export async function buildTrainingContext(goal: string): Promise<string> {
 }
 
 // --- Goal plan context ---
-export async function buildGoalContext(objective: string, targetDate?: string): Promise<string> {
+export async function buildGoalContext(objective: string, userId: string, targetDate?: string): Promise<string> {
   const today = new Date().toISOString().slice(0, 10);
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const sections: string[] = [];
 
-  const assessmentCtx = await getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext(userId);
   if (assessmentCtx) sections.push(assessmentCtx);
 
   sections.push(`## User's goal\n${objective}`);
@@ -486,7 +509,7 @@ export async function buildGoalContext(objective: string, targetDate?: string): 
     distance: activitiesTable.distance,
     avg_hr: activitiesTable.avg_hr,
   }).from(activitiesTable)
-    .where(gte(activitiesTable.start_time, `${cutoff}T00:00:00`))
+    .where(and(eq(activitiesTable.user_id, userId), gte(activitiesTable.start_time, `${cutoff}T00:00:00`)))
     .orderBy(desc(activitiesTable.start_time))
     .limit(30);
 
@@ -500,7 +523,7 @@ export async function buildGoalContext(objective: string, targetDate?: string): 
   }
 
   const groups = await db.select({ name: sport_groups.name, sport_types: sport_groups.sport_types })
-    .from(sport_groups).orderBy(sport_groups.sort_order);
+    .from(sport_groups).where(eq(sport_groups.user_id, userId)).orderBy(sport_groups.sort_order);
   if (groups.length > 0) {
     const groupStr = groups.map(g => `- ${g.name}: ${(g.sport_types as string[]).join(', ')}`).join('\n');
     sections.push(`## User's sports\n${groupStr}`);
@@ -508,7 +531,7 @@ export async function buildGoalContext(objective: string, targetDate?: string): 
 
   const sleepRows = await db.select({ date: sleepTable.date, score: sleepTable.score })
     .from(sleepTable)
-    .where(and(gte(sleepTable.date, cutoff), sql`${sleepTable.score} IS NOT NULL`))
+    .where(and(eq(sleepTable.user_id, userId), gte(sleepTable.date, cutoff), sql`${sleepTable.score} IS NOT NULL`))
     .orderBy(desc(sleepTable.date)).limit(7);
 
   if (sleepRows.length > 0) {
@@ -518,7 +541,7 @@ export async function buildGoalContext(objective: string, targetDate?: string): 
 
   const hrvRows = await db.select({ date: hrvTable.date, nightly_avg: hrvTable.nightly_avg, status: hrvTable.status })
     .from(hrvTable)
-    .where(and(gte(hrvTable.date, cutoff), sql`${hrvTable.nightly_avg} IS NOT NULL`))
+    .where(and(eq(hrvTable.user_id, userId), gte(hrvTable.date, cutoff), sql`${hrvTable.nightly_avg} IS NOT NULL`))
     .orderBy(desc(hrvTable.date)).limit(7);
 
   if (hrvRows.length > 0) {
@@ -532,33 +555,34 @@ export async function buildGoalContext(objective: string, targetDate?: string): 
 // --- Main dispatcher ---
 export type AnalyzeMode = 'session' | 'sleep' | 'wellness' | 'sport' | 'monthly' | 'daily';
 
-export async function buildAnalyzeContext(mode: AnalyzeMode, payload: AnalyzePayload): Promise<string> {
+export async function buildAnalyzeContext(mode: AnalyzeMode, payload: AnalyzePayload, userId: string): Promise<string> {
   const modeContext = await (async () => {
     switch (mode) {
-      case 'session': return buildSessionContext(payload);
-      case 'sleep': return buildSleepContext(payload);
-      case 'wellness': return buildWellnessContext(payload);
-      case 'sport': return buildSportContext(payload);
-      case 'monthly': return buildMonthlyContext(payload);
-      case 'daily': return buildDailyContext();
+      case 'session': return buildSessionContext(payload, userId);
+      case 'sleep': return buildSleepContext(payload, userId);
+      case 'wellness': return buildWellnessContext(payload, userId);
+      case 'sport': return buildSportContext(payload, userId);
+      case 'monthly': return buildMonthlyContext(payload, userId);
+      case 'daily': return buildDailyContext(userId);
       default: return '';
     }
   })();
 
-  const assessmentCtx = await getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext(userId);
   if (!assessmentCtx) return modeContext;
   return modeContext ? `${assessmentCtx}\n\n${modeContext}` : assessmentCtx;
 }
 
 // Cache key generation
-export function getCacheKey(mode: AnalyzeMode, payload: AnalyzePayload): string {
+export function getCacheKey(mode: AnalyzeMode, payload: AnalyzePayload, userId: string): string {
   const today = new Date().toISOString().slice(0, 10);
+  const prefix = userId.slice(0, 8);
   switch (mode) {
-    case 'session': return `session:${payload.activityId}`;
-    case 'sleep': return `sleep:${payload.period ?? 'weekly'}:${today}`;
-    case 'wellness': return `wellness:${payload.period ?? 'weekly'}:${today}`;
-    case 'sport': return `sport:${payload.groupId}:${payload.period ?? 'total'}:${today}`;
-    case 'monthly': return `monthly:${payload.month || today.slice(0, 7)}`;
-    case 'daily': return `daily:${today}`;
+    case 'session': return `${prefix}:session:${payload.activityId}`;
+    case 'sleep': return `${prefix}:sleep:${payload.period ?? 'weekly'}:${today}`;
+    case 'wellness': return `${prefix}:wellness:${payload.period ?? 'weekly'}:${today}`;
+    case 'sport': return `${prefix}:sport:${payload.groupId}:${payload.period ?? 'total'}:${today}`;
+    case 'monthly': return `${prefix}:monthly:${payload.month || today.slice(0, 7)}`;
+    case 'daily': return `${prefix}:daily:${today}`;
   }
 }

@@ -1,6 +1,6 @@
 // insights/index.ts — Orchestrator: queries DB, computes stats, evaluates rules
 
-import { desc, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import db from '../db/client.js';
 import { sleep, hrv, stress, daily_summary, activities, weekly_plan } from '../db/schema/index.js';
 import {
@@ -20,11 +20,11 @@ interface InsightsResult {
   };
 }
 
-export async function computeInsights(): Promise<InsightsResult> {
+export async function computeInsights(userId: string): Promise<InsightsResult> {
   const today = new Date().toISOString().slice(0, 10);
 
   const sleepRows = await db.select({ date: sleep.date, score: sleep.score })
-    .from(sleep).where(sql`${sleep.score} IS NOT NULL`).orderBy(desc(sleep.date)).limit(30);
+    .from(sleep).where(sql`${sleep.user_id} = ${userId} AND ${sleep.score} IS NOT NULL`).orderBy(desc(sleep.date)).limit(30);
 
   const sleepValues = [...sleepRows].reverse().map(r => r.score!);
   const sleepToday = sleepRows[0]?.score ?? null;
@@ -36,7 +36,7 @@ export async function computeInsights(): Promise<InsightsResult> {
   const sleepTrend = sleepValues.length >= 5 ? trend(sleepValues.slice(-7)) : { direction: 'stable' as const, slope: 0 };
 
   const hrvRows = await db.select({ date: hrv.date, nightly_avg: hrv.nightly_avg, status: hrv.status })
-    .from(hrv).where(sql`${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(30);
+    .from(hrv).where(sql`${hrv.user_id} = ${userId} AND ${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(30);
 
   const hrvValues = [...hrvRows].reverse().map(r => r.nightly_avg!);
   const hrvToday = hrvRows[0]?.nightly_avg ?? null;
@@ -49,7 +49,7 @@ export async function computeInsights(): Promise<InsightsResult> {
   const hrvStatus = hrvRows[0]?.status ?? null;
 
   const stressRows = await db.select({ date: stress.date, avg_stress: stress.avg_stress })
-    .from(stress).where(sql`${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(30);
+    .from(stress).where(sql`${stress.user_id} = ${userId} AND ${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(30);
 
   const stressValues = [...stressRows].reverse().map(r => r.avg_stress!);
   const stressToday = stressRows[0]?.avg_stress ?? null;
@@ -61,7 +61,7 @@ export async function computeInsights(): Promise<InsightsResult> {
     : 'stable';
 
   const hrRows = await db.select({ date: daily_summary.date, resting_hr: daily_summary.resting_hr })
-    .from(daily_summary).where(sql`${daily_summary.resting_hr} IS NOT NULL`).orderBy(desc(daily_summary.date)).limit(14);
+    .from(daily_summary).where(sql`${daily_summary.user_id} = ${userId} AND ${daily_summary.resting_hr} IS NOT NULL`).orderBy(desc(daily_summary.date)).limit(14);
 
   const hrValues = [...hrRows].reverse().map(r => r.resting_hr!);
   const hrToday = hrRows[0]?.resting_hr ?? null;
@@ -72,7 +72,7 @@ export async function computeInsights(): Promise<InsightsResult> {
     date: sql<string>`LEFT(${activities.start_time}, 10)`,
     duration: activities.duration,
     avg_hr: activities.avg_hr,
-  }).from(activities).orderBy(desc(activities.start_time)).limit(100);
+  }).from(activities).where(eq(activities.user_id, userId)).orderBy(desc(activities.start_time)).limit(100);
 
   const actDates = actRows.map(r => r.date);
   const consecutiveDays = consecutiveTrainingDays(actDates);
@@ -83,7 +83,7 @@ export async function computeInsights(): Promise<InsightsResult> {
   const todayName = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][new Date().getDay()];
   const [planRow] = await db.select({ sport: weekly_plan.sport, detail: weekly_plan.detail })
     .from(weekly_plan)
-    .where(sql`${weekly_plan.day} = ${todayName} AND ${weekly_plan.completed} = FALSE`)
+    .where(sql`${weekly_plan.user_id} = ${userId} AND ${weekly_plan.day} = ${todayName} AND ${weekly_plan.completed} = FALSE`)
     .limit(1);
   const todayPlan = planRow ?? null;
 

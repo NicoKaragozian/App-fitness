@@ -102,18 +102,19 @@ export interface ToolResult {
 export async function executeTool(
   name: string,
   input: Record<string, any>,
-  opts: { provider?: Provider } = {}
+  opts: { provider?: Provider; userId?: string } = {}
 ): Promise<ToolResult> {
+  const userId = opts.userId ?? '';
   try {
     switch (name) {
       case 'update_profile':
-        return { result: await executeUpdateProfile(input), isError: false };
+        return { result: await executeUpdateProfile(input, userId), isError: false };
       case 'generate_training_plan':
-        return { result: await executeGenerateTrainingPlan(input, opts.provider), isError: false };
+        return { result: await executeGenerateTrainingPlan(input, userId, opts.provider), isError: false };
       case 'log_meal':
-        return { result: await executeLogMeal(input), isError: false };
+        return { result: await executeLogMeal(input, userId), isError: false };
       case 'get_daily_briefing':
-        return { result: await executeGetDailyBriefing(), isError: false };
+        return { result: await executeGetDailyBriefing(userId), isError: false };
       case 'navigate_to':
         return { result: { navigated: true, route: input.route }, isError: false };
       default:
@@ -127,8 +128,8 @@ export async function executeTool(
 
 // ── Individual tool executors ────────────────────────────────────────
 
-async function executeUpdateProfile(input: Record<string, any>): Promise<any> {
-  const [current] = await db.select().from(user_profile).where(eq(user_profile.id, 1)).limit(1);
+async function executeUpdateProfile(input: Record<string, any>, userId: string): Promise<any> {
+  const [current] = await db.select().from(user_profile).where(eq(user_profile.user_id, userId)).limit(1);
   const now = new Date().toISOString();
 
   const merged: any = {
@@ -168,32 +169,34 @@ async function executeUpdateProfile(input: Record<string, any>): Promise<any> {
     macros = computed;
   }
 
-  await db.insert(user_profile).values({
-    id: 1,
-    ...merged,
-    ...macros,
-    onboarded_at: current?.onboarded_at ?? now,
-    updated_at: now,
-  }).onConflictDoUpdate({
-    target: user_profile.id,
-    set: {
+  if (current) {
+    await db.update(user_profile).set({
       ...merged,
       ...macros,
       updated_at: now,
-    },
-  });
+    }).where(eq(user_profile.user_id, userId));
+  } else {
+    await db.insert(user_profile).values({
+      id: Date.now(),
+      user_id: userId,
+      ...merged,
+      ...macros,
+      onboarded_at: now,
+      updated_at: now,
+    });
+  }
 
   const updatedFields = Object.keys(input).filter(k => input[k] != null);
-  const [updated] = await db.select().from(user_profile).where(eq(user_profile.id, 1)).limit(1);
+  const [updated] = await db.select().from(user_profile).where(eq(user_profile.user_id, userId)).limit(1);
   return { updated_fields: updatedFields, profile: updated };
 }
 
-async function executeGenerateTrainingPlan(input: Record<string, any>, provider?: Provider): Promise<any> {
+async function executeGenerateTrainingPlan(input: Record<string, any>, userId: string, provider?: Provider): Promise<any> {
   if (!provider) {
     throw new Error('Provider required to generate training plan inside agent');
   }
   const goal = input.goal;
-  const context = await buildTrainingContext(goal);
+  const context = await buildTrainingContext(goal, userId);
   const systemPrompt = PROMPTS.training_plan + '\n\nUser data:\n' + context;
 
   const rawContent = await provider.chat(systemPrompt, `Generate a training plan for: ${goal}`, 4096);
@@ -209,8 +212,8 @@ async function executeGenerateTrainingPlan(input: Record<string, any>, provider?
 
   const planObj = JSON.parse(jsonStr);
   const plan = validatePlan(planObj);
-  const planId = await savePlanToDB(plan, rawContent, modelNameFor(provider.name));
-  const fullPlan = await getPlanById(planId);
+  const planId = await savePlanToDB(plan, rawContent, modelNameFor(provider.name), userId);
+  const fullPlan = await getPlanById(planId, userId);
 
   return {
     plan_id: planId,
@@ -224,10 +227,11 @@ async function executeGenerateTrainingPlan(input: Record<string, any>, provider?
   };
 }
 
-async function executeLogMeal(input: Record<string, any>): Promise<any> {
+async function executeLogMeal(input: Record<string, any>, userId: string): Promise<any> {
   const today = new Date().toISOString().slice(0, 10);
 
   const [inserted] = await db.insert(nutrition_logs).values({
+    user_id: userId,
     date: today,
     logged_at: new Date().toISOString(),
     meal_slot: input.meal_slot ?? null,
@@ -251,10 +255,10 @@ async function executeLogMeal(input: Record<string, any>): Promise<any> {
   };
 }
 
-async function executeGetDailyBriefing(): Promise<any> {
+async function executeGetDailyBriefing(userId: string): Promise<any> {
   const [{ stats, recommendations }, dailyContext] = await Promise.all([
-    computeInsights(),
-    buildAnalyzeContext('daily', {}),
+    computeInsights(userId),
+    buildAnalyzeContext('daily', {}, userId),
   ]);
 
   const slpScore = stats.sleep.current ?? 0;
@@ -289,10 +293,11 @@ async function executeGetDailyBriefing(): Promise<any> {
       cals: sql<number>`SUM(${nutrition_logs.calories})`,
       prot: sql<number>`SUM(${nutrition_logs.protein_g})`,
       meals: sql<number>`COUNT(*)`,
-    }).from(nutrition_logs).where(eq(nutrition_logs.date, todayStr)),
+    }).from(nutrition_logs)
+      .where(sql`${nutrition_logs.user_id} = ${userId} AND ${nutrition_logs.date} = ${todayStr}`),
     db.select({ id: training_plans.id, title: training_plans.title })
       .from(training_plans)
-      .where(eq(training_plans.status, 'active'))
+      .where(sql`${training_plans.user_id} = ${userId} AND ${training_plans.status} = 'active'`)
       .orderBy(desc(training_plans.id))
       .limit(1),
   ]);

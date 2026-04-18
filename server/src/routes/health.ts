@@ -1,13 +1,17 @@
 import { Router } from 'express';
-import { desc, sql } from 'drizzle-orm';
+import { desc, sql, eq, and } from 'drizzle-orm';
 import db from '../db/client.js';
 import { sleep, hrv, stress, daily_summary } from '../db/schema/index.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = Router();
+
+router.use(requireUser);
 
 const DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 router.get('/sleep', async (req, res) => {
+  const { userId } = req;
   const period = (req.query.period as string) || 'weekly';
 
   if (period === 'daily') {
@@ -18,8 +22,8 @@ router.get('/sleep', async (req, res) => {
       nightly_avg: hrv.nightly_avg,
     })
       .from(sleep)
-      .leftJoin(hrv, sql`${sleep.date} = ${hrv.date}`)
-      .where(sql`${sleep.score} IS NOT NULL`)
+      .leftJoin(hrv, and(sql`${sleep.date} = ${hrv.date}`, eq(hrv.user_id, userId)))
+      .where(and(eq(sleep.user_id, userId), sql`${sleep.score} IS NOT NULL`))
       .orderBy(desc(sleep.date))
       .limit(1);
 
@@ -36,7 +40,7 @@ router.get('/sleep', async (req, res) => {
 
   const limit = period === 'weekly' ? 7 : 49;
   const sleepRows = await db.select().from(sleep)
-    .where(sql`${sleep.score} IS NOT NULL`)
+    .where(and(eq(sleep.user_id, userId), sql`${sleep.score} IS NOT NULL`))
     .orderBy(desc(sleep.date))
     .limit(limit);
 
@@ -52,7 +56,7 @@ router.get('/sleep', async (req, res) => {
   });
 
   const hrvRows = await db.select({ date: hrv.date, nightly_avg: hrv.nightly_avg })
-    .from(hrv).orderBy(desc(hrv.date)).limit(limit);
+    .from(hrv).where(eq(hrv.user_id, userId)).orderBy(desc(hrv.date)).limit(limit);
 
   const hrvMap = new Map(hrvRows.map((r) => [r.date, r.nightly_avg]));
   for (let i = 0; i < sleepRows.length && i < data.length; i++) {
@@ -64,6 +68,7 @@ router.get('/sleep', async (req, res) => {
 });
 
 router.get('/stress', async (req, res) => {
+  const { userId } = req;
   const period = (req.query.period as string) || 'weekly';
 
   const getMetrics = (dataRows: (typeof stress.$inferSelect)[]) => {
@@ -113,7 +118,8 @@ router.get('/stress', async (req, res) => {
   };
 
   if (period === 'weekly') {
-    const rows = await db.select().from(stress).orderBy(desc(stress.date)).limit(7);
+    const rows = await db.select().from(stress)
+      .where(eq(stress.user_id, userId)).orderBy(desc(stress.date)).limit(7);
     const metrics = getMetrics(rows);
     const data = rows.reverse().map((r) => {
       const d = new Date(r.date + 'T00:00:00');
@@ -121,14 +127,16 @@ router.get('/stress', async (req, res) => {
     });
     const avg = data.length ? Math.round(data.reduce((a, b) => a + b.stress, 0) / data.length) : 0;
 
-    const monthlyRows = await db.select({ avg_stress: stress.avg_stress }).from(stress).orderBy(desc(stress.date)).limit(30);
+    const monthlyRows = await db.select({ avg_stress: stress.avg_stress })
+      .from(stress).where(eq(stress.user_id, userId)).orderBy(desc(stress.date)).limit(30);
     const monthlyAvg = monthlyRows.length
       ? Math.round(monthlyRows.reduce((a, b) => a + (b.avg_stress ?? 0), 0) / monthlyRows.length)
       : 0;
 
     res.json({ data, weeklyAvg: avg, monthlyAvg, ...metrics });
   } else {
-    const rows = await db.select().from(stress).orderBy(desc(stress.date)).limit(30);
+    const rows = await db.select().from(stress)
+      .where(eq(stress.user_id, userId)).orderBy(desc(stress.date)).limit(30);
     const metrics = getMetrics(rows);
     const weeks: Record<string, number[]> = {};
     rows.forEach((r, i) => {
@@ -155,10 +163,12 @@ router.get('/stress', async (req, res) => {
 });
 
 router.get('/hrv', async (req, res) => {
+  const { userId } = req;
   const period = (req.query.period as string) || 'weekly';
   const limit = period === 'weekly' ? 7 : 30;
 
-  const rows = await db.select().from(hrv).orderBy(desc(hrv.date)).limit(limit);
+  const rows = await db.select().from(hrv)
+    .where(eq(hrv.user_id, userId)).orderBy(desc(hrv.date)).limit(limit);
   const latest = rows[0];
   const history = rows.reverse().map((r) => {
     const d = new Date(r.date + 'T00:00:00');
@@ -175,14 +185,19 @@ router.get('/hrv', async (req, res) => {
   });
 });
 
-router.get('/summary', async (_req, res) => {
-  const [row] = await db.select().from(daily_summary).orderBy(desc(daily_summary.date)).limit(1);
+router.get('/summary', async (req, res) => {
+  const { userId } = req;
+  const [row] = await db.select().from(daily_summary)
+    .where(eq(daily_summary.user_id, userId)).orderBy(desc(daily_summary.date)).limit(1);
   const [sleepRow] = await db.select({ score: sleep.score })
-    .from(sleep).where(sql`${sleep.score} IS NOT NULL`).orderBy(desc(sleep.date)).limit(1);
+    .from(sleep).where(and(eq(sleep.user_id, userId), sql`${sleep.score} IS NOT NULL`))
+    .orderBy(desc(sleep.date)).limit(1);
   const [stressRow] = await db.select({ avg_stress: stress.avg_stress })
-    .from(stress).where(sql`${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(1);
+    .from(stress).where(and(eq(stress.user_id, userId), sql`${stress.avg_stress} IS NOT NULL`))
+    .orderBy(desc(stress.date)).limit(1);
   const [hrvRow] = await db.select({ status: hrv.status, nightly_avg: hrv.nightly_avg })
-    .from(hrv).where(sql`${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(1);
+    .from(hrv).where(and(eq(hrv.user_id, userId), sql`${hrv.nightly_avg} IS NOT NULL`))
+    .orderBy(desc(hrv.date)).limit(1);
 
   const slpScore = sleepRow?.score ?? 0;
   const avgStress = stressRow?.avg_stress ?? 0;

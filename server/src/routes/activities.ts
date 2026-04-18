@@ -2,8 +2,12 @@ import { Router } from 'express';
 import { eq, desc, asc, and, gte, lte, sql } from 'drizzle-orm';
 import db from '../db/client.js';
 import { activities, sport_groups, sleep, stress, hrv } from '../db/schema/index.js';
+import { requireUser } from '../middleware/auth.js';
+import { seedDefaultSportGroups } from '../db/seed.js';
 
 const router = Router();
+
+router.use(requireUser);
 
 function getDateRange(period: string): { start: string; end: string } {
   const now = new Date();
@@ -27,17 +31,25 @@ function normalizeSportType(raw: string): string {
 const round = (n: number) => Math.round(n * 10) / 10;
 
 // GET /api/activities/sport-types
-router.get('/sport-types', async (_req, res) => {
+router.get('/sport-types', async (req, res) => {
+  const { userId } = req;
   const rows = await db.selectDistinct({ sport_type: activities.sport_type })
     .from(activities)
+    .where(eq(activities.user_id, userId))
     .orderBy(asc(activities.sport_type));
   res.json(rows.map((r) => normalizeSportType(r.sport_type)));
 });
 
 router.get('/', async (req, res) => {
+  const { userId } = req;
   const period = (req.query.period as string) || 'weekly';
 
-  const groupRows = await db.select().from(sport_groups).orderBy(asc(sport_groups.sort_order));
+  // Seed default sport groups if user has none yet
+  await seedDefaultSportGroups(userId);
+
+  const groupRows = await db.select().from(sport_groups)
+    .where(eq(sport_groups.user_id, userId))
+    .orderBy(asc(sport_groups.sort_order));
   const groups = groupRows.map((g) => ({
     id: g.id,
     name: g.name,
@@ -59,11 +71,14 @@ router.get('/', async (req, res) => {
 
   let rows: (typeof activities.$inferSelect)[];
   if (period === 'total') {
-    rows = await db.select().from(activities).orderBy(desc(activities.start_time));
+    rows = await db.select().from(activities)
+      .where(eq(activities.user_id, userId))
+      .orderBy(desc(activities.start_time));
   } else {
     const { start, end } = getDateRange(period);
     rows = await db.select().from(activities)
       .where(and(
+        eq(activities.user_id, userId),
         gte(sql`LEFT(${activities.start_time}, 10)`, start),
         lte(sql`LEFT(${activities.start_time}, 10)`, end),
       ))
@@ -114,7 +129,10 @@ router.get('/', async (req, res) => {
   const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
 
   const volumeRows = await db.select().from(activities)
-    .where(gte(sql`LEFT(${activities.start_time}, 10)`, sixMonthsAgoStr))
+    .where(and(
+      eq(activities.user_id, userId),
+      gte(sql`LEFT(${activities.start_time}, 10)`, sixMonthsAgoStr),
+    ))
     .orderBy(asc(activities.start_time));
 
   const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -164,11 +182,14 @@ router.get('/', async (req, res) => {
   }));
 
   const [sleepForReadiness] = await db.select({ score: sleep.score })
-    .from(sleep).where(sql`${sleep.score} IS NOT NULL`).orderBy(desc(sleep.date)).limit(1);
+    .from(sleep).where(and(eq(sleep.user_id, userId), sql`${sleep.score} IS NOT NULL`))
+    .orderBy(desc(sleep.date)).limit(1);
   const [stressForReadiness] = await db.select({ avg_stress: stress.avg_stress })
-    .from(stress).where(sql`${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(1);
+    .from(stress).where(and(eq(stress.user_id, userId), sql`${stress.avg_stress} IS NOT NULL`))
+    .orderBy(desc(stress.date)).limit(1);
   const [hrvForReadiness] = await db.select({ nightly_avg: hrv.nightly_avg })
-    .from(hrv).where(sql`${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(1);
+    .from(hrv).where(and(eq(hrv.user_id, userId), sql`${hrv.nightly_avg} IS NOT NULL`))
+    .orderBy(desc(hrv.date)).limit(1);
 
   const slp = sleepForReadiness?.score ?? 0;
   const stressVal = stressForReadiness?.avg_stress ?? 0;
@@ -202,10 +223,12 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/category/:category', async (req, res) => {
+  const { userId } = req;
   const { category } = req.params;
   const period = (req.query.period as string) || 'total';
 
-  const [groupRow] = await db.select().from(sport_groups).where(eq(sport_groups.id, category));
+  const [groupRow] = await db.select().from(sport_groups)
+    .where(and(eq(sport_groups.id, category), eq(sport_groups.user_id, userId)));
   if (!groupRow) {
     res.status(404).json({ error: 'Group not found' });
     return;
@@ -213,7 +236,9 @@ router.get('/category/:category', async (req, res) => {
 
   const sportTypes = groupRow.sport_types as string[];
 
-  const allRows = await db.select().from(activities).orderBy(desc(activities.start_time));
+  const allRows = await db.select().from(activities)
+    .where(eq(activities.user_id, userId))
+    .orderBy(desc(activities.start_time));
   const allGroupRows = allRows.filter((r) => sportTypes.includes(normalizeSportType(r.sport_type)));
 
   let filteredRows = allGroupRows;
@@ -299,8 +324,10 @@ router.get('/category/:category', async (req, res) => {
 
 // GET /api/activities/:id — full session detail from raw_json
 router.get('/:id', async (req, res) => {
+  const { userId } = req;
   const { id } = req.params;
-  const [row] = await db.select().from(activities).where(eq(activities.garmin_id, id));
+  const [row] = await db.select().from(activities)
+    .where(and(eq(activities.garmin_id, id), eq(activities.user_id, userId)));
   if (!row) { res.status(404).json({ error: 'Activity not found' }); return; }
 
   const raw = JSON.parse(row.raw_json ?? '{}');

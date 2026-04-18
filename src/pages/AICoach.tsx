@@ -9,6 +9,7 @@ import { AGENT_PLAN_PROGRESS } from '../utils/aiProgressConfigs';
 import { useAIProvider } from '../hooks/useAIProvider';
 import { useLanguage } from '../hooks/useLanguage';
 import { useTranslation } from 'react-i18next';
+import { apiFetchRaw } from '../api/client';
 
 interface ToolEvent {
   type: 'call' | 'result';
@@ -371,7 +372,7 @@ export const AICoach: React.FC = () => {
         fetchBody = JSON.stringify({ messages: newMessages, provider, language });
       }
 
-      const res = await fetch('/api/ai/agent', {
+      const res = await apiFetchRaw('/ai/agent', {
         method: 'POST',
         headers: fetchHeaders,
         body: fetchBody,

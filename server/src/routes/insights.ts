@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { computeInsights } from '../insights/index.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/', async (_req, res) => {
+router.use(requireUser);
+
+router.get('/', async (req, res) => {
   try {
-    const result = await computeInsights();
+    const result = await computeInsights(req.userId!);
     res.json(result);
   } catch (err: any) {
     console.error('[insights] Error computing insights:', err);

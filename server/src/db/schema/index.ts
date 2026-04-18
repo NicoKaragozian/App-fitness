@@ -1,3 +1,4 @@
+export * from './auth.js';
 export * from './garmin.js';
 export * from './core.js';
 export * from './training.js';

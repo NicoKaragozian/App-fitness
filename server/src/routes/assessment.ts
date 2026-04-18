@@ -2,8 +2,11 @@ import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import db from '../db/client.js';
 import { user_assessment } from '../db/schema/index.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = Router();
+
+router.use(requireUser);
 
 const ARRAY_FIELDS = ['goals', 'available_days', 'equipment'];
 const ALL_FIELDS = [
@@ -16,12 +19,14 @@ const ALL_FIELDS = [
 
 // GET /api/assessment
 router.get('/', async (req, res) => {
-  const [row] = await db.select().from(user_assessment).where(eq(user_assessment.id, 1));
+  const { userId } = req;
+  const [row] = await db.select().from(user_assessment).where(eq(user_assessment.user_id, userId));
   res.json(row ?? null);
 });
 
 // PUT /api/assessment
 router.put('/', async (req, res) => {
+  const { userId } = req;
   const body = req.body as Record<string, any>;
 
   if (!body.name?.toString().trim()) {
@@ -31,7 +36,10 @@ router.put('/', async (req, res) => {
     res.status(400).json({ error: 'Age is required' }); return;
   }
 
-  const values: Record<string, any> = { id: 1, updated_at: new Date().toISOString() };
+  const [existing] = await db.select({ id: user_assessment.id })
+    .from(user_assessment).where(eq(user_assessment.user_id, userId));
+
+  const values: Record<string, any> = { updated_at: new Date().toISOString(), user_id: userId };
   for (const f of ALL_FIELDS) {
     const val = body[f];
     if (val === undefined || val === null || val === '') {
@@ -43,13 +51,14 @@ router.put('/', async (req, res) => {
     }
   }
 
-  await db.insert(user_assessment).values(values as any)
-    .onConflictDoUpdate({
-      target: user_assessment.id,
-      set: { ...values, id: undefined } as any,
-    });
+  if (existing) {
+    await db.update(user_assessment).set(values as any).where(eq(user_assessment.user_id, userId));
+  } else {
+    const nextId = Date.now();
+    await db.insert(user_assessment).values({ id: nextId, ...values } as any);
+  }
 
-  const [row] = await db.select().from(user_assessment).where(eq(user_assessment.id, 1));
+  const [row] = await db.select().from(user_assessment).where(eq(user_assessment.user_id, userId));
   res.json(row);
 });
 

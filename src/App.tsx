@@ -13,6 +13,7 @@ import { GoalDetail } from './pages/GoalDetail';
 import { Assessment } from './pages/Assessment';
 import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
+import { Signup } from './pages/Signup';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 function AuthenticatedLayout() {
@@ -52,6 +53,7 @@ function AppRoutes() {
   if (!isAuthenticated && !isDemoMode) {
     return (
       <Routes>
+        <Route path="/signup" element={<Signup />} />
         <Route path="*" element={<Login />} />
       </Routes>
     );

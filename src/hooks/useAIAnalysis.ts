@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { apiFetchRaw } from '../api/client';
 
 type AnalyzeMode = 'session' | 'sleep' | 'wellness' | 'sport' | 'monthly' | 'daily';
 
@@ -29,7 +30,7 @@ export function useAIAnalysis(mode: AnalyzeMode, payload: Record<string, string>
     setState({ content: '', loading: true, error: null, cached: false, generatedAt: null });
 
     try {
-      const res = await fetch('/api/ai/analyze', {
+      const res = await apiFetchRaw('/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode, payload, force }),

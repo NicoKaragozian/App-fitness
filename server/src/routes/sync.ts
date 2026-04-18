@@ -1,31 +1,27 @@
 import { Router } from 'express';
-import { syncInitial, syncActivitiesOnly, isSyncing, lastSync } from '../sync.js';
+import { syncInitial, isSyncing, lastSync, isSyncingForUser, getLastSyncForUser } from '../sync.js';
+import { hasTokensForUser } from '../garmin.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = Router();
 
-router.post('/', async (_req, res) => {
-  if (isSyncing) {
-    res.json({ message: 'Sync already in progress', lastSync });
+router.use(requireUser);
+
+router.post('/', async (req, res) => {
+  const { userId } = req;
+  const hasTokens = await hasTokensForUser(userId);
+  if (!hasTokens) {
+    res.status(400).json({ error: 'No Garmin tokens' });
     return;
   }
 
-  syncInitial();
-  res.json({ message: 'Sync started', lastSync });
-});
-
-// Fast sync — only activities (no sleep/HRV/stress loops)
-router.post('/activities', async (_req, res) => {
-  if (isSyncing) {
-    res.json({ message: 'Sync already in progress', lastSync });
+  if (isSyncingForUser(userId)) {
+    res.json({ message: 'Sync already in progress', lastSync: getLastSyncForUser(userId) });
     return;
   }
 
-  try {
-    await syncActivitiesOnly();
-    res.json({ message: 'Activities synced' });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? 'Sync failed' });
-  }
+  syncInitial(userId);
+  res.json({ message: 'Sync started', lastSync: getLastSyncForUser(userId) });
 });
 
 export default router;

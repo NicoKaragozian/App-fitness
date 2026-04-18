@@ -28,6 +28,7 @@ export interface AgentOptions {
   res: Response;
   maxTokens?: number;
   maxIterations?: number;
+  userId?: string;
 }
 
 export interface Provider {

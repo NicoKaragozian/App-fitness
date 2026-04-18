@@ -126,7 +126,7 @@ export const gemmaProvider: Provider = {
     }
   },
 
-  async streamAgent({ systemPrompt, messages, res, maxTokens = 4096, maxIterations = 5 }: AgentOptions) {
-    await reactStreamAgent(systemPrompt, messages, res, gemmaProvider, { maxTokens, maxIterations });
+  async streamAgent({ systemPrompt, messages, res, maxTokens = 4096, maxIterations = 5, userId }: AgentOptions) {
+    await reactStreamAgent(systemPrompt, messages, res, gemmaProvider, { maxTokens, maxIterations, userId });
   },
 };

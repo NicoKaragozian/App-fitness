@@ -1,4 +1,5 @@
 import { pgTable, serial, text, integer, boolean, jsonb, index } from 'drizzle-orm/pg-core';
+import { user } from './auth.js';
 
 export const goals = pgTable('goals', {
   id: serial('id').primaryKey(),
@@ -13,8 +14,10 @@ export const goals = pgTable('goals', {
   raw_ai_response: text('raw_ai_response'),
   created_at: text('created_at'),
   updated_at: text('updated_at'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (table) => [
   index('idx_goals_status').on(table.status),
+  index('idx_goals_user_id').on(table.user_id),
 ]);
 
 export const goal_milestones = pgTable('goal_milestones', {
@@ -30,4 +33,5 @@ export const goal_milestones = pgTable('goal_milestones', {
   sort_order: integer('sort_order').default(0),
   duration: text('duration'),
   tips: jsonb('tips').default([]).$type<string[]>(),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 });

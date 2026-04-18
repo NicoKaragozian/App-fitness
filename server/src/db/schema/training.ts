@@ -1,4 +1,5 @@
 import { pgTable, serial, text, integer, doublePrecision, boolean, index } from 'drizzle-orm/pg-core';
+import { user } from './auth.js';
 
 export const training_plans = pgTable('training_plans', {
   id: serial('id').primaryKey(),
@@ -10,8 +11,10 @@ export const training_plans = pgTable('training_plans', {
   raw_ai_response: text('raw_ai_response'),
   created_at: text('created_at'),
   updated_at: text('updated_at'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (table) => [
   index('idx_training_plans_status').on(table.status),
+  index('idx_training_plans_user_id').on(table.user_id),
 ]);
 
 export const training_sessions = pgTable('training_sessions', {
@@ -21,6 +24,7 @@ export const training_sessions = pgTable('training_sessions', {
   sort_order: integer('sort_order').notNull().default(0),
   notes: text('notes'),
   type: text('type'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 });
 
 export const training_exercises = pgTable('training_exercises', {
@@ -37,6 +41,7 @@ export const training_exercises = pgTable('training_exercises', {
   target_duration_seconds: integer('target_duration_seconds'),
   target_distance_meters: doublePrecision('target_distance_meters'),
   target_pace: text('target_pace'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 });
 
 export const workout_logs = pgTable('workout_logs', {
@@ -46,9 +51,11 @@ export const workout_logs = pgTable('workout_logs', {
   started_at: text('started_at').notNull(),
   completed_at: text('completed_at'),
   notes: text('notes'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (table) => [
   index('idx_workout_logs_plan_id').on(table.plan_id),
   index('idx_workout_logs_session_id').on(table.session_id),
+  index('idx_workout_logs_user_id').on(table.user_id),
 ]);
 
 export const workout_sets = pgTable('workout_sets', {
@@ -62,6 +69,7 @@ export const workout_sets = pgTable('workout_sets', {
   notes: text('notes'),
   duration_seconds: doublePrecision('duration_seconds'),
   distance_meters: doublePrecision('distance_meters'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (table) => [
   index('idx_workout_sets_log_id').on(table.workout_log_id),
   index('idx_workout_sets_exercise_id').on(table.exercise_id),

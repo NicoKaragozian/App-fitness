@@ -1,6 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../api/client';
 
+const DEMO_ASSESSMENT_KEY = 'drift_demo_assessment';
+
+function isDemoMode(): boolean {
+  try {
+    return localStorage.getItem('drift_demo') === '1';
+  } catch {
+    return false;
+  }
+}
+
 export interface Assessment {
   id: number;
   name: string | null;
@@ -32,6 +42,12 @@ export function useAssessment() {
 
   const fetchAssessment = useCallback(async () => {
     try {
+      if (isDemoMode()) {
+        const raw = localStorage.getItem(DEMO_ASSESSMENT_KEY);
+        if (raw) setAssessment(JSON.parse(raw) as Assessment);
+        else setAssessment(null);
+        return;
+      }
       const data = await apiFetch<Assessment | null>('/assessment');
       setAssessment(data);
     } catch {
@@ -44,6 +60,20 @@ export function useAssessment() {
   useEffect(() => { fetchAssessment(); }, [fetchAssessment]);
 
   const save = useCallback(async (data: Record<string, any>) => {
+    if (isDemoMode()) {
+      const raw = localStorage.getItem(DEMO_ASSESSMENT_KEY);
+      const prev = raw
+        ? (JSON.parse(raw) as Record<string, unknown>)
+        : { id: 1 };
+      const merged = {
+        ...prev,
+        ...data,
+        updated_at: new Date().toISOString(),
+      } as Assessment;
+      localStorage.setItem(DEMO_ASSESSMENT_KEY, JSON.stringify(merged));
+      setAssessment(merged);
+      return merged;
+    }
     const result = await apiFetch<Assessment>('/assessment', {
       method: 'PUT',
       body: JSON.stringify(data),

@@ -8,6 +8,27 @@
       "when": 1776449959622,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776454864235,
+      "tag": "0001_etapa2_multiuser_migration1",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776455239598,
+      "tag": "0002_etapa2_migration2_not_null",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1776455350293,
+      "tag": "0003_etapa2_migration2_not_null",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import sharp from 'sharp';
-import { eq, desc, gte, sql } from 'drizzle-orm';
+import { eq, desc, gte, and, sql } from 'drizzle-orm';
 import db from '../db/client.js';
 import {
   user_profile, training_plans, training_sessions, workout_logs,
@@ -14,8 +14,11 @@ import { getAssessmentContext } from '../ai/context.js';
 import { getPrompt } from '../ai/prompts.js';
 import { UPLOAD_DIR } from '../lib/upload-dir.js';
 import type { AIMessage, AIContentBlock } from '../ai/providers/types.js';
+import { requireUser } from '../middleware/auth.js';
 
 const router = Router();
+
+router.use(requireUser);
 
 const agentUpload = multer({
   storage: multer.diskStorage({
@@ -60,13 +63,13 @@ function detectNeeds(message: string) {
   };
 }
 
-async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<string> {
+async function buildContext(needs: ReturnType<typeof detectNeeds>, userId: string): Promise<string> {
   const sections: string[] = [];
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const cutoff7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const cutoff14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const [profile] = await db.select().from(user_profile).where(eq(user_profile.id, 1));
+  const [profile] = await db.select().from(user_profile).where(eq(user_profile.user_id, userId));
   if (profile) {
     const sportsArr = (profile.sports as string[] | null) || [];
     const equipArr = (profile.equipment as string[] | null) || [];
@@ -89,7 +92,9 @@ async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<stri
     title: training_plans.title,
     objective: training_plans.objective,
     frequency: training_plans.frequency,
-  }).from(training_plans).where(eq(training_plans.status, 'active')).orderBy(desc(training_plans.id)).limit(1);
+  }).from(training_plans)
+    .where(and(eq(training_plans.user_id, userId), eq(training_plans.status, 'active')))
+    .orderBy(desc(training_plans.id)).limit(1);
 
   if (activePlan) {
     const sessions = await db.select({ name: training_sessions.name })
@@ -105,7 +110,7 @@ async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<stri
     })
       .from(workout_logs)
       .innerJoin(training_sessions, eq(training_sessions.id, workout_logs.session_id))
-      .where(eq(workout_logs.plan_id, activePlan.id))
+      .where(and(eq(workout_logs.user_id, userId), eq(workout_logs.plan_id, activePlan.id)))
       .orderBy(desc(workout_logs.started_at))
       .limit(1);
 
@@ -115,7 +120,7 @@ async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<stri
     }
   }
 
-  const assessmentCtx = await getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext(userId);
   if (assessmentCtx) sections.push(assessmentCtx);
 
   if (needs.activities) {
@@ -128,7 +133,7 @@ async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<stri
       avg_hr: activities.avg_hr,
       max_speed: activities.max_speed,
     }).from(activities)
-      .where(gte(activities.start_time, cutoff + 'T00:00:00'))
+      .where(and(eq(activities.user_id, userId), gte(activities.start_time, cutoff + 'T00:00:00')))
       .orderBy(desc(activities.start_time))
       .limit(40);
 
@@ -151,7 +156,7 @@ async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<stri
       deep_seconds: sleep.deep_seconds,
       rem_seconds: sleep.rem_seconds,
     }).from(sleep)
-      .where(sql`${sleep.date} >= ${cutoff} AND ${sleep.score} IS NOT NULL`)
+      .where(and(eq(sleep.user_id, userId), sql`${sleep.date} >= ${cutoff} AND ${sleep.score} IS NOT NULL`))
       .orderBy(desc(sleep.date))
       .limit(21);
 
@@ -168,11 +173,11 @@ async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<stri
 
   if (needs.wellness) {
     const hrvRows = await db.select({ date: hrv.date, nightly_avg: hrv.nightly_avg, status: hrv.status })
-      .from(hrv).where(sql`${hrv.date} >= ${cutoff14d} AND ${hrv.nightly_avg} IS NOT NULL`).orderBy(desc(hrv.date)).limit(14);
+      .from(hrv).where(and(eq(hrv.user_id, userId), sql`${hrv.date} >= ${cutoff14d} AND ${hrv.nightly_avg} IS NOT NULL`)).orderBy(desc(hrv.date)).limit(14);
     const stressRows = await db.select({ date: stress.date, avg_stress: stress.avg_stress })
-      .from(stress).where(sql`${stress.date} >= ${cutoff14d} AND ${stress.avg_stress} IS NOT NULL`).orderBy(desc(stress.date)).limit(14);
+      .from(stress).where(and(eq(stress.user_id, userId), sql`${stress.date} >= ${cutoff14d} AND ${stress.avg_stress} IS NOT NULL`)).orderBy(desc(stress.date)).limit(14);
     const summaryRows = await db.select({ date: daily_summary.date, steps: daily_summary.steps, resting_hr: daily_summary.resting_hr })
-      .from(daily_summary).where(sql`${daily_summary.date} >= ${cutoff14d} AND ${daily_summary.steps} IS NOT NULL`).orderBy(desc(daily_summary.date)).limit(14);
+      .from(daily_summary).where(and(eq(daily_summary.user_id, userId), sql`${daily_summary.date} >= ${cutoff14d} AND ${daily_summary.steps} IS NOT NULL`)).orderBy(desc(daily_summary.date)).limit(14);
 
     if (hrvRows.length > 0) {
       sections.push(`## HRV (2 weeks)\n${hrvRows.map(h => `${h.date} | HRV:${Number(h.nightly_avg).toFixed(1)}ms | status:${h.status || '-'}`).join('\n')}`);
@@ -195,7 +200,7 @@ async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<stri
       meals: sql<number>`COUNT(*)`,
     })
       .from(nutrition_logs)
-      .where(gte(nutrition_logs.date, cutoff7d))
+      .where(and(eq(nutrition_logs.user_id, userId), gte(nutrition_logs.date, cutoff7d)))
       .groupBy(nutrition_logs.date)
       .orderBy(desc(nutrition_logs.date))
       .limit(7);
@@ -213,6 +218,7 @@ async function buildContext(needs: ReturnType<typeof detectNeeds>): Promise<stri
 
 // POST /api/ai/chat
 router.post('/chat', async (req: Request, res: Response) => {
+  const userId = req.userId!;
   const { messages } = req.body as { messages: { role: string; content: string }[] };
   if (!Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: 'messages required' }); return;
@@ -227,7 +233,7 @@ router.post('/chat', async (req: Request, res: Response) => {
   const lang = pickLanguageFromReq(req);
   const lastUser = [...messages].reverse().find(m => m.role === 'user');
   const needs = detectNeeds(lastUser?.content || '');
-  const context = await buildContext(needs);
+  const context = await buildContext(needs, userId);
 
   const langRule = lang === 'es'
     ? 'CRÍTICO: Responde siempre en castellano únicamente, sin importar el idioma del mensaje del usuario o los datos del perfil.'
@@ -249,6 +255,7 @@ router.post('/analyze', handleAnalyze);
 
 // POST /api/ai/agent
 router.post('/agent', agentUpload.single('image'), async (req: Request, res: Response) => {
+  const userId = req.userId!;
   let rawMessages: { role: string; content: string }[];
   if (req.file) {
     try { rawMessages = JSON.parse(req.body.messages); }
@@ -269,7 +276,7 @@ router.post('/agent', agentUpload.single('image'), async (req: Request, res: Res
 
   const sections: string[] = [];
 
-  const [profile] = await db.select().from(user_profile).where(eq(user_profile.id, 1));
+  const [profile] = await db.select().from(user_profile).where(eq(user_profile.user_id, userId));
   if (profile) {
     const sportsArr = (profile.sports as string[] | null) || [];
     const equipArr = (profile.equipment as string[] | null) || [];
@@ -291,7 +298,9 @@ router.post('/agent', agentUpload.single('image'), async (req: Request, res: Res
     title: training_plans.title,
     objective: training_plans.objective,
     frequency: training_plans.frequency,
-  }).from(training_plans).where(eq(training_plans.status, 'active')).orderBy(desc(training_plans.id)).limit(1);
+  }).from(training_plans)
+    .where(and(eq(training_plans.user_id, userId), eq(training_plans.status, 'active')))
+    .orderBy(desc(training_plans.id)).limit(1);
 
   if (activePlan) {
     const sessionRows = await db.select({ name: training_sessions.name })
@@ -302,7 +311,7 @@ router.post('/agent', agentUpload.single('image'), async (req: Request, res: Res
 - Sessions: ${sessionRows.map(s => s.name).join(', ') || '-'}`);
   }
 
-  const assessmentCtx = await getAssessmentContext();
+  const assessmentCtx = await getAssessmentContext(userId);
   if (assessmentCtx) sections.push(assessmentCtx);
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -313,7 +322,9 @@ router.post('/agent', agentUpload.single('image'), async (req: Request, res: Res
     protein_g: nutrition_logs.protein_g,
     carbs_g: nutrition_logs.carbs_g,
     fat_g: nutrition_logs.fat_g,
-  }).from(nutrition_logs).where(eq(nutrition_logs.date, todayStr)).orderBy(nutrition_logs.logged_at);
+  }).from(nutrition_logs)
+    .where(and(eq(nutrition_logs.user_id, userId), eq(nutrition_logs.date, todayStr)))
+    .orderBy(nutrition_logs.logged_at);
 
   if (todayLogs.length > 0) {
     const logLines = todayLogs.map(l =>
@@ -356,7 +367,7 @@ ${logLines.join('\n')}
     }
   }
 
-  await provider.streamAgent({ systemPrompt, messages: aiMessages, res });
+  await provider.streamAgent({ systemPrompt, messages: aiMessages, res, userId });
 });
 
 export default router;

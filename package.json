@@ -13,6 +13,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "better-auth": "^1.6.5",
     "i18next": "^26.0.5",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

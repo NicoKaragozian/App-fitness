@@ -1,6 +1,7 @@
-import { pgTable, integer, text, boolean, doublePrecision, jsonb, check } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
+import { pgTable, integer, text, boolean, doublePrecision, jsonb, uniqueIndex } from 'drizzle-orm/pg-core';
+import { user } from './auth.js';
 
+// user_id is the real identifier per-user; integer id kept for backward compat with existing rows
 export const user_profile = pgTable('user_profile', {
   id: integer('id').primaryKey(),
   has_wearable: boolean('has_wearable').default(false),
@@ -24,8 +25,9 @@ export const user_profile = pgTable('user_profile', {
   daily_fat_g: integer('daily_fat_g'),
   onboarded_at: text('onboarded_at'),
   updated_at: text('updated_at'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (table) => [
-  check('user_profile_single_row', sql`${table.id} = 1`),
+  uniqueIndex('idx_user_profile_user_id').on(table.user_id),
 ]);
 
 export const user_assessment = pgTable('user_assessment', {
@@ -51,6 +53,7 @@ export const user_assessment = pgTable('user_assessment', {
   long_term_goals: text('long_term_goals'),
   special_considerations: text('special_considerations'),
   updated_at: text('updated_at'),
+  user_id: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
 }, (table) => [
-  check('user_assessment_single_row', sql`${table.id} = 1`),
+  uniqueIndex('idx_user_assessment_user_id').on(table.user_id),
 ]);

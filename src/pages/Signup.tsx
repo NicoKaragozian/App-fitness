@@ -1,27 +1,26 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { signIn } from '../lib/authClient';
+import { signUp, signIn } from '../lib/authClient';
 
-export const Login: React.FC = () => {
-  const { enterDemoMode } = useAuth();
+export const Signup: React.FC = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const result = await signIn.email({ email, password });
+      const result = await signUp.email({ name, email, password });
       if (result.error) {
-        setError(result.error.message || 'Invalid credentials');
+        setError(result.error.message || 'Signup failed');
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Signup failed');
     } finally {
       setLoading(false);
     }
@@ -46,8 +45,19 @@ export const Login: React.FC = () => {
           <h1 className="font-display text-4xl font-bold text-primary tracking-tight">DRIFT</h1>
         </div>
 
-        {/* Email/Password Form */}
-        <form onSubmit={handleEmailLogin} className="space-y-3 mb-4">
+        <h2 className="font-display font-bold text-on-surface text-lg tracking-widest uppercase text-center mb-6">Create Account</h2>
+
+        <form onSubmit={handleSignup} className="space-y-3 mb-4">
+          <div>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Full name"
+              required
+              className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-3 text-on-surface font-body text-sm placeholder-on-surface-variant/40 focus:outline-none focus:border-primary/50 transition-colors"
+            />
+          </div>
           <div>
             <input
               type="email"
@@ -63,8 +73,9 @@ export const Login: React.FC = () => {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Password"
+              placeholder="Password (min 8 characters)"
               required
+              minLength={8}
               className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-3 text-on-surface font-body text-sm placeholder-on-surface-variant/40 focus:outline-none focus:border-primary/50 transition-colors"
             />
           </div>
@@ -83,24 +94,22 @@ export const Login: React.FC = () => {
             {loading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-surface border-t-transparent rounded-full animate-spin" />
-                Signing in...
+                Creating account...
               </span>
-            ) : 'Sign in'}
+            ) : 'Create Account'}
           </button>
         </form>
 
-        {/* Divider */}
         <div className="flex items-center gap-3 mb-4">
           <div className="flex-1 h-px bg-outline-variant/30" />
           <span className="font-label text-label-sm text-on-surface-variant/50">or</span>
           <div className="flex-1 h-px bg-outline-variant/30" />
         </div>
 
-        {/* Google OAuth */}
         <button
           onClick={handleGoogleLogin}
           disabled={googleLoading}
-          className="w-full bg-surface-container border border-outline-variant/30 text-on-surface font-display font-bold text-sm py-3 rounded-xl tracking-widest uppercase hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-50 mb-3 flex items-center justify-center gap-3"
+          className="w-full bg-surface-container border border-outline-variant/30 text-on-surface font-display font-bold text-sm py-3 rounded-xl tracking-widest uppercase hover:border-primary/50 hover:text-primary transition-colors disabled:opacity-50 mb-4 flex items-center justify-center gap-3"
         >
           {googleLoading ? (
             <span className="flex items-center gap-2">
@@ -120,28 +129,9 @@ export const Login: React.FC = () => {
           )}
         </button>
 
-        {/* Sign up link */}
-        <p className="font-label text-label-sm text-on-surface-variant/60 text-center mb-4">
-          Don't have an account?{' '}
-          <Link to="/signup" className="text-primary hover:underline">Sign up</Link>
-        </p>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex-1 h-px bg-outline-variant/20" />
-          <span className="font-label text-label-sm text-on-surface-variant/30">or</span>
-          <div className="flex-1 h-px bg-outline-variant/20" />
-        </div>
-
-        {/* Demo mode */}
-        <button
-          onClick={enterDemoMode}
-          className="w-full bg-surface-container border border-outline-variant/20 text-on-surface-variant font-display font-bold text-sm py-3 rounded-xl tracking-widest uppercase hover:text-on-surface hover:border-outline-variant/50 transition-colors"
-        >
-          Try Demo Mode
-        </button>
-        <p className="font-label text-label-sm text-on-surface-variant/40 mt-2 text-center">
-          Explore the app with sample data
+        <p className="font-label text-label-sm text-on-surface-variant/60 text-center">
+          Already have an account?{' '}
+          <Link to="/login" className="text-primary hover:underline">Sign in</Link>
         </p>
       </div>
     </div>

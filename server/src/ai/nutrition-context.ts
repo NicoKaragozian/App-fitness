@@ -1,6 +1,6 @@
 // ai/nutrition-context.ts — Context builders for nutrition (async, Drizzle)
 
-import { desc, eq, gte, sql } from 'drizzle-orm';
+import { desc, eq, and, gte, sql } from 'drizzle-orm';
 import db from '../db/client.js';
 import { user_profile } from '../db/schema/profile.js';
 import { training_plans, training_sessions } from '../db/schema/training.js';
@@ -23,10 +23,14 @@ function parseDietPrefs(raw: unknown): string {
   return 'none';
 }
 
-export async function buildNutritionPlanContext(strategy?: string): Promise<string> {
+export async function buildNutritionPlanContext(strategy?: string, userId?: string): Promise<string> {
   const sections: string[] = [];
 
-  const [profile] = await db.select().from(user_profile).where(eq(user_profile.id, 1)).limit(1);
+  const profileQuery = userId
+    ? db.select().from(user_profile).where(eq(user_profile.user_id, userId)).limit(1)
+    : db.select().from(user_profile).limit(1);
+  const [profile] = await profileQuery;
+
   if (profile) {
     const sports = (profile.sports as string[] | null) ?? [];
     const dietPrefsText = parseDietPrefs(profile.dietary_preferences);
@@ -47,15 +51,27 @@ Current targets: ${profile.daily_calorie_target || '-'}kcal | Prot: ${profile.da
 
   if (strategy) sections.push(`## Requested strategy\n${strategy}`);
 
-  const [activePlan] = await db.select({
-    id: training_plans.id,
-    title: training_plans.title,
-    objective: training_plans.objective,
-    frequency: training_plans.frequency,
-  }).from(training_plans)
-    .where(eq(training_plans.status, 'active'))
-    .orderBy(desc(training_plans.id))
-    .limit(1);
+  const planQuery = userId
+    ? db.select({
+        id: training_plans.id,
+        title: training_plans.title,
+        objective: training_plans.objective,
+        frequency: training_plans.frequency,
+      }).from(training_plans)
+        .where(and(eq(training_plans.user_id, userId), eq(training_plans.status, 'active')))
+        .orderBy(desc(training_plans.id))
+        .limit(1)
+    : db.select({
+        id: training_plans.id,
+        title: training_plans.title,
+        objective: training_plans.objective,
+        frequency: training_plans.frequency,
+      }).from(training_plans)
+        .where(eq(training_plans.status, 'active'))
+        .orderBy(desc(training_plans.id))
+        .limit(1);
+
+  const [activePlan] = await planQuery;
 
   if (activePlan) {
     const sessions = await db.select({ name: training_sessions.name })
@@ -71,6 +87,10 @@ Sessions: ${sessionNames || '-'}`);
   }
 
   const cutoff7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const actWhere = userId
+    ? and(eq(activitiesTable.user_id, userId), gte(activitiesTable.start_time, `${cutoff7d}T00:00:00`))
+    : gte(activitiesTable.start_time, `${cutoff7d}T00:00:00`);
+
   const acts = await db.select({
     sport_type: activitiesTable.sport_type,
     start_time: activitiesTable.start_time,
@@ -78,7 +98,7 @@ Sessions: ${sessionNames || '-'}`);
     calories: activitiesTable.calories,
     avg_hr: activitiesTable.avg_hr,
   }).from(activitiesTable)
-    .where(gte(activitiesTable.start_time, `${cutoff7d}T00:00:00`))
+    .where(actWhere)
     .orderBy(desc(activitiesTable.start_time));
 
   if (acts.length > 0) {
@@ -93,6 +113,10 @@ Total trained: ${Math.round(totalDur / 60)}min | Calories burned: ${totalCal}kca
 ${lines.join('\n')}`);
   }
 
+  const logsWhere = userId
+    ? and(eq(nutrition_logs.user_id, userId), gte(nutrition_logs.date, cutoff7d))
+    : gte(nutrition_logs.date, cutoff7d);
+
   const dailyLogs = await db.select({
     date: nutrition_logs.date,
     cals: sql<number>`SUM(${nutrition_logs.calories})`,
@@ -100,7 +124,7 @@ ${lines.join('\n')}`);
     carbs: sql<number>`SUM(${nutrition_logs.carbs_g})`,
     fat: sql<number>`SUM(${nutrition_logs.fat_g})`,
   }).from(nutrition_logs)
-    .where(gte(nutrition_logs.date, cutoff7d))
+    .where(logsWhere)
     .groupBy(nutrition_logs.date)
     .orderBy(desc(nutrition_logs.date));
 
@@ -120,12 +144,16 @@ Calories: ${avgCals}kcal | Protein: ${avgProt}g | Carbs: ${avgCarbs}g | Fat: ${a
 }
 
 // Context builder for nutrition chat — selected day context
-export async function buildNutritionChatContext(date: string): Promise<string> {
+export async function buildNutritionChatContext(date: string, userId?: string): Promise<string> {
   const sections: string[] = [];
 
   sections.push(`## Date queried\n${date}`);
 
-  const [profile] = await db.select().from(user_profile).where(eq(user_profile.id, 1)).limit(1);
+  const profileQuery = userId
+    ? db.select().from(user_profile).where(eq(user_profile.user_id, userId)).limit(1)
+    : db.select().from(user_profile).limit(1);
+  const [profile] = await profileQuery;
+
   const targets = {
     daily_calorie_target: profile?.daily_calorie_target ?? 2000,
     daily_protein_g: profile?.daily_protein_g ?? 150,
@@ -140,6 +168,10 @@ Weight: ${profile.weight_kg || '-'}kg | Goal: ${profile.primary_goal || '-'}
 Preferences: ${dietPrefsText}`);
   }
 
+  const logsWhere = userId
+    ? and(eq(nutrition_logs.user_id, userId), eq(nutrition_logs.date, date))
+    : eq(nutrition_logs.date, date);
+
   const logs = await db.select({
     meal_slot: nutrition_logs.meal_slot,
     meal_name: nutrition_logs.meal_name,
@@ -149,7 +181,7 @@ Preferences: ${dietPrefsText}`);
     fat_g: nutrition_logs.fat_g,
     logged_at: nutrition_logs.logged_at,
   }).from(nutrition_logs)
-    .where(eq(nutrition_logs.date, date))
+    .where(logsWhere)
     .orderBy(nutrition_logs.logged_at);
 
   const SLOT_EN: Record<string, string> = {
@@ -187,15 +219,29 @@ Progress: ${Math.round(totalCals / targets.daily_calorie_target * 100)}% cal | $
     sections.push(`## Daily goals\n${targets.daily_calorie_target}kcal | ${targets.daily_protein_g}g prot | ${targets.daily_carbs_g}g carbs | ${targets.daily_fat_g}g fat`);
   }
 
-  const [activePlan] = await db.select({
-    id: nutrition_plans.id,
-    title: nutrition_plans.title,
-    strategy: nutrition_plans.strategy,
-    daily_calories: nutrition_plans.daily_calories,
-    daily_protein_g: nutrition_plans.daily_protein_g,
-    daily_carbs_g: nutrition_plans.daily_carbs_g,
-    daily_fat_g: nutrition_plans.daily_fat_g,
-  }).from(nutrition_plans).orderBy(desc(nutrition_plans.id)).limit(1);
+  const planQuery = userId
+    ? db.select({
+        id: nutrition_plans.id,
+        title: nutrition_plans.title,
+        strategy: nutrition_plans.strategy,
+        daily_calories: nutrition_plans.daily_calories,
+        daily_protein_g: nutrition_plans.daily_protein_g,
+        daily_carbs_g: nutrition_plans.daily_carbs_g,
+        daily_fat_g: nutrition_plans.daily_fat_g,
+      }).from(nutrition_plans)
+        .where(eq(nutrition_plans.user_id, userId))
+        .orderBy(desc(nutrition_plans.id)).limit(1)
+    : db.select({
+        id: nutrition_plans.id,
+        title: nutrition_plans.title,
+        strategy: nutrition_plans.strategy,
+        daily_calories: nutrition_plans.daily_calories,
+        daily_protein_g: nutrition_plans.daily_protein_g,
+        daily_carbs_g: nutrition_plans.daily_carbs_g,
+        daily_fat_g: nutrition_plans.daily_fat_g,
+      }).from(nutrition_plans).orderBy(desc(nutrition_plans.id)).limit(1);
+
+  const [activePlan] = await planQuery;
 
   if (activePlan) {
     const meals = await db.select({

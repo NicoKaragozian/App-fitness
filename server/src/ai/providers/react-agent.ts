@@ -51,9 +51,9 @@ export async function reactStreamAgent(
   initialMessages: AIMessage[],
   res: Response,
   provider: Provider,
-  opts: { maxTokens?: number; maxIterations?: number } = {}
+  opts: { maxTokens?: number; maxIterations?: number; userId?: string } = {}
 ): Promise<void> {
-  const { maxTokens = 4096, maxIterations = 5 } = opts;
+  const { maxTokens = 4096, maxIterations = 5, userId } = opts;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -129,7 +129,7 @@ export async function reactStreamAgent(
       res.write(`data: ${JSON.stringify({ tool_call: { id: toolId, name, input } })}\n\n`);
 
       // Execute the tool
-      const { result, isError } = await executeTool(name, input, { provider });
+      const { result, isError } = await executeTool(name, input, { provider, userId });
 
       // Emit tool_result event
       res.write(`data: ${JSON.stringify({ tool_result: { id: toolId, name, result } })}\n\n`);

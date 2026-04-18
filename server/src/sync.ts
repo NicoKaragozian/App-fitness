@@ -1,7 +1,7 @@
 import cron from 'node-cron';
+import { eq, and, sql } from 'drizzle-orm';
 import db from './db/client.js';
 import { activities, sleep, stress, hrv, daily_summary, sync_log } from './db/schema/index.js';
-import { eq } from 'drizzle-orm';
 import * as garmin from './garmin.js';
 
 const SPORT_CATEGORY_MAP: Record<string, string> = {
@@ -23,6 +23,19 @@ function categorize(sportType: string): string {
   return SPORT_CATEGORY_MAP[key] ?? 'others';
 }
 
+// Track per-user sync state
+const syncingUsers = new Set<string>();
+const lastSyncByUser = new Map<string, string>();
+
+export function isSyncingForUser(userId: string): boolean {
+  return syncingUsers.has(userId);
+}
+
+export function getLastSyncForUser(userId: string): string | null {
+  return lastSyncByUser.get(userId) ?? null;
+}
+
+// Kept for backwards compat with status endpoint (reports first user or null)
 export let isSyncing = false;
 export let lastSync: string | null = null;
 let abortSync = false;
@@ -31,8 +44,10 @@ export function signalAbortSync() {
   abortSync = true;
 }
 
-async function syncActivities(startDate: Date, endDate: Date) {
-  const activityList = await garmin.fetchActivities(startDate, endDate);
+// ── Private helpers ────────────────────────────────────────────────────────────
+
+async function syncActivities(client: any, userId: string, startDate: Date, endDate: Date) {
+  const activityList = await garmin.fetchActivities(client, startDate, endDate);
 
   for (const a of activityList) {
     const sportType = a.activityType?.typeKey ?? 'unknown';
@@ -47,8 +62,10 @@ async function syncActivities(startDate: Date, endDate: Date) {
       avg_hr: a.averageHR ?? 0,
       max_speed: a.maxSpeed ?? 0,
       raw_json: JSON.stringify(a),
+      user_id: userId,
     }).onConflictDoUpdate({
-      target: activities.garmin_id,
+      // composite unique (user_id, garmin_id) — added in migration 2
+      target: [activities.user_id, activities.garmin_id],
       set: {
         sport_type: sportType,
         category: categorize(sportType),
@@ -64,18 +81,16 @@ async function syncActivities(startDate: Date, endDate: Date) {
   }
 }
 
-// Garmin's API has a systematic 1-day offset: querying date X returns data with calendarDate X-1.
 function nextDay(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + 1);
   return garmin.formatDate(d);
 }
 
-async function syncDayData(dateStr: string) {
+async function syncDayData(client: any, userId: string, dateStr: string) {
   const fetchDate = nextDay(dateStr);
 
-  // Sleep
-  const sleepData = await garmin.fetchSleep(fetchDate);
+  const sleepData = await garmin.fetchSleep(client, fetchDate);
   if (sleepData) {
     const dto = sleepData.dailySleepDTO;
     const storeDate = (dto as any)?.calendarDate ?? dateStr;
@@ -88,8 +103,9 @@ async function syncDayData(dateStr: string) {
       rem_seconds: dto.remSleepSeconds ?? null,
       awake_seconds: dto.awakeSleepSeconds ?? null,
       raw_json: JSON.stringify(sleepData),
+      user_id: userId,
     }).onConflictDoUpdate({
-      target: sleep.date,
+      target: [sleep.user_id, sleep.date],
       set: {
         score: (dto as any).sleepScores?.overall?.value ?? null,
         duration_seconds: dto.sleepTimeSeconds ?? null,
@@ -102,16 +118,16 @@ async function syncDayData(dateStr: string) {
     });
   }
 
-  // Stress
-  const stressData = await garmin.fetchStress(fetchDate);
+  const stressData = await garmin.fetchStress(client, fetchDate);
   if (stressData) {
     await db.insert(stress).values({
       date: dateStr,
       avg_stress: stressData.overallStressLevel ?? stressData.avgStressLevel ?? stressData.averageStressLevel ?? null,
       max_stress: stressData.maxStressLevel ?? null,
       raw_json: JSON.stringify(stressData),
+      user_id: userId,
     }).onConflictDoUpdate({
-      target: stress.date,
+      target: [stress.user_id, stress.date],
       set: {
         avg_stress: stressData.overallStressLevel ?? stressData.avgStressLevel ?? stressData.averageStressLevel ?? null,
         max_stress: stressData.maxStressLevel ?? null,
@@ -120,16 +136,16 @@ async function syncDayData(dateStr: string) {
     });
   }
 
-  // HRV
-  const hrvData = await garmin.fetchHRV(fetchDate);
+  const hrvData = await garmin.fetchHRV(client, fetchDate);
   if (hrvData) {
     await db.insert(hrv).values({
       date: dateStr,
       nightly_avg: hrvData.hrvSummary?.lastNightAvg ?? null,
       status: hrvData.hrvSummary?.status ?? null,
       raw_json: JSON.stringify(hrvData),
+      user_id: userId,
     }).onConflictDoUpdate({
-      target: hrv.date,
+      target: [hrv.user_id, hrv.date],
       set: {
         nightly_avg: hrvData.hrvSummary?.lastNightAvg ?? null,
         status: hrvData.hrvSummary?.status ?? null,
@@ -138,8 +154,7 @@ async function syncDayData(dateStr: string) {
     });
   }
 
-  // Daily Summary
-  const summary = await garmin.fetchDailySummary(fetchDate);
+  const summary = await garmin.fetchDailySummary(client, fetchDate);
   if (summary) {
     await db.insert(daily_summary).values({
       date: dateStr,
@@ -148,8 +163,9 @@ async function syncDayData(dateStr: string) {
       body_battery: summary.bodyBatteryMostRecentValue ?? summary.bodyBattery ?? null,
       resting_hr: summary.restingHeartRate ?? summary.restingHR ?? null,
       raw_json: JSON.stringify(summary),
+      user_id: userId,
     }).onConflictDoUpdate({
-      target: daily_summary.date,
+      target: [daily_summary.user_id, daily_summary.date],
       set: {
         steps: summary.totalSteps ?? summary.steps ?? null,
         calories: summary.totalKilocalories ?? summary.calories ?? null,
@@ -161,21 +177,26 @@ async function syncDayData(dateStr: string) {
   }
 }
 
-export async function syncActivitiesOnly() {
-  if (!garmin.getStatus()) throw new Error('Not logged in');
-  const allTimeStart = new Date(0);
-  const endDate = new Date();
-  await syncActivities(allTimeStart, endDate);
-}
+// ── Public API ─────────────────────────────────────────────────────────────────
 
-export async function syncInitial() {
-  if (isSyncing) return;
-  isSyncing = true;
+export async function syncInitial(userId: string): Promise<void> {
+  if (syncingUsers.has(userId)) return;
+  syncingUsers.add(userId);
   abortSync = false;
+  isSyncing = true;
+
+  const client = await garmin.getGarminClient(userId);
+  if (!client) {
+    console.warn(`[sync] No Garmin tokens found for user ${userId}`);
+    syncingUsers.delete(userId);
+    isSyncing = syncingUsers.size > 0;
+    return;
+  }
 
   const [log] = await db.insert(sync_log).values({
     sync_type: 'initial',
     started_at: new Date().toISOString(),
+    user_id: userId,
   }).returning({ id: sync_log.id });
   const logId = log.id;
 
@@ -183,36 +204,41 @@ export async function syncInitial() {
     const endDate = new Date();
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 30);
-
     const allTimeStart = new Date(0);
-    await syncActivities(allTimeStart, endDate);
+
+    await syncActivities(client, userId, allTimeStart, endDate);
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      if (abortSync) {
-        console.log('[sync] Sync aborted by logout');
-        break;
-      }
+      if (abortSync) break;
       const dateStr = garmin.formatDate(d);
-      await syncDayData(dateStr);
+      await syncDayData(client, userId, dateStr);
     }
 
-    lastSync = new Date().toISOString();
+    const now = new Date().toISOString();
+    lastSyncByUser.set(userId, now);
+    lastSync = now;
     await db.update(sync_log)
-      .set({ completed_at: new Date().toISOString(), status: 'completed' })
+      .set({ completed_at: now, status: 'completed' })
       .where(eq(sync_log.id, logId));
-    console.log('[sync] Initial sync completed');
+    console.log(`[sync] Initial sync completed for user ${userId}`);
   } catch (err) {
-    console.error('[sync] Initial sync error:', err);
+    console.error(`[sync] Initial sync error for user ${userId}:`, err);
     await db.update(sync_log)
       .set({ completed_at: new Date().toISOString(), status: 'failed' })
       .where(eq(sync_log.id, logId));
   } finally {
-    isSyncing = false;
+    syncingUsers.delete(userId);
+    isSyncing = syncingUsers.size > 0;
   }
 }
 
-async function syncToday() {
-  if (isSyncing || !garmin.getStatus()) return;
+async function syncTodayForUser(userId: string): Promise<void> {
+  if (syncingUsers.has(userId)) return;
+
+  const client = await garmin.getGarminClient(userId);
+  if (!client) return;
+
+  syncingUsers.add(userId);
   isSyncing = true;
 
   try {
@@ -221,20 +247,28 @@ async function syncToday() {
     const startDate = new Date();
     startDate.setHours(0, 0, 0, 0);
 
-    await syncActivities(startDate, endDate);
-    await syncDayData(today);
-    lastSync = new Date().toISOString();
+    await syncActivities(client, userId, startDate, endDate);
+    await syncDayData(client, userId, today);
+
+    const now = new Date().toISOString();
+    lastSyncByUser.set(userId, now);
+    lastSync = now;
   } catch (err) {
-    console.error('[sync] Periodic sync error:', err);
+    console.error(`[sync] Periodic sync error for user ${userId}:`, err);
   } finally {
-    isSyncing = false;
+    syncingUsers.delete(userId);
+    isSyncing = syncingUsers.size > 0;
   }
 }
 
-export function startPeriodicSync() {
-  cron.schedule('*/15 * * * *', () => {
-    console.log('[sync] Running periodic sync...');
-    syncToday();
+export function startPeriodicSync(): void {
+  cron.schedule('*/15 * * * *', async () => {
+    console.log('[sync] Running periodic sync for all Garmin users...');
+    const userIds = await garmin.getAllUsersWithTokens();
+    for (const userId of userIds) {
+      // Sequential to respect Garmin rate limits
+      await syncTodayForUser(userId);
+    }
   });
   console.log('[sync] Periodic sync scheduled (every 15 min)');
 }
